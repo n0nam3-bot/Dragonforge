@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4f6ef7">
+<title>SpriteSmith Studio</title>
+<style>
+:root{--bg:#f4f7fb;--panel:rgba(255,255,255,.88);--text:#152033;--muted:#637086;--border:#dbe3ef;--primary:#4f6ef7;--primary2:#7c5cff;--shadow:0 18px 50px rgba(28,44,75,.10);--r:28px}
+*{box-sizing:border-box} html,body{height:100%} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);background:radial-gradient(circle at top left,rgba(79,110,247,.12),transparent 28%),radial-gradient(circle at bottom right,rgba(124,92,255,.10),transparent 22%),linear-gradient(135deg,#f9fbff 0%,#eef4ff 55%,#f9fbff 100%)}
+button,input,select,textarea{font:inherit} button{cursor:pointer} #app{min-height:100%}
+.shell{max-width:1600px;margin:0 auto;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+.topbar,.panel{border:1px solid var(--border);background:var(--panel);backdrop-filter:blur(14px);box-shadow:var(--shadow)}
+.topbar{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;padding:20px 22px;border-radius:calc(var(--r) + 8px);margin-bottom:14px}
+.brand{display:inline-flex;align-items:center;gap:8px;color:var(--primary);font-size:12px;letter-spacing:.25em;text-transform:uppercase;font-weight:800}.dot{width:10px;height:10px;border-radius:999px;background:linear-gradient(135deg,var(--primary),var(--primary2));box-shadow:0 0 0 6px rgba(79,110,247,.1)}
+h1{margin:8px 0 6px;font-size:clamp(28px,3vw,44px);line-height:1.05;letter-spacing:-.03em}.lede{margin:0;max-width:980px;color:var(--muted);font-size:14px;line-height:1.65}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.btn{border:1px solid var(--border);background:#fff;color:var(--text);padding:12px 16px;border-radius:16px;font-weight:700;display:inline-flex;gap:10px;align-items:center;box-shadow:0 8px 18px rgba(28,44,75,.06)}.btn.primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;border-color:transparent}.btn.success{background:linear-gradient(135deg,#17a763,#0d8f52);color:#fff;border-color:transparent}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr) 360px;gap:14px}.col{display:flex;flex-direction:column;gap:14px}.panel{border-radius:var(--r);overflow:hidden}.ph{display:flex;align-items:center;gap:12px;padding:18px 18px 0;font-weight:800;color:#33415c}.pi{width:34px;height:34px;border-radius:14px;display:grid;place-items:center;background:#f1f5ff;border:1px solid #e2e9fb;color:#5267c9;flex:0 0 auto}.pb{padding:16px 18px 18px}
+.stack{display:grid;gap:12px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#6d7a8e;margin:0 0 6px;font-weight:800}.field input,.field select,.field textarea{width:100%;border:1px solid var(--border);border-radius:16px;background:#fff;padding:11px 12px;color:var(--text);outline:none}.field textarea{resize:vertical;min-height:88px}
+.range .row{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#6d7a8e;font-weight:800}.range input[type=range]{width:100%;accent-color:var(--primary)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid var(--border);background:#fff;padding:9px 12px;border-radius:999px;font-size:13px;font-weight:700;color:#41516b}.chip.on{background:#dfe8ff;border-color:#b7c9ff;color:#2640a8}
+.previewWrap{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px}.canvasCard{padding:14px;border-radius:24px;border:1px solid var(--border);background:linear-gradient(180deg,#fdfdff,#eef3ff)}.canvasCard.sheet{background:linear-gradient(180deg,#fdfdff,#f3f6fc)}
+.canvasFrame{width:100%;aspect-ratio:1/1;border-radius:20px;overflow:hidden;background:linear-gradient(45deg,rgba(0,0,0,.05) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.05) 75%,rgba(0,0,0,.05)),linear-gradient(45deg,rgba(0,0,0,.05) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.05) 75%,rgba(0,0,0,.05));background-size:24px 24px;background-position:0 0,12px 12px}.canvasFrame canvas{width:100%;height:100%;display:block}
+.meta{display:grid;gap:12px}.card{border:1px solid var(--border);background:#fff;border-radius:24px;padding:14px}.kicker{text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:800;color:#6d7a8e}.title{font-size:22px;font-weight:900;margin-top:4px}.sub{margin-top:8px;color:var(--muted);font-size:13px;line-height:1.6}
+.poseGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.poseBtn{border:1px solid var(--border);background:#fff;border-radius:22px;padding:10px}.poseBtn.on{border-color:#7f96f9;background:#eef3ff}.poseName{text-align:center;font-size:12px;font-weight:800;color:#556378;margin-top:8px}
+.specs{display:grid;gap:10px}.spec{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border:1px solid var(--border);background:#fff;border-radius:18px;padding:12px 14px}.spec .l{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#73819a;font-weight:800}.spec .v{text-align:right;font-size:13px;color:var(--text);max-width:62%}
+.notice{border-radius:18px;padding:12px 14px;font-size:13px;line-height:1.6;background:#f4f7ff;border:1px solid #d8e2ff;color:#2d3f8a}.error{background:#fff0f0;border-color:#ffd0d0;color:#8a2d2d}.upload{border:1.5px dashed #bfd0ef;background:#fbfcff;border-radius:22px;padding:14px;text-align:center}.upload small{display:block;color:var(--muted);line-height:1.5}
+.tools{display:flex;flex-wrap:wrap;gap:10px}.inline{display:flex;align-items:center;gap:8px;font-size:13px;color:#41516b;font-weight:700}.inline input{accent-color:var(--primary)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:9999;background:#0f172a;color:#fff;padding:12px 16px;border-radius:999px;box-shadow:0 15px 35px rgba(0,0,0,.18);font-size:13px;font-weight:700;max-width:92vw;text-align:center}
+@media (max-width:1280px){.layout,.previewWrap{grid-template-columns:1fr}}
+@media (max-width:900px){.grid2,.poseGrid{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){.shell{padding:12px}.topbar{padding:16px}.grid2,.poseGrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(() => {
+  'use strict';
+  const app = document.getElementById('app');
+  const poses = ['Idle','Walk','Run','Jump','Attack','Cast','Hurt','Victory'];
+  const directions = ['Down','Left','Right','Up'];
+  const storageKey = 'spritesmith-studio-ready-v1';
+  const defaults = {
+    name:'Nova', theme:'default', body:'balanced', hair:'Brown', skin:'Warm', eyes:'Brown',
+    top:'Tee', bottom:'Pants', shoes:'Boots', headwear:'None', accessory:'None',
+    hairStyle:'Short', eyeStyle:'Round', facial:'Clean', pose:0, dir:0,
+    speed:1.4, frames:8, frameSize:128, imageScale:1, imageX:0, imageY:0, imageRotate:0, opacity:1,
+    showGuides:true, bgTransparent:false, sheetColumns:4
+  };
+  const bodyPresets = {
+    petite:{h:.92, head:1.05, shoulders:.86, waist:.88, legs:.98},
+    balanced:{h:1, head:1, shoulders:1, waist:1, legs:1},
+    athletic:{h:1.03, head:.95, shoulders:1.08, waist:.95, legs:1.05},
+    bulky:{h:1, head:.92, shoulders:1.22, waist:1.12, legs:.96},
+  };
+  const themeMap = {
+    default:{bg:'#f4f6fb', a:'#5b7cfa', b:'#9b5de5', dark:'#253041', light:'#fff'},
+    sunset:{bg:'#f8efe6', a:'#e76f51', b:'#f4a261', dark:'#2f2e41', light:'#fff7f1'},
+    neon:{bg:'#12131a', a:'#7c5cff', b:'#2de2e6', dark:'#e9ecf1', light:'#1a1c26'},
+    forest:{bg:'#edf6ec', a:'#2f855a', b:'#6bbf59', dark:'#1f2937', light:'#f6fbf5'},
+  };
+  const skinMap = {Warm:'#d8a07e', Fair:'#f2d6c9', Tan:'#c98f68', Deep:'#7a4f3d', 'Cool Gray':'#9ea3ad', 'Fantasy Blue':'#6aa9d8'};
+  const hairMap = {Black:'#1f1f26', Brown:'#5c3d2e', Blonde:'#d9bd6b', Red:'#a93c2e', White:'#eceff6', Blue:'#4b6bd9', Pink:'#dd74b9', Green:'#59b167'};
+  const state = load() || Object.assign({}, defaults, { abilities: {Dash:true,'Double Jump':true,Shield:false,Fire:false,Ice:false,Fly:false,Stealth:false,Heal:false} });
+  let img = null, imgUrl = '', previewCanvas = null, previewCtx = null, sheetCanvas = null, sheetCtx = null;
+  let animFrame = 0, animTick = 0, toastTimer = 0;
+
+  function load(){ try { return JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch { return null; } }
+  function save(){ try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch {} }
+  function set(p){ Object.assign(state, p); save(); render(); }
+  function setAbility(name){ state.abilities[name] = !state.abilities[name]; save(); render(); }
+  function activeAbilities(){ return Object.keys(state.abilities).filter(k => state.abilities[k]); }
+  function cls(){ const a = activeAbilities(); if(a.includes('Fly')) return 'Skyborne'; if(a.includes('Fire') || a.includes('Ice')) return 'Elemental'; if(a.includes('Shield')) return 'Guardian'; return 'Adventurer'; }
+  function spec(){ return { app:'SpriteSmith Studio', version:1, character:{ name:state.name, theme:state.theme, body:state.body, hair:state.hair, skin:state.skin, eyes:state.eyes, top:state.top, bottom:state.bottom, shoes:state.shoes, headwear:state.headwear, accessory:state.accessory, hairStyle:state.hairStyle, eyeStyle:state.eyeStyle, facial:state.facial, pose:poses[state.pose], dir:directions[state.dir], abilities:activeAbilities(), class:cls() }, source:{ mode:'single', image:!!img }, settings:{ speed:state.speed, frames:state.frames, frameSize:state.frameSize, imageScale:state.imageScale, imageX:state.imageX, imageY:state.imageY, imageRotate:state.imageRotate, opacity:state.opacity, bgTransparent:state.bgTransparent, showGuides:state.showGuides, sheetColumns:state.sheetColumns }, generatedAt:new Date().toISOString() }; }
+  function code(){ return btoa(unescape(encodeURIComponent(JSON.stringify(spec())))).replace(/=+$/,''); }
+  function toast(text, danger=false){ let t = document.querySelector('.toast'); if(t) t.remove(); t = document.createElement('div'); t.className='toast'; if(danger) t.style.background='#8a2d2d'; t.textContent = text; document.body.appendChild(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 1600); }
+  function dl(name, content, type='text/plain;charset=utf-8'){ const b = new Blob([content], {type}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 1000); }
+  function dlpng(canvas, name){ canvas.toBlob(b => { if(!b) return; const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 1000); }, 'image/png'); }
+  function q(tag, attrs={}, children=[]){ const n = document.createElement(tag); for (const [k,v] of Object.entries(attrs)) { if (k === 'class') n.className = v; else if (k === 'html') n.innerHTML = v; else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v); else if (v !== null && v !== undefined) n.setAttribute(k, String(v)); } [].concat(children).forEach(ch => ch && n.appendChild(ch.nodeType ? ch : document.createTextNode(String(ch)))); return n; }
+  function palette(){ return themeMap[state.theme] || themeMap.default; }
+  function roundRect(ctx, x, y, w, h, r){ r = Math.min(r, w/2, h/2); ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r); ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath(); }
+  function circle(ctx, x, y, r){ ctx.beginPath(); ctx.arc(x, y, Math.max(1, r), 0, Math.PI*2); ctx.fill(); }
+  function rotRect(ctx, x, y, w, h, deg){ ctx.save(); ctx.translate(x + w/2, y + h/2); ctx.rotate(deg * Math.PI / 180); roundRect(ctx, -w/2, -h/2, w, h, Math.min(10, w/3, h/3)); ctx.fill(); ctx.restore(); }
+  function motion(pose, frame, dir){ const t = frame / Math.max(1, state.frames - 1), w = Math.sin(t * Math.PI * 2), s = dir === 1 ? -1 : dir === 2 ? 1 : 0; let x=0,y=0,r=0,sc=1; if(pose==='Idle'){ y = Math.sin(t*Math.PI*2)*2; r = Math.sin(t*Math.PI*2)*.02; } else if(pose==='Walk'){ x=w*6*s; y=Math.abs(w)*-3; r=w*.04*s; } else if(pose==='Run'){ x=w*10*s; y=Math.abs(w)*-6; r=w*.08*s; sc=1.02; } else if(pose==='Jump'){ y=-18*Math.sin(t*Math.PI); r=-.05; sc=1.02-Math.sin(t*Math.PI)*.04; } else if(pose==='Attack'){ x=Math.sin(t*Math.PI)*7*s; r=Math.sin(t*Math.PI)*.08*s; } else if(pose==='Cast'){ y=Math.sin(t*Math.PI*2)*3; r=Math.sin(t*Math.PI*2)*.03; } else if(pose==='Hurt'){ x=Math.sin(t*Math.PI*10)*3; r=Math.sin(t*Math.PI*10)*.05; } else if(pose==='Victory'){ y=-6+Math.sin(t*Math.PI*2)*2; r=Math.sin(t*Math.PI*2)*.03; } return {x,y,r,sc}; }
+  function drawBackground(ctx, w, h){ const p = palette(); const g = ctx.createLinearGradient(0,0,w,h); g.addColorStop(0,p.light); g.addColorStop(1,p.bg); ctx.fillStyle = g; ctx.fillRect(0,0,w,h); ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.beginPath(); ctx.ellipse(w*0.5, h*0.83, w*0.23, h*0.06, 0, 0, Math.PI*2); ctx.fill(); }
+  function drawSprite(ctx, w, h, poseIndex, frameIndex, dirIndex, allowImage=true){ const p = palette(); const body = bodyPresets[state.body] || bodyPresets.balanced; const pose = poses[poseIndex]; const m = motion(pose, frameIndex, dirIndex); const baseX = w * 0.5 + m.x; const baseY = m.y; const skin = skinMap[state.skin] || skinMap.Warm; const hair = hairMap[state.hair] || hairMap.Brown; const clothTop = state.top === 'Armor' ? p.b : state.top === 'Robe' ? p.light : p.a; const clothBottom = state.bottom === 'Armor Pants' ? p.b : state.bottom === 'Skirt' ? p.light : p.dark; const shoe = state.shoes === 'Sandals' ? p.b : p.dark; const cloak = state.accessory === 'Cape' ? p.b : state.accessory === 'Scarf' ? p.a : null; const active = activeAbilities();
+    if (state.bgTransparent) ctx.clearRect(0,0,w,h); else drawBackground(ctx, w, h);
+    if (img && allowImage) { const box = Math.min(w,h) * 0.72 * state.imageScale; const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height; const s = box / Math.max(iw, ih); ctx.save(); ctx.translate(baseX + state.imageX, h*0.52 + state.imageY + baseY); ctx.rotate((state.imageRotate + m.r*180) * Math.PI / 180); ctx.globalAlpha = state.opacity; ctx.drawImage(img, -iw*s/2, -ih*s/2, iw*s, ih*s); ctx.restore(); if (state.showGuides) drawGuides(ctx,w,h); return; }
+    const bodyY = h*0.57 + baseY, headY = h*0.29 + baseY, bodyW = 44*body.shoulders*(w/256), waistW = 28*body.waist*(w/256), headR = 32*body.head*(w/256), topH = 68*body.h*(h/256), legH = 76*body.legs*(h/256), legW = 16*(w/256); const moving = pose==='Walk' || pose==='Run', jump = pose==='Jump', fight = pose==='Attack' || pose==='Hurt', cast = pose==='Cast', win = pose==='Victory'; const armShift = fight ? 18 : cast ? 10 : moving ? (frameIndex % 2 ? 7 : -7) : 0; const legShift = moving ? (frameIndex % 2 ? 10 : -10) : jump ? 6 : 0; const bob = moving ? (frameIndex % 2 ? 3 : -3) : jump ? -10 : win ? -5 : 0; const y = baseY + bob;
+    if (cloak) { ctx.fillStyle = cloak; ctx.globalAlpha = 0.84; ctx.beginPath(); ctx.moveTo(baseX-bodyW*0.58, bodyY-18+y); ctx.quadraticCurveTo(baseX-bodyW*0.8, bodyY+20+y, baseX-bodyW*0.72, bodyY+72+y); ctx.lineTo(baseX+bodyW*0.72, bodyY+72+y); ctx.quadraticCurveTo(baseX+bodyW*0.8, bodyY+20+y, baseX+bodyW*0.58, bodyY-18+y); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.fillStyle = 'rgba(0,0,0,.14)'; ctx.beginPath(); ctx.ellipse(baseX, bodyY+84+y, 56*(w/256), 12*(h/256), 0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = clothTop; roundRect(ctx, baseX-waistW/2, bodyY-8+y, waistW, topH, 18); ctx.fill(); ctx.fillRect(baseX-bodyW/2, bodyY-8+y, bodyW, 14); ctx.fillRect(baseX-bodyW/2, bodyY+40+y, bodyW, 14);
+    ctx.save(); ctx.translate(0, armShift+y); ctx.fillStyle = skin; rotRect(ctx, baseX-bodyW*0.72, bodyY+8-y, 14*(w/256), 46*(h/256), fight ? -26 : moving ? -10 : 8); rotRect(ctx, baseX+bodyW*0.58, bodyY+8-y, 14*(w/256), 46*(h/256), fight ? 26 : moving ? 10 : -8); circle(ctx, baseX-bodyW*0.60, bodyY+56-y, 8*(w/256)); circle(ctx, baseX+bodyW*0.72, bodyY+56-y, 8*(w/256)); ctx.restore();
+    if (active.includes('Shield')) { ctx.fillStyle = p.b; ctx.globalAlpha = .9; ctx.beginPath(); ctx.moveTo(baseX+bodyW*0.72, bodyY+20+y); ctx.lineTo(baseX+bodyW*1.05, bodyY+28+y); ctx.lineTo(baseX+bodyW*0.98, bodyY+58+y); ctx.lineTo(baseX+bodyW*0.72, bodyY+70+y); ctx.lineTo(baseX+bodyW*0.46, bodyY+58+y); ctx.lineTo(baseX+bodyW*0.39, bodyY+28+y); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; }
+    if (active.includes('Fire') && cast) { ctx.fillStyle = '#ff9f1c'; ctx.globalAlpha = .9; ctx.beginPath(); ctx.moveTo(baseX+bodyW*0.78, bodyY+8+y); ctx.quadraticCurveTo(baseX+bodyW*1.02, bodyY-8+y, baseX+bodyW*1.05, bodyY+20+y); ctx.quadraticCurveTo(baseX+bodyW*1.01, bodyY+40+y, baseX+bodyW*0.75, bodyY+18+y); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; }
+    if (active.includes('Ice') && cast) { ctx.fillStyle = '#72d7ff'; ctx.globalAlpha = .9; ctx.beginPath(); ctx.moveTo(baseX+bodyW*0.78, bodyY+8+y); ctx.lineTo(baseX+bodyW*0.98, bodyY+38+y); ctx.lineTo(baseX+bodyW*0.70, bodyY+22+y); ctx.lineTo(baseX+bodyW*1.00, bodyY+22+y); ctx.lineTo(baseX+bodyW*0.70, bodyY+38+y); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.save(); ctx.translate(0, legShift+y); ctx.fillStyle = clothBottom; rotRect(ctx, baseX-bodyW*0.23, bodyY+50-y, legW, legH, moving ? -14 : jump ? -8 : 0); rotRect(ctx, baseX+bodyW*0.08, bodyY+50-y, legW, legH, moving ? 14 : jump ? 8 : 0); ctx.fillStyle = shoe; rotRect(ctx, baseX-bodyW*0.30, bodyY+100-y, 24*(w/256), 12*(h/256), moving ? -10 : 0); rotRect(ctx, baseX+bodyW*0.03, bodyY+100-y, 24*(w/256), 12*(h/256), moving ? 10 : 0); ctx.restore();
+    ctx.fillStyle = skin; circle(ctx, baseX, headY, headR); if (state.headwear !== 'None' && state.headwear !== 'Helmet') { ctx.fillStyle = state.headwear === 'Crown' ? p.b : state.headwear === 'Hood' ? clothTop : p.dark; roundRect(ctx, baseX-headR, headY-headR+4, headR*2, 22*(h/256), 10); ctx.fill(); } if (state.headwear === 'Helmet') { ctx.fillStyle = p.dark; ctx.beginPath(); ctx.moveTo(baseX-headR-2, headY-18); ctx.quadraticCurveTo(baseX, headY-44, baseX+headR+2, headY-18); ctx.lineTo(baseX+headR-2, headY+10); ctx.lineTo(baseX-headR+2, headY+10); ctx.closePath(); ctx.fill(); }
+    if (state.hairStyle !== 'Bald') { ctx.fillStyle = hair; ctx.beginPath(); ctx.moveTo(baseX-headR, headY-3); ctx.quadraticCurveTo(baseX-headR*.7, headY-36, baseX, headY-36); ctx.quadraticCurveTo(baseX+headR*.7, headY-36, baseX+headR, headY-3); ctx.quadraticCurveTo(baseX, headY-16, baseX-headR, headY-3); ctx.closePath(); ctx.fill(); } if (state.hairStyle === 'Long') { ctx.fillStyle = hair; ctx.beginPath(); ctx.moveTo(baseX-headR*.85, headY+2); ctx.quadraticCurveTo(baseX-headR*.8, headY+30, baseX-headR*.55, headY+64); ctx.lineTo(baseX-headR*.38, headY+62); ctx.quadraticCurveTo(baseX-headR*.56, headY+32, baseX-headR*.2, headY+8); ctx.closePath(); ctx.fill(); } if (state.hairStyle === 'Spiky') { ctx.fillStyle = hair; ctx.beginPath(); ctx.moveTo(baseX-headR*.7, headY-24); ctx.lineTo(baseX-headR*.3, headY-44); ctx.lineTo(baseX, headY-28); ctx.lineTo(baseX+headR*.3, headY-46); ctx.lineTo(baseX+headR*.72, headY-24); ctx.closePath(); ctx.fill(); } if (state.hairStyle === 'Curly') { ctx.fillStyle = hair; circle(ctx, baseX-headR*.52, headY-18, 11*(w/256)); circle(ctx, baseX+headR*.52, headY-18, 11*(w/256)); } if (state.hairStyle === 'Braided') { ctx.strokeStyle = hair; ctx.lineWidth = 8*(w/256); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(baseX-10*(w/256), headY+4); ctx.quadraticCurveTo(baseX-14*(w/256), headY+20, baseX-6*(w/256), headY+58); ctx.moveTo(baseX+10*(w/256), headY+4); ctx.quadraticCurveTo(baseX+14*(w/256), headY+20, baseX+6*(w/256), headY+58); ctx.stroke(); }
+    if (state.facial === 'Beard') { ctx.fillStyle = hair; ctx.globalAlpha = .85; ctx.beginPath(); ctx.moveTo(baseX-15*(w/256), headY+12); ctx.quadraticCurveTo(baseX-7*(w/256), headY+30, baseX, headY+38); ctx.quadraticCurveTo(baseX+7*(w/256), headY+30, baseX+15*(w/256), headY+12); ctx.quadraticCurveTo(baseX+7*(w/256), headY+42, baseX, headY+42); ctx.quadraticCurveTo(baseX-7*(w/256), headY+42, baseX-15*(w/256), headY+12); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; } if (state.facial === 'Moustache') { ctx.fillStyle = hair; ctx.globalAlpha = .9; ctx.beginPath(); ctx.moveTo(baseX-13*(w/256), headY+13); ctx.quadraticCurveTo(baseX-8*(w/256), headY+8, baseX, headY+12); ctx.quadraticCurveTo(baseX+8*(w/256), headY+8, baseX+13*(w/256), headY+13); ctx.quadraticCurveTo(baseX, headY+18, baseX-13*(w/256), headY+13); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; } if (state.facial === 'Scar') { ctx.strokeStyle = '#8b3c3c'; ctx.lineWidth = 3*(w/256); ctx.beginPath(); ctx.moveTo(baseX+7*(w/256), headY-2); ctx.lineTo(baseX+18*(w/256), headY+10); ctx.stroke(); } if (state.facial === 'Mask') { ctx.fillStyle = p.dark; roundRect(ctx, baseX-16*(w/256), headY+4, 32*(w/256), 16*(h/256), 8); ctx.fill(); }
+    ctx.fillStyle = state.eyes === 'Glow' ? p.b : p.dark; circle(ctx, baseX-14*(w/256), headY+2, 3.5*(w/256)); circle(ctx, baseX+14*(w/256), headY+2, 3.5*(w/256)); if (state.eyeStyle === 'Sharp') { ctx.strokeStyle = p.dark; ctx.lineWidth = 2*(w/256); ctx.beginPath(); ctx.moveTo(baseX-18*(w/256), headY-2); ctx.lineTo(baseX-9*(w/256), headY+1); ctx.lineTo(baseX-18*(w/256), headY+4); ctx.stroke(); } if (state.eyeStyle === 'Cat') { ctx.strokeStyle = p.dark; ctx.lineWidth = 2*(w/256); ctx.beginPath(); ctx.moveTo(baseX-16*(w/256), headY+1); ctx.lineTo(baseX-12*(w/256), headY-2); ctx.lineTo(baseX-8*(w/256), headY+1); ctx.stroke(); } if (state.eyeStyle === 'Robot') { ctx.fillStyle = p.dark; roundRect(ctx, baseX-18*(w/256), headY-1, 8*(w/256), 8*(h/256), 2); ctx.fill(); } ctx.strokeStyle = p.dark; ctx.lineWidth = 2.5*(w/256); ctx.beginPath(); ctx.moveTo(baseX-6*(w/256), headY+16); ctx.quadraticCurveTo(baseX, headY+22, baseX+6*(w/256), headY+16); ctx.stroke(); if (state.eyeStyle === 'Sleepy') { ctx.beginPath(); ctx.moveTo(baseX-19*(w/256), headY+1); ctx.quadraticCurveTo(baseX-14*(w/256), headY-2, baseX-9*(w/256), headY+1); ctx.stroke(); }
+    if (cast) { ctx.fillStyle = p.b; ctx.globalAlpha = .24; circle(ctx, baseX+bodyW, bodyY+12+y, 18*(w/256)); ctx.globalAlpha = 1; } if (win) { ctx.strokeStyle = p.a; ctx.lineWidth = 4*(w/256); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(baseX-14*(w/256), headY+44); ctx.quadraticCurveTo(baseX, headY+36, baseX+14*(w/256), headY+44); ctx.stroke(); }
+    if (state.showGuides) drawGuides(ctx, w, h);
+  }
+  function drawGuides(ctx,w,h){ ctx.save(); ctx.strokeStyle='rgba(79,110,247,.2)'; ctx.setLineDash([6,6]); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(w*0.5, 0); ctx.lineTo(w*0.5, h); ctx.moveTo(0, h*0.5); ctx.lineTo(w, h*0.5); ctx.stroke(); ctx.restore(); }
+  function renderThumb(p, d){ const c = document.createElement('canvas'); c.width = 180; c.height = 180; const ctx = c.getContext('2d'); drawSprite(ctx, 180, 180, p, 0, d, true); return c.toDataURL('image/png'); }
+  function render(){
+    app.innerHTML = '';
+    app.appendChild(buildUI());
+    previewCanvas = app.querySelector('.previewCanvas');
+    previewCtx = previewCanvas.getContext('2d');
+    sheetCanvas = app.querySelector('.sheetCanvas');
+    sheetCtx = sheetCanvas.getContext('2d');
+    resizeCanvas();
+  }
+  function buildUI(){
+    const poseTiles = poses.map((p, i) => q('button', {class:`poseBtn ${state.pose === i ? 'on' : ''}`, type:'button', onclick:() => set({pose:i})}, [ q('div', {class:'canvasFrame'}, [ q('img', {alt:p, src: renderThumb(i, state.dir)}) ]), q('div', {class:'poseName'}, p) ]));
+    const chips = Object.keys(state.abilities).map(name => q('button', {class:`chip ${state.abilities[name] ? 'on' : ''}`, type:'button', onclick:() => setAbility(name)}, [name]));
+    const left = q('div', {class:'col'}, [
+      panel('Identity','◎', q('div', {class:'stack'}, [
+        field('Character name', q('input', {type:'text', value: state.name, oninput:e => set({name:e.target.value})})),
+        q('div', {class:'grid2'}, [sel('Theme','theme',['default','sunset','neon','forest']), sel('Body type','body', Object.keys(bodyPresets))]),
+        q('div', {class:'grid2'}, [sel('Gender','gender',['Neutral','Female','Male']), sel('Style','style',['pixel','vector','concept'])]),
+      ])),
+      panel('Clothing','✚', q('div', {class:'grid2'}, [
+        sel('Headwear','headwear',['None','Cap','Hood','Crown','Bandana','Helmet']),
+        sel('Top','top',['Tee','Hoodie','Armor','Jacket','Robe','Tunic']),
+        sel('Bottom','bottom',['Shorts','Pants','Armor Pants','Skirt','Kilt']),
+        sel('Shoes','shoes',['Sneakers','Boots','Sandals','Barefoot','Heavy Boots']),
+        sel('Accessory','accessory',['None','Cape','Scarf','Backpack','Shoulder Pad','Amulet']),
+      ])),
+      panel('Features','◌', q('div', {class:'grid2'}, [
+        sel('Hair','hairStyle',['Short','Long','Spiky','Curly','Bald','Braided']),
+        sel('Eyes','eyeStyle',['Round','Sharp','Glow','Sleepy','Robot','Cat']),
+        sel('Facial','facial',['Clean','Beard','Moustache','Scar','Mask']),
+        sel('Skin','skin', Object.keys(skinMap)),
+        sel('Hair color','hair', Object.keys(hairMap)),
+      ])),
+      panel('Proportions','⇱', q('div', {class:'stack'}, [
+        rng('Animation speed','speed',0.5,3,0.1),
+        rng('Frames per pose','frames',1,16,1),
+        rng('Frame size','frameSize',64,256,1),
+        rng('Sheet columns','sheetColumns',2,8,1),
+      ])),
+    ]);
+    const preview = q('div', {class:'previewWrap'}, [
+      q('div', {}, [
+        q('div', {class:'tools', style:'margin-bottom:10px'}, [
+          q('button', {class:'btn primary', type:'button', onclick:() => set({pose:(state.pose+1)%poses.length})}, `Pose: ${poses[state.pose]}`),
+          q('button', {class:'btn', type:'button', onclick:() => set({dir:(state.dir+1)%directions.length})}, `Direction: ${directions[state.dir]}`),
+          q('button', {class:'btn', type:'button', onclick:exportSheet}, '⬇ PNG sheet'),
+          q('button', {class:'btn', type:'button', onclick:exportJSON}, '⬇ JSON')
+        ]),
+        q('div', {class:'canvasCard'}, [ q('div', {class:'canvasFrame'}, [ q('canvas', {class:'previewCanvas'}) ]) ])
+      ]),
+      q('div', {class:'meta'}, [
+        q('div', {class:'card'}, [ q('div', {class:'kicker'}, 'Character class'), q('div', {class:'title'}, cls()), q('div', {class:'sub'}, img ? 'Uploaded image is animated with motion transforms.' : 'Procedural sprite is rendered from the selected controls.') ]),
+        q('div', {class:'card'}, [ q('div', {class:'kicker'}, 'Project JSON'), q('textarea', {class:'codebox', readonly:'readonly'}, JSON.stringify(spec(), null, 2)) ]),
+        q('div', {class:'card'}, [ q('div', {class:'kicker'}, 'Export'), q('div', {class:'actions', style:'margin-top:10px'}, [ q('button', {class:'btn success', type:'button', onclick:exportSheet}, '⬇ PNG sheet'), q('button', {class:'btn', type:'button', onclick:exportJSON}, '⬇ JSON'), q('button', {class:'btn', type:'button', onclick:exportPackage}, '⬇ Project') ]) ])
+      ])
+    ]);
+    const middle = q('div', {class:'col'}, [
+      panel('Live preview','◈', preview),
+      panel('Animation sets','▦', q('div', {}, [ q('div', {class:'poseGrid'}, poseTiles), q('div', {class:'notice', style:'margin-top:12px'}, 'Tap a tile to switch the active pose. The preview canvas animates continuously.') ])),
+      panel('Sprite sheet','▣', q('div', {class:'stack'}, [ q('div', {class:'canvasCard sheet'}, [ q('div', {class:'canvasFrame'}, [ q('canvas', {class:'sheetCanvas'}) ]) ]), q('div', {class:'notice'}, 'The sheet is baked in-browser as a PNG export.') ])),
+      panel('Abilities + motion','✎', q('div', {class:'stack'}, [ q('div', {class:'chips'}, chips), q('div', {class:'grid2'}, [ q('div', {class:'stack'}, [ chk('Use transparent background', 'bgTransparent'), chk('Show guides', 'showGuides') ]), q('div', {class:'stack'}, [ rng('Image scale','imageScale',0.3,3,0.05), rng('Image opacity','opacity',0,1,0.01), rng('Image X offset','imageX',-300,300,1), rng('Image Y offset','imageY',-300,300,1), rng('Rotation','imageRotate',-180,180,1) ]) ]), ]))
+    ]);
+    const right = q('div', {class:'col'}, [
+      panel('Import image','⤒', q('div', {class:'stack'}, [
+        q('div', {class:'upload'}, [ q('strong', {}, 'Load a character image'), q('small', {}, 'PNG with transparency works best, but JPG and WebP also work.'), q('div', {class:'actions', style:'justify-content:center;margin-top:12px'}, [ q('label', {class:'btn primary'}, [ 'Choose file', q('input', {type:'file', accept:'image/*', style:'display:none', onchange:e => loadImage(e.target.files && e.target.files[0])}) ]), q('button', {class:'btn', type:'button', onclick:clearImage}, 'Clear') ]) ]),
+        q('div', {class:'grid2'}, [ q('div', {class:'field'}, [ q('label', {}, 'Image scale'), q('input', {type:'range', min:0.3, max:3, step:0.05, value:state.imageScale, oninput:e=>set({imageScale:Number(e.target.value)})}) ]), q('div', {class:'field'}, [ q('label', {}, 'Opacity'), q('input', {type:'range', min:0, max:1, step:0.01, value:state.opacity, oninput:e=>set({opacity:Number(e.target.value)})}) ]), q('div', {class:'field'}, [ q('label', {}, 'X offset'), q('input', {type:'range', min:-300, max:300, step:1, value:state.imageX, oninput:e=>set({imageX:Number(e.target.value)})}) ]), q('div', {class:'field'}, [ q('label', {}, 'Y offset'), q('input', {type:'range', min:-300, max:300, step:1, value:state.imageY, oninput:e=>set({imageY:Number(e.target.value)})}) ]), q('div', {class:'field'}, [ q('label', {}, 'Rotation'), q('input', {type:'range', min:-180, max:180, step:1, value:state.imageRotate, oninput:e=>set({imageRotate:Number(e.target.value)})}) ]) ])
+      ])),
+      panel('Workflow','↺', q('div', {class:'stack'}, [ q('div', {class:'card'}, [ q('strong', {}, '1. Load or design'), q('div', {class:'sub'}, 'Use the image uploader or the built-in sprite controls.') ]), q('div', {class:'card'}, [ q('strong', {}, '2. Preview motion'), q('div', {class:'sub'}, 'The canvas updates in real time and the animation loops continuously.') ]), q('div', {class:'card'}, [ q('strong', {}, '3. Export outputs'), q('div', {class:'sub'}, 'Download a PNG sheet, JSON spec, or project package without any paid backend.') ]) ])),
+      panel('Specs','☁', q('div', {class:'stack'}, [ specRow('Repository mode', 'Static GitHub Pages'), specRow('Backend', 'None'), specRow('Mobile support', 'Yes'), specRow('Offline support', 'After first load'), specRow('Export formats', 'PNG / JSON') ])),
+      panel('Project package','⬒', q('div', {class:'stack'}, [ q('div', {class:'notice'}, 'This project is intentionally static and deploys free on GitHub Pages.'), q('div', {class:'actions'}, [ q('button', {class:'btn success', type:'button', onclick:exportSheet}, '⬇ PNG sheet'), q('button', {class:'btn', type:'button', onclick:exportJSON}, '⬇ JSON'), q('button', {class:'btn', type:'button', onclick:exportPackage}, '⬇ Project') ]) ]))
+    ]);
+    return q('div', {class:'shell'}, [ q('div', {class:'topbar'}, [ q('div', {}, [ q('div', {class:'brand'}, [ q('span', {class:'dot'}), 'SpriteSmith Studio' ]), q('h1', {}, 'Free browser sprite studio'), q('p', {class:'lede'}, 'Design characters, load your own image, preview real motion in canvas, and export a sprite sheet PNG plus JSON project file — all with no paid backend.') ]), q('div', {class:'actions'}, [ q('button', {class:'btn primary', type:'button', onclick:randomize}, '⚡ Randomize'), q('button', {class:'btn', type:'button', onclick:exportPackage}, '⬇ Export project') ]) ]), q('div', {class:'layout'}, [ left, middle, right ]) ]);
+  }
+  function panel(title, icon, body){ return q('div', {class:'panel'}, [ q('div', {class:'ph'}, [ q('div', {class:'pi'}, icon), q('div', {}, title) ]), q('div', {class:'pb'}, [ body ]) ]); }
+  function field(label, control){ return q('div', {class:'field'}, [ q('label', {}, label), control ]); }
+  function specRow(label, value){ return q('div', {class:'spec'}, [ q('div', {class:'l'}, label), q('div', {class:'v'}, value) ]); }
+  function sel(label, key, options){ return field(label, q('select', {value: state[key], onchange: e => set({[key]: e.target.value})}, options.map(o => q('option', {value:o, selected: state[key]===o ? 'selected' : null}, o)))); }
+  function rng(label, key, min, max, step){ return q('div', {class:'range'}, [ q('div', {class:'row'}, [ q('span', {}, label), q('span', {}, String(state[key])) ]), q('input', {type:'range', min, max, step, value: state[key], oninput: e => set({[key]: Number(e.target.value)})}) ]); }
+  function chk(label, key){ return q('label', {class:'inline'}, [ q('input', {type:'checkbox', checked: !!state[key], onchange: e => set({[key]: e.target.checked})}), q('span', {}, label) ]); }
+  function loadImage(file){ if(!file) return; const url = URL.createObjectURL(file); const i = new Image(); i.onload = () => { if (imgUrl) URL.revokeObjectURL(imgUrl); img = i; imgUrl = url; toast('Image loaded'); renderCanvases(); render(); }; i.onerror = () => { URL.revokeObjectURL(url); toast('Could not load image', true); }; i.src = url; }
+  function clearImage(){ img = null; if (imgUrl) URL.revokeObjectURL(imgUrl); imgUrl = ''; state.imageScale = 1; state.imageX = 0; state.imageY = 0; state.imageRotate = 0; state.opacity = 1; save(); render(); }
+  function drawFrame(ctx, w, h, poseIndex, frameIndex, dirIndex){ drawSprite(ctx, w, h, poseIndex, frameIndex, dirIndex, true); if (state.showGuides) drawGuides(ctx, w, h); }
+  function renderThumb(p, d){ const c = document.createElement('canvas'); c.width = 180; c.height = 180; const ctx = c.getContext('2d'); drawFrame(ctx, 180, 180, p, 0, d); return c.toDataURL('image/png'); }
+  function renderCanvases(){ if (!previewCanvas || !sheetCanvas) return; const dpr = window.devicePixelRatio || 1; const previewW = Math.max(320, previewCanvas.clientWidth || 320); const previewH = Math.max(320, previewCanvas.clientHeight || previewW); previewCanvas.width = Math.round(previewW * dpr); previewCanvas.height = Math.round(previewH * dpr); previewCtx.setTransform(dpr,0,0,dpr,0,0); drawFrame(previewCtx, previewW, previewH, state.pose, animFrame, state.dir); const cols = Math.max(2, Number(state.sheetColumns) || 4); const frames = Math.max(1, Number(state.frames) || 8); const total = poses.length * directions.length * frames; const rows = Math.ceil(total / cols); const cw = Math.max(640, sheetCanvas.clientWidth || cols * state.frameSize); const ch = Math.max(360, Math.ceil((cw / cols) * rows)); sheetCanvas.width = Math.round(cw * dpr); sheetCanvas.height = Math.round(ch * dpr); sheetCtx.setTransform(dpr,0,0,dpr,0,0); sheetCtx.clearRect(0,0,cw,ch); let i = 0; for (let p = 0; p < poses.length; p++) for (let d = 0; d < directions.length; d++) for (let f = 0; f < frames; f++) { const x = (i % cols) * (cw / cols), y = Math.floor(i / cols) * (ch / rows); sheetCtx.save(); sheetCtx.translate(x, y); sheetCtx.beginPath(); sheetCtx.rect(0,0,cw/cols,ch/rows); sheetCtx.clip(); drawFrame(sheetCtx, cw/cols, ch/rows, p, f, d); sheetCtx.restore(); i++; } }
+  function exportSheet(){ if(!sheetCanvas) return; bakeSheet(); dlpng(sheetCanvas, `${state.name || 'sprite'}.sheet.png`); toast('PNG sheet exported'); }
+  function exportJSON(){ dl(`${state.name || 'sprite'}.project.json`, JSON.stringify(spec(), null, 2), 'application/json;charset=utf-8'); toast('JSON exported'); }
+  function exportPackage(){ if(!sheetCanvas) return; bakeSheet(); dl(`${state.name || 'sprite'}.package.json`, JSON.stringify({spec: spec(), sheetPNG: sheetCanvas.toDataURL('image/png')}, null, 2), 'application/json;charset=utf-8'); toast('Project package exported'); }
+  function bakeSheet(){ renderCanvases(); }
+  function randomize(){ const pick = arr => arr[Math.floor(Math.random() * arr.length)]; const abilityNames = Object.keys(state.abilities); abilityNames.forEach(k => state.abilities[k] = Math.random() > 0.55); Object.assign(state, { name: pick(['Nova','Rift','Astra','Kairo','Mira','Flux','Echo','Vanta']), theme: pick(['default','sunset','neon','forest']), body: pick(Object.keys(bodyPresets)), hair: pick(Object.keys(hairMap)), skin: pick(Object.keys(skinMap)), eyes: pick(['Brown','Blue','Green','Gray','Glow']), hairStyle: pick(['Short','Long','Spiky','Curly','Bald','Braided']), eyeStyle: pick(['Round','Sharp','Glow','Sleepy','Robot','Cat']), facial: pick(['Clean','Beard','Moustache','Scar','Mask']), headwear: pick(['None','Cap','Hood','Crown','Bandana','Helmet']), top: pick(['Tee','Hoodie','Armor','Jacket','Robe','Tunic']), bottom: pick(['Shorts','Pants','Armor Pants','Skirt','Kilt']), shoes: pick(['Sneakers','Boots','Sandals','Barefoot','Heavy Boots']), accessory: pick(['None','Cape','Scarf','Backpack','Shoulder Pad','Amulet']), pose: Math.floor(Math.random() * poses.length), dir: Math.floor(Math.random() * directions.length), speed: 1 + Math.random() * 1.5, frames: [6,8,10][Math.floor(Math.random()*3)], frameSize: [96,128,144][Math.floor(Math.random()*3)], sheetColumns: [3,4,5][Math.floor(Math.random()*3)] }); save(); render(); toast('Randomized'); }
+  function resizeCanvas(){ if (!previewCanvas || !sheetCanvas) return; renderCanvases(); }
+  function render(){ app.innerHTML = ''; app.appendChild(buildUI()); previewCanvas = app.querySelector('.previewCanvas'); previewCtx = previewCanvas.getContext('2d'); sheetCanvas = app.querySelector('.sheetCanvas'); sheetCtx = sheetCanvas.getContext('2d'); renderCanvases(); }
+  function handleError(err){ console.error(err); app.innerHTML = '<div class="shell"><div class="panel"><div class="pb"><div class="notice error"><strong>App failed to load.</strong><div style="margin-top:6px">' + String(err && err.message ? err.message : err) + '</div></div></div></div></div>'; }
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => { e.preventDefault(); const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(file && file.type.startsWith('image/')) loadImage(file); });
+  window.addEventListener('error', e => handleError(e.error || e.message));
+  try { render(); requestAnimationFrame(function tick(){ animTick++; if (animTick % Math.max(1, Math.round(12 / Math.max(0.1, Number(state.speed) || 1))) === 0) { animFrame = (animFrame + 1) % Math.max(1, Number(state.frames) || 8); renderCanvases(); } requestAnimationFrame(tick); }); } catch (err) { handleError(err); }
+})();
+</script>
+</body>
+</html>
