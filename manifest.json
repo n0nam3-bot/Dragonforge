@@ -1,0 +1,9 @@
+{
+  "name": "SpriteSmith Studio",
+  "short_name": "SpriteSmith",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#4f6ef7",
+  "description": "A free character and sprite designer."
+}
