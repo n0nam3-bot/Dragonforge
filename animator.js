@@ -1,6 +1,4 @@
-// animator.js — Skeletal-region warp animation engine
-
-// ── Pose catalogue ───────────────────────────────────────────────────────────
+// animator.js — Pivot-based skeletal animation using detected body parts
 
 export const POSES = [
   { id: 'idle',   label: 'IDLE',   ico: '🧍' },
@@ -14,322 +12,315 @@ export const POSES = [
   { id: 'cast',   label: 'CAST',   ico: '✨' },
 ];
 
-// Region boundaries as [start, end] fractions of bounding-box height
-const RB = {
-  hair:  [0.00, 0.12],
-  head:  [0.12, 0.26],
-  torso: [0.26, 0.56],
-  hips:  [0.56, 0.68],
-  legs:  [0.68, 1.00],
-};
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const DEG   = Math.PI / 180;
+const sin1  = t => Math.sin(t * Math.PI * 2);
+const cos1  = t => Math.cos(t * Math.PI * 2);
+const sin2  = t => Math.sin(t * Math.PI * 4);
+const abs1  = t => Math.abs(sin1(t));
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const ease  = (t, p = 2) => t < 0.5
+  ? Math.pow(t * 2, p) / 2
+  : 1 - Math.pow((1 - t) * 2, p) / 2;
 
-// ── Body detection ───────────────────────────────────────────────────────────
+// ── POSE TABLE ────────────────────────────────────────────────────────────────
+// rot  = radians, clockwise positive, around the part's anchor/joint
+// dx   = horizontal shift as fraction of bb.h (character height)
+// dy   = vertical shift as fraction of bb.h
+// alpha = opacity 0..1
 
-/**
- * Scan the character canvas (already bg-removed) and return structural info.
- * Returns null if no visible pixels found.
- */
-export function detectBodyInfo(charCanvas) {
-  const W = charCanvas.width, H = charCanvas.height;
-  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const d = ctx.getImageData(0, 0, W, H).data;
+export function getPoseTransforms(pose, t) {
+  switch (pose) {
 
-  let minX = W, maxX = 0, minY = H, maxY = 0;
-  let alphaX = 0, alphaTotal = 0;
-
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const a = d[(y*W+x)*4+3];
-      if (a > 20) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-        alphaX     += x * a;
-        alphaTotal += a;
-      }
+    // ── IDLE ──────────────────────────────────────────────────────────────────
+    case 'idle': {
+      const breath = sin1(t) * 0.006;
+      const sway   = sin1(t) * 0.5;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: sway * DEG,         dx: 0,     dy: -breath * 0.5, alpha: 1 },
+        head:  { rot: sway * 0.3 * DEG,   dx: 0,     dy: -breath,       alpha: 1 },
+        torso: { rot: sway * 0.2 * DEG,   dx: 0,     dy: -breath * 0.7, alpha: 1 },
+        armL:  { rot: (3 + sin1(t)*3)*DEG,dx: 0.002, dy: 0,             alpha: 1 },
+        armR:  { rot:-(3 + sin1(t)*3)*DEG,dx:-0.002, dy: 0,             alpha: 1 },
+        hips:  { rot: sway*-0.1*DEG,      dx: 0,     dy: breath * 0.4,  alpha: 1 },
+        legL:  { rot: sin1(t)*1.5*DEG,    dx: 0,     dy: breath * 0.5,  alpha: 1 },
+        legR:  { rot:-sin1(t)*1.5*DEG,    dx: 0,     dy: breath * 0.5,  alpha: 1 },
+        globalY: sin1(t) * 0.006,
+        globalRot: 0, alpha: 1, effect: null,
+      };
     }
+
+    // ── WALK ──────────────────────────────────────────────────────────────────
+    case 'walk': {
+      const bob    = -abs1(t) * 0.018;
+      const legSwg = sin1(t) * 30;
+      const armSwg = -sin1(t) * 24;
+      const hipRot = sin1(t) * 5;
+      const lean   = 4;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: sin1(t)*5*DEG,      dx: 0, dy: bob*0.4,  alpha: 1 },
+        head:  { rot: lean*0.4*DEG,       dx: 0, dy: bob*0.5,  alpha: 1 },
+        torso: { rot: lean*DEG,           dx: 0, dy: bob*0.4,  alpha: 1 },
+        armL:  { rot: armSwg*DEG,         dx: 0, dy: bob*0.3,  alpha: 1 },
+        armR:  { rot:-armSwg*DEG,         dx: 0, dy: bob*0.3,  alpha: 1 },
+        hips:  { rot: hipRot*DEG,         dx: 0, dy: bob*0.3,  alpha: 1 },
+        legL:  { rot: legSwg*DEG,         dx: 0, dy: 0,        alpha: 1 },
+        legR:  { rot:-legSwg*DEG,         dx: 0, dy: 0,        alpha: 1 },
+        globalY: bob, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
+
+    // ── RUN ───────────────────────────────────────────────────────────────────
+    case 'run': {
+      const bob    = -abs1(t) * 0.036;
+      const legSwg = sin1(t) * 50;
+      const armSwg = -sin1(t) * 44;
+      const lean   = 11;
+      const hipRot = sin1(t) * 9;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: sin1(t)*14*DEG,     dx: lean*0.001, dy: bob*0.6, alpha: 1 },
+        head:  { rot: lean*0.5*DEG,       dx: 0,          dy: bob*0.6, alpha: 1 },
+        torso: { rot: lean*DEG,           dx: 0,          dy: bob*0.5, alpha: 1 },
+        armL:  { rot: armSwg*DEG,         dx: 0,          dy: bob*0.4, alpha: 1 },
+        armR:  { rot:-armSwg*DEG,         dx: 0,          dy: bob*0.4, alpha: 1 },
+        hips:  { rot: hipRot*DEG,         dx: 0,          dy: bob*0.3, alpha: 1 },
+        legL:  { rot: legSwg*DEG,         dx: 0,          dy: 0,       alpha: 1 },
+        legR:  { rot:-legSwg*DEG,         dx: 0,          dy: 0,       alpha: 1 },
+        globalY: bob, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
+
+    // ── JUMP ──────────────────────────────────────────────────────────────────
+    case 'jump': {
+      const arc   = -Math.sin(t * Math.PI);
+      const tuck  = arc * 30;
+      const armUp = arc * -55;
+      const lean  = arc * 8;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: lean*-0.6*DEG,   dx: 0,     dy: arc*-0.04, alpha: 1 },
+        head:  { rot: lean*-0.3*DEG,   dx: 0,     dy: arc*-0.02, alpha: 1 },
+        torso: { rot: lean*DEG,        dx: 0,     dy: 0,          alpha: 1 },
+        armL:  { rot: armUp*DEG,       dx:-0.01,  dy: arc*-0.01,  alpha: 1 },
+        armR:  { rot:-armUp*DEG,       dx: 0.01,  dy: arc*-0.01,  alpha: 1 },
+        hips:  { rot: 0,               dx: 0,     dy: 0,          alpha: 1 },
+        legL:  { rot: tuck*DEG,        dx: 0.012, dy: 0,          alpha: 1 },
+        legR:  { rot:-tuck*DEG,        dx:-0.012, dy: 0,          alpha: 1 },
+        globalY: arc*0.13, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
+
+    // ── ATTACK ────────────────────────────────────────────────────────────────
+    case 'attack': {
+      const slashT = t < 0.3 ? -(t/0.3) : (t-0.3)/0.7;
+      const armRot = slashT * 115;
+      const tw     = slashT * 18;
+      const bob    = -Math.abs(slashT) * 0.012;
+      return {
+        order: ['legR','legL','hips','armL','torso','armR','head','hair'],
+        hair:  { rot: tw*0.5*DEG,        dx: 0, dy: 0,   alpha: 1 },
+        head:  { rot: tw*0.3*DEG,        dx: 0, dy: 0,   alpha: 1 },
+        torso: { rot: tw*DEG,            dx: 0, dy: bob,  alpha: 1 },
+        armL:  { rot:-20*DEG,            dx: 0, dy: 0,   alpha: 1 },
+        armR:  { rot:(armRot-55)*DEG,    dx: 0, dy: 0,   alpha: 1 },
+        hips:  { rot: tw*0.4*DEG,        dx: 0, dy: bob*0.5, alpha: 1 },
+        legL:  { rot:-10*DEG,            dx: 0, dy: 0,   alpha: 1 },
+        legR:  { rot: 16*DEG,            dx: 0, dy: 0,   alpha: 1 },
+        globalY: bob*0.5, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
+
+    // ── HURT ──────────────────────────────────────────────────────────────────
+    case 'hurt': {
+      const recoil = Math.sin(t * Math.PI) * -20;
+      const flash  = t < 0.25 ? 1 : clamp(1-(t-0.25)*5, 0, 1);
+      const shake  = sin2(t) * 3;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot:(recoil*-0.6+shake)*DEG, dx: 0, dy: 0, alpha: 1 },
+        head:  { rot: recoil*-0.4*DEG,        dx: 0, dy: 0, alpha: 1 },
+        torso: { rot: recoil*DEG,             dx: 0, dy: 0, alpha: 1 },
+        armL:  { rot:(recoil+22)*DEG,         dx: 0, dy: 0, alpha: 1 },
+        armR:  { rot:(recoil-22)*DEG,         dx: 0, dy: 0, alpha: 1 },
+        hips:  { rot: recoil*0.4*DEG,         dx: 0, dy: 0, alpha: 1 },
+        legL:  { rot: recoil*0.3*DEG,         dx: 0, dy: 0, alpha: 1 },
+        legR:  { rot: recoil*0.3*DEG,         dx: 0, dy: 0, alpha: 1 },
+        globalY: -Math.sin(t*Math.PI)*0.02,
+        globalRot: shake*0.3*DEG,
+        alpha: 0.45 + 0.55*(1-flash*0.45),
+        effect: { type: 'hurt', flash },
+      };
+    }
+
+    // ── DIE ───────────────────────────────────────────────────────────────────
+    case 'die': {
+      const fall = clamp(ease(t, 2.5), 0, 1);
+      const fade = t > 0.65 ? clamp(1-(t-0.65)/0.35, 0, 1) : 1;
+      return {
+        order: ['hair','head','armL','armR','torso','hips','legL','legR'],
+        hair:  { rot: fall*82*DEG,   dx: 0, dy: fall*0.02, alpha: fade },
+        head:  { rot: fall*72*DEG,   dx: 0, dy: fall*0.01, alpha: fade },
+        torso: { rot: fall*76*DEG,   dx: 0, dy: fall*0.01, alpha: fade },
+        armL:  { rot: fall*105*DEG,  dx: 0, dy: 0,          alpha: fade },
+        armR:  { rot: fall*-42*DEG,  dx: 0, dy: 0,          alpha: fade },
+        hips:  { rot: fall*80*DEG,   dx: 0, dy: 0,          alpha: fade },
+        legL:  { rot: fall*62*DEG,   dx: 0, dy: 0,          alpha: fade },
+        legR:  { rot: fall*52*DEG,   dx: 0, dy: 0,          alpha: fade },
+        globalY: fall*0.07,
+        globalRot: fall*86*DEG,
+        alpha: fade, effect: null,
+      };
+    }
+
+    // ── CROUCH ────────────────────────────────────────────────────────────────
+    case 'crouch': {
+      const depth  = clamp(ease(clamp(t*2,0,1), 2), 0, 1);
+      const spread = depth * 24;
+      const squat  = depth * 0.065;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: 0,              dx: 0,     dy: squat,       alpha: 1 },
+        head:  { rot: 11*depth*DEG,   dx: 0,     dy: squat*0.8,   alpha: 1 },
+        torso: { rot: 9*depth*DEG,    dx: 0,     dy: squat*0.6,   alpha: 1 },
+        armL:  { rot: 32*depth*DEG,   dx: 0,     dy: squat*0.4,   alpha: 1 },
+        armR:  { rot:-32*depth*DEG,   dx: 0,     dy: squat*0.4,   alpha: 1 },
+        hips:  { rot: 0,              dx: 0,     dy: squat*0.2,   alpha: 1 },
+        legL:  { rot: spread*DEG,     dx: 0.012, dy: 0,           alpha: 1 },
+        legR:  { rot:-spread*DEG,     dx:-0.012, dy: 0,           alpha: 1 },
+        globalY: squat*0.85, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
+
+    // ── CAST ──────────────────────────────────────────────────────────────────
+    case 'cast': {
+      const raise  = Math.abs(cos1(t)) * -65;
+      const sway   = sin1(t) * 6;
+      const ripple = sin2(t) * 3;
+      const glow   = (1 + sin2(t)) * 0.5;
+      return {
+        order: ['legL','legR','hips','torso','armR','head','armL','hair'],
+        hair:  { rot:(sway*1.5+ripple)*DEG, dx: 0, dy: 0,  alpha: 1 },
+        head:  { rot: sway*0.4*DEG,         dx: 0, dy: -0.005*Math.abs(cos1(t)), alpha: 1 },
+        torso: { rot: sway*0.2*DEG,         dx: 0, dy: 0,  alpha: 1 },
+        armL:  { rot:(raise-10)*DEG,        dx: 0, dy: 0,  alpha: 1 },
+        armR:  { rot: sway*DEG,             dx: 0, dy: 0,  alpha: 1 },
+        hips:  { rot: sway*-0.1*DEG,        dx: 0, dy: 0,  alpha: 1 },
+        legL:  { rot: sway*0.5*DEG,         dx: 0, dy: 0,  alpha: 1 },
+        legR:  { rot:-sway*0.5*DEG,         dx: 0, dy: 0,  alpha: 1 },
+        globalY: 0, globalRot: 0, alpha: 1,
+        effect: { type: 'cast', glow },
+      };
+    }
+
+    default: return getPoseTransforms('idle', t);
   }
-
-  if (minX > maxX || minY > maxY) return null;
-
-  const bb = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
-  const centerX = alphaTotal > 0 ? alphaX / alphaTotal : (minX + maxX) / 2;
-
-  return { bb, centerX, regionBounds: RB };
 }
 
-// ── Frame renderer ───────────────────────────────────────────────────────────
-
+// ── Main render ───────────────────────────────────────────────────────────────
 /**
  * Render one animation frame onto ctx.
- * @param {CanvasRenderingContext2D} ctx   - destination
- * @param {HTMLCanvasElement}        src   - bg-removed character
- * @param {object}                   info  - result of detectBodyInfo()
- * @param {string}                   pose  - one of POSES[*].id
- * @param {number}                   t     - phase 0..1 (looping)
- * @param {'left'|'right'}           dir   - facing direction
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {object} bodyData — result from detectBodyParts()
+ * @param {string} pose
+ * @param {number} t   — phase 0..1
+ * @param {'left'|'right'} dir
  */
-export function renderFrame(ctx, src, info, pose, t, dir) {
-  const { bb, centerX, regionBounds: rb } = info;
-  const T = getPoseTransforms(pose, t);
-
+export function renderFrame(ctx, bodyData, pose, t, dir) {
+  const { parts, bb } = bodyData;
   const DW = ctx.canvas.width;
   const DH = ctx.canvas.height;
 
-  const scale = Math.min((DW * 0.70) / bb.w, (DH * 0.70) / bb.h, 3);
-  const baseX = (DW - bb.w * scale) / 2;
-  const baseY = (DH - bb.h * scale) / 2 + T.globalY * scale;
-
   ctx.clearRect(0, 0, DW, DH);
+
+  const T     = getPoseTransforms(pose, t);
+  const scale = Math.min((DW * 0.75) / bb.w, (DH * 0.80) / bb.h);
+
+  // Centre character bounding box
+  const baseX = (DW - bb.w * scale) / 2;
+  const baseY = (DH - bb.h * scale) / 2 + T.globalY * DH;
+
   ctx.save();
 
-  // Horizontal flip for left-facing
+  // Direction flip
   if (dir === 'left') {
     ctx.translate(DW, 0);
     ctx.scale(-1, 1);
   }
 
-  const alpha = T.alpha ?? 1;
-  const cxD   = baseX + (centerX - bb.x) * scale; // dest x of character centre
+  // Global rotation for die
+  if (T.globalRot) {
+    ctx.translate(DW / 2, DH * 0.7);
+    ctx.rotate(T.globalRot);
+    ctx.translate(-DW / 2, -DH * 0.7);
+  }
 
-  // Draw each named region with its own left/right horizontal offsets
-  const regions = [
-    { rb0: rb.hair[0],  rb1: rb.hair[1],  xL: T.hairXOff,  xR: T.hairXOff,  yOff: T.headYOff  },
-    { rb0: rb.head[0],  rb1: rb.head[1],  xL: T.headXOff,  xR: T.headXOff,  yOff: T.headYOff  },
-    { rb0: rb.head[1],  rb1: rb.torso[1], xL: T.torsoXL,   xR: T.torsoXR,   yOff: T.bodyYOff  },
-    { rb0: rb.torso[1], rb1: rb.hips[1],  xL: T.hipsXL,    xR: T.hipsXR,    yOff: T.bodyYOff  },
-    { rb0: rb.hips[1],  rb1: 1.00,        xL: T.legsXL,    xR: T.legsXR,    yOff: T.legsYOff  },
-  ];
+  const order = T.order || Object.keys(parts);
 
-  for (const { rb0, rb1, xL, xR, yOff } of regions) {
-    const srcY = bb.y + rb0 * bb.h | 0;
-    const srcH = Math.max(1, ((rb1 - rb0) * bb.h) | 0);
-    const dy   = baseY + rb0 * bb.h * scale + yOff * scale;
-    const dh   = srcH * scale;
+  for (const pid of order) {
+    const part = parts[pid];
+    const xf   = T[pid];
+    if (!part || !xf) continue;
+
+    const { canvas, anchorX, anchorY, originX, originY } = part;
+
+    // World-space position of the pivot point
+    const pivotX = baseX + (originX - bb.x + anchorX) * scale;
+    const pivotY = baseY + (originY - bb.y + anchorY) * scale;
 
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = clamp((T.alpha ?? 1) * (xf.alpha ?? 1), 0, 1);
 
-    // Left half (clipped to left of centreline)
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, dy - 1, cxD, dh + 2);
-    ctx.clip();
-    ctx.drawImage(src, bb.x, srcY, bb.w, srcH,
-      baseX + xL * scale, dy, bb.w * scale, dh);
-    ctx.restore();
+    ctx.translate(
+      pivotX + (xf.dx || 0) * DH,
+      pivotY + (xf.dy || 0) * DH
+    );
+    ctx.rotate(xf.rot || 0);
 
-    // Right half (clipped to right of centreline)
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(cxD, dy - 1, DW - cxD, dh + 2);
-    ctx.clip();
-    ctx.drawImage(src, bb.x, srcY, bb.w, srcH,
-      baseX + xR * scale, dy, bb.w * scale, dh);
-    ctx.restore();
+    // Draw part so its anchor aligns with (0,0)
+    ctx.drawImage(
+      canvas,
+      -anchorX  * scale,
+      -anchorY  * scale,
+      canvas.width  * scale,
+      canvas.height * scale
+    );
 
     ctx.restore();
   }
 
-  // ── Special effects overlay ───────────────────────────────────────────────
-  if (pose === 'cast') drawCastGlow(ctx, DW, DH, t, dir);
-  if (pose === 'hurt') drawHurtFlash(ctx, DW, DH, T.flashAlpha ?? 0);
+  // Effects overlay
+  if (T.effect) {
+    if (T.effect.type === 'cast') drawCastGlow(ctx, DW, DH, T.effect.glow, dir);
+    if (T.effect.type === 'hurt') drawHurtFlash(ctx, DW, DH, T.effect.flash);
+  }
 
   ctx.restore();
 }
 
-// ── Pose transform library ───────────────────────────────────────────────────
-// All offsets are in source-image pixels (scaled at render time).
-// Positive xL/xR = move that half rightward.
-
-function getPoseTransforms(pose, t) {
-  const s1 = Math.sin(t * Math.PI * 2);   // −1..+1 one cycle
-  const c1 = Math.cos(t * Math.PI * 2);
-  const s2 = Math.sin(t * Math.PI * 4);   // two cycles
-  const as1 = Math.abs(s1);
-
-  switch (pose) {
-
-    case 'idle': {
-      const breath = s1 * 1.2;
-      const sway   = s1 * 0.8;
-      return {
-        globalY: breath, alpha: 1,
-        hairXOff: sway * 2,
-        headXOff: sway,
-        torsoXL: 0,       torsoXR: 0,
-        hipsXL:  0,        hipsXR: 0,
-        legsXL:  0,        legsXR: 0,
-        headYOff: breath,  bodyYOff: 0, legsYOff: 0,
-      };
-    }
-
-    case 'walk': {
-      const bob    = -as1 * 3.5;
-      const arm    = s1 * 15;
-      const leg    = -s1 * 17;
-      const lean   = s1 * 0.6;
-      return {
-        globalY: as1 * 1.5, alpha: 1,
-        hairXOff: s1 * 2.5 + lean,
-        headXOff: lean,
-        torsoXL:  -arm,     torsoXR: arm,
-        hipsXL:   arm * 0.12, hipsXR: -arm * 0.12,
-        legsXL:   leg,      legsXR: -leg,
-        headYOff: bob,      bodyYOff: bob * 0.4, legsYOff: 0,
-      };
-    }
-
-    case 'run': {
-      const bob  = -as1 * 6;
-      const arm  = s1 * 24;
-      const leg  = -s1 * 28;
-      const lean = 4;
-      return {
-        globalY: as1 * 3, alpha: 1,
-        hairXOff: s1 * 6 + lean,
-        headXOff: lean,
-        torsoXL:  -arm,       torsoXR: arm,
-        hipsXL:   arm * 0.18, hipsXR: -arm * 0.18,
-        legsXL:   leg,        legsXR: -leg,
-        headYOff: bob,        bodyYOff: bob * 0.5, legsYOff: 0,
-      };
-    }
-
-    case 'jump': {
-      const arc    = -Math.sin(t * Math.PI) * 42; // rise then fall
-      const tuck   = Math.sin(t * Math.PI) * 12;  // legs tuck at peak
-      const armUp  = -Math.sin(t * Math.PI) * 14;
-      return {
-        globalY: arc, alpha: 1,
-        hairXOff: -arc * 0.08,
-        headXOff: 0,
-        torsoXL:  armUp,   torsoXR: armUp,
-        hipsXL:   0,        hipsXR: 0,
-        legsXL:   tuck,     legsXR: -tuck,
-        headYOff: 0,        bodyYOff: 0, legsYOff: tuck,
-      };
-    }
-
-    case 'attack': {
-      // Sword-swing: right arm/half thrusts forward, body twists
-      const fwd    = Math.max(0, s1) * Math.max(0, s1);
-      const recoil = Math.max(0, -s1) * 0.4;
-      return {
-        globalY: 0, alpha: 1,
-        hairXOff: fwd * 5,
-        headXOff: fwd * 2,
-        torsoXL:  -fwd * 10,   torsoXR: fwd * 30,
-        hipsXL:   -recoil * 6, hipsXR: recoil * 6,
-        legsXL:   -recoil * 9, legsXR: recoil * 9,
-        headYOff: 0,           bodyYOff: 0, legsYOff: 0,
-      };
-    }
-
-    case 'hurt': {
-      const recoil    = Math.sin(t * Math.PI) * -18;
-      const flashA    = t < 0.3 ? 1 : 0.55 + Math.sin(t * Math.PI * 12) * 0.45;
-      return {
-        globalY: -Math.sin(t * Math.PI) * 6, alpha: flashA,
-        flashAlpha: 1 - flashA,
-        hairXOff: recoil * 0.5,
-        headXOff: recoil * 0.35,
-        torsoXL:  recoil,    torsoXR: recoil,
-        hipsXL:   recoil * 0.55, hipsXR: recoil * 0.55,
-        legsXL:   recoil * 0.2,  legsXR: recoil * 0.2,
-        headYOff: 0,         bodyYOff: 0, legsYOff: 0,
-      };
-    }
-
-    case 'die': {
-      const fall  = clamp01(t * 1.4);
-      const lean  = fall * 22;
-      const grav  = fall * fall * 38;
-      const fade  = t > 0.75 ? 1 - (t - 0.75) * 4 : 1;
-      return {
-        globalY: grav, alpha: fade,
-        hairXOff: lean * 0.7,
-        headXOff: lean * 0.5,
-        torsoXL:  lean,       torsoXR: lean * 2.2,
-        hipsXL:   lean * 1.6, hipsXR: lean * 1.6,
-        legsXL:   lean * 2.0, legsXR: lean * 2.8,
-        headYOff: -fall * 4,  bodyYOff: grav * 0.25, legsYOff: -fall * 2,
-      };
-    }
-
-    case 'crouch': {
-      const depth  = 0.5 - 0.5 * Math.cos(clamp01(t * 2) * Math.PI); // ease in
-      const spread = depth * 14;
-      return {
-        globalY: depth * 28, alpha: 1,
-        hairXOff: 0,
-        headXOff: 0,
-        torsoXL:  -spread * 0.3, torsoXR: spread * 0.3,
-        hipsXL:   -spread * 0.6, hipsXR: spread * 0.6,
-        legsXL:   -spread,       legsXR: spread,
-        headYOff: depth * 12,    bodyYOff: depth * 18, legsYOff: depth * 6,
-      };
-    }
-
-    case 'cast': {
-      const raise  = -Math.abs(Math.sin(t * Math.PI)) * 20;
-      const sway   = s1 * 5;
-      const ripple = s2 * 2;
-      return {
-        globalY: 0, alpha: 1,
-        hairXOff: sway * 1.8 + ripple,
-        headXOff: sway,
-        torsoXL:  raise + sway, torsoXR: raise + sway,
-        hipsXL:   -sway * 0.4,  hipsXR: sway * 0.4,
-        legsXL:   0,             legsXR: 0,
-        headYOff: -as1 * 3,     bodyYOff: 0, legsYOff: 0,
-      };
-    }
-
-    default: return zeroT();
-  }
-}
-
-function zeroT() {
-  return {
-    globalY: 0, alpha: 1,
-    hairXOff: 0, headXOff: 0,
-    torsoXL: 0, torsoXR: 0,
-    hipsXL: 0,  hipsXR: 0,
-    legsXL: 0,  legsXR: 0,
-    headYOff: 0, bodyYOff: 0, legsYOff: 0,
-  };
-}
-
-// ── Visual effects ────────────────────────────────────────────────────────────
-
-function drawCastGlow(ctx, DW, DH, t, dir) {
-  const glow   = Math.abs(Math.sin(t * Math.PI * 2));
-  const ex     = dir === 'left' ? DW * 0.3 : DW * 0.7;
-  const ey     = DH * 0.38;
-  const radius = 20 + glow * 30;
-  const grad   = ctx.createRadialGradient(ex, ey, 0, ex, ey, radius);
-  grad.addColorStop(0,   `rgba(180,120,255,${0.55 * glow})`);
-  grad.addColorStop(0.4, `rgba(120,80,255,${0.25 * glow})`);
-  grad.addColorStop(1,   'rgba(80,40,255,0)');
+// ── Effects ───────────────────────────────────────────────────────────────────
+function drawCastGlow(ctx, DW, DH, glow, dir) {
+  const ex = dir === 'left' ? DW * 0.35 : DW * 0.65;
+  const ey = DH * 0.35;
+  const r  = 22 + glow * 28;
+  const g  = ctx.createRadialGradient(ex, ey, 0, ex, ey, r);
+  g.addColorStop(0,   `rgba(200,140,255,${0.7 * glow})`);
+  g.addColorStop(0.4, `rgba(130,80,255,${0.35 * glow})`);
+  g.addColorStop(1,   'rgba(80,40,200,0)');
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(ex, ey, radius, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(ex, ey, r, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
 function drawHurtFlash(ctx, DW, DH, flash) {
-  if (flash <= 0) return;
+  if (!flash) return;
   ctx.save();
   ctx.globalCompositeOperation = 'source-atop';
-  ctx.fillStyle = `rgba(255,60,60,${flash * 0.45})`;
+  ctx.fillStyle = `rgba(255,50,50,${flash * 0.5})`;
   ctx.fillRect(0, 0, DW, DH);
   ctx.restore();
 }
-
-// ── Utilities ────────────────────────────────────────────────────────────────
-function clamp01(v) { return Math.max(0, Math.min(1, v)); }
