@@ -1,15 +1,15 @@
-// app.js — SpriteSmith Studio main entry point
+// app.js — SpriteSmith Studio  (v2 — skeletal body detection)
 
-import { removeBackground }        from './bgremove.js';
-import { POSES, detectBodyInfo, renderFrame } from './animator.js';
-import { bakeSheet, exportPNG, exportJSON }   from './spritesheet.js';
+import { removeBackground }                  from './bgremove.js';
+import { detectBodyParts }                   from './bodyDetect.js';
+import { POSES, renderFrame }                from './animator.js';
+import { bakeSheet, exportPNG, exportJSON }  from './spritesheet.js';
 
 // ════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════
 let state = {
-  charCanvas:  null,  // bg-removed character canvas
-  bodyInfo:    null,  // detected body regions
+  bodyData:    null,   // { parts, joints, bb, isFront, landmarks }
   pose:        'idle',
   direction:   'right',
   speed:       1.0,
@@ -19,51 +19,50 @@ let state = {
   sheetCanvas: null,
 };
 
-let animPhase  = 0;
-let lastTime   = null;
-let rafId      = null;
+let animPhase = 0;
+let lastTime  = null;
+let rafId     = null;
 
 // ════════════════════════════════════════════════════════
 // ELEMENT REFS
 // ════════════════════════════════════════════════════════
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
 
-const uploadZone      = $('uploadZone');
-const uploadTrigger   = $('uploadTrigger');
-const uploadPreview   = $('uploadPreview');
-const uploadThumb     = $('uploadThumb');
-const fileInput       = $('fileInput');
-const clearBtn        = $('clearBtn');
-const bgBar           = $('bgBar');
-const progFill        = $('progFill');
-const progLabel       = $('progLabel');
-const poseGrid        = $('poseGrid');
-const dirGroup        = $('dirGroup');
-const speedSlider     = $('speedSlider');
-const speedVal        = $('speedVal');
-const framesSlider    = $('framesSlider');
-const framesVal       = $('framesVal');
-const sizeSelect      = $('sizeSelect');
-const layoutSelect    = $('layoutSelect');
-const bakeBtn         = $('bakeBtn');
-const exportPNGBtn    = $('exportPNG');
-const exportJSONBtn   = $('exportJSON');
-const previewCanvas   = $('previewCanvas');
-const previewPlhdr    = $('previewPlaceholder');
-const sheetCanvas     = $('sheetCanvas');
-const sheetPlhdr      = $('sheetPlaceholder');
-const poseBadge       = $('poseBadge');
-const sheetBadge      = $('sheetBadge');
-const saveBtn         = $('saveBtn');
-const loadBtn         = $('loadBtn');
-const saveStatus      = $('saveStatus');
-const toast           = $('toast');
+const uploadZone    = $('uploadZone');
+const uploadTrigger = $('uploadTrigger');
+const uploadPreview = $('uploadPreview');
+const uploadThumb   = $('uploadThumb');
+const fileInput     = $('fileInput');
+const clearBtn      = $('clearBtn');
+const bgBar         = $('bgBar');
+const progFill      = $('progFill');
+const progLabel     = $('progLabel');
+const poseGrid      = $('poseGrid');
+const dirGroup      = $('dirGroup');
+const speedSlider   = $('speedSlider');
+const speedVal      = $('speedVal');
+const framesSlider  = $('framesSlider');
+const framesVal     = $('framesVal');
+const sizeSelect    = $('sizeSelect');
+const layoutSelect  = $('layoutSelect');
+const bakeBtn       = $('bakeBtn');
+const exportPNGBtn  = $('exportPNG');
+const exportJSONBtn = $('exportJSON');
+const previewCanvas = $('previewCanvas');
+const previewPlhdr  = $('previewPlaceholder');
+const sheetCanvas   = $('sheetCanvas');
+const sheetPlhdr    = $('sheetPlaceholder');
+const poseBadge     = $('poseBadge');
+const sheetBadge    = $('sheetBadge');
+const saveBtn       = $('saveBtn');
+const loadBtn       = $('loadBtn');
+const saveStatus    = $('saveStatus');
 
 const previewCtx = previewCanvas.getContext('2d');
 const sheetCtx   = sheetCanvas.getContext('2d');
 
 // ════════════════════════════════════════════════════════
-// POSE GRID BUILD
+// POSE GRID
 // ════════════════════════════════════════════════════════
 POSES.forEach(p => {
   const btn = document.createElement('button');
@@ -75,28 +74,26 @@ POSES.forEach(p => {
 });
 
 // ════════════════════════════════════════════════════════
-// UPLOAD HANDLING
+// UPLOAD
 // ════════════════════════════════════════════════════════
 uploadTrigger.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => {
   if (fileInput.files[0]) handleFile(fileInput.files[0]);
 });
-
 uploadZone.addEventListener('dragover', e => {
-  e.preventDefault();
-  uploadZone.classList.add('drag-over');
+  e.preventDefault(); uploadZone.classList.add('drag-over');
 });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
 uploadZone.addEventListener('drop', e => {
-  e.preventDefault();
-  uploadZone.classList.remove('drag-over');
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
   const f = e.dataTransfer.files[0];
   if (f && f.type.startsWith('image/')) handleFile(f);
 });
 
-clearBtn.addEventListener('click', () => {
-  state.charCanvas = null;
-  state.bodyInfo   = null;
+clearBtn.addEventListener('click', resetCharacter);
+
+function resetCharacter() {
+  state.bodyData = null;
   uploadTrigger.classList.remove('hidden');
   uploadPreview.classList.add('hidden');
   bgBar.classList.add('hidden');
@@ -104,21 +101,16 @@ clearBtn.addEventListener('click', () => {
   previewPlhdr.classList.remove('hidden');
   stopAnimation();
   previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-});
+}
 
 async function handleFile(file) {
-  const url = URL.createObjectURL(file);
-  const img  = new Image();
+  const objectURL = URL.createObjectURL(file);
+  const img = new Image();
   img.crossOrigin = 'anonymous';
-  img.src = url;
-  await new Promise(res => { img.onload = res; });
-  URL.revokeObjectURL(url);
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = objectURL; });
 
-  // Show thumb immediately
-  uploadThumb.src = img.src || url;
-  uploadThumb.src = img.src; // after onload this is a usable src
-
-  // Show progress bar
+  // Show raw thumb immediately while processing
+  uploadThumb.src = objectURL;
   bgBar.classList.remove('hidden');
   uploadTrigger.classList.add('hidden');
   uploadPreview.classList.remove('hidden');
@@ -126,53 +118,75 @@ async function handleFile(file) {
 
   setProgress(0, 'Removing background…');
 
+  let cleaned;
   try {
-    const cleaned = await removeBackground(img, (p) => {
-      const pct = Math.round(p * 100);
-      const labels = {
-        0:   'Sampling edge colours…',
-        15:  'Running flood fill…',
-        60:  'Refining fringe pixels…',
-        80:  'Smoothing alpha edges…',
-        92:  'Finalising…',
-        100: 'Done!',
-      };
-      setProgress(p, labels[Object.keys(labels).reduce((a,b) => +b <= pct ? b : a)] ?? '');
+    cleaned = await removeBackground(img, p => {
+      const stages = [[0,'Sampling edge colours…'],[0.15,'Flood-filling background…'],
+                      [0.60,'Cleaning fringe pixels…'],[0.80,'Smoothing alpha edges…'],
+                      [0.92,'Finalising…'],[1,'Done!']];
+      const lbl = stages.reduce((a,b) => p >= b[0] ? b : a)[1];
+      setProgress(p * 0.50, lbl); // bg removal = first 50%
     });
-
-    // Update thumb to show bg-removed version
-    uploadThumb.src = cleaned.toDataURL();
-
-    state.charCanvas = cleaned;
-    state.bodyInfo   = detectBodyInfo(cleaned);
-
-    if (!state.bodyInfo) {
-      showToast('No character detected — try a clearer image.', 'warn');
-      return;
-    }
-
+  } catch (e) {
+    console.error(e);
+    showToast('Background removal failed.', 'err');
     bgBar.classList.add('hidden');
-    previewPlhdr.classList.add('hidden');
-    bakeBtn.disabled = false;
-
-    startAnimation();
-    showToast('Character loaded ✓', 'ok');
-
-  } catch (err) {
-    console.error(err);
-    showToast('Error processing image.', 'err');
-    bgBar.classList.add('hidden');
+    return;
   }
+
+  // Update thumb to cleaned version
+  uploadThumb.src = cleaned.toDataURL();
+  setProgress(0.52, 'Analysing body structure…');
+  await tick();
+
+  let bodyData;
+  try {
+    bodyData = await detectBodyParts(cleaned, p => {
+      setProgress(0.50 + p * 0.50, bodyDetectLabel(p));
+    });
+  } catch (e) {
+    console.error(e);
+    showToast('Body detection failed — try a clearer character image.', 'err');
+    bgBar.classList.add('hidden');
+    return;
+  }
+
+  if (!bodyData) {
+    showToast('No character detected — try a front-facing sprite.', 'warn');
+    bgBar.classList.add('hidden');
+    return;
+  }
+
+  state.bodyData = bodyData;
+
+  bgBar.classList.add('hidden');
+  previewPlhdr.classList.add('hidden');
+  bakeBtn.disabled = false;
+
+  // Show detection debug badge
+  const pcount = Object.keys(bodyData.parts).length;
+  showToast(`Character loaded — ${pcount} body parts detected ✓`, 'ok');
+
+  URL.revokeObjectURL(objectURL);
+  startAnimation();
+}
+
+function bodyDetectLabel(p) {
+  if (p < 0.20) return 'Scanning row profiles…';
+  if (p < 0.40) return 'Finding anatomical landmarks…';
+  if (p < 0.60) return 'Assigning pixels to body parts…';
+  if (p < 0.80) return 'Extracting part canvases…';
+  return 'Computing joint anchors…';
 }
 
 // ════════════════════════════════════════════════════════
 // ANIMATION LOOP
 // ════════════════════════════════════════════════════════
 function startAnimation() {
-  if (rafId) cancelAnimationFrame(rafId);
-  lastTime = null;
+  stopAnimation();
+  lastTime  = null;
   animPhase = 0;
-  loop(0);
+  rafId = requestAnimationFrame(loop);
 }
 
 function stopAnimation() {
@@ -181,25 +195,27 @@ function stopAnimation() {
 
 function loop(now) {
   rafId = requestAnimationFrame(loop);
-  if (!state.charCanvas || !state.bodyInfo) return;
+  if (!state.bodyData) return;
 
-  const dt = lastTime ? (now - lastTime) / 1000 : 0;
+  const dt  = lastTime ? (now - lastTime) / 1000 : 0;
   lastTime  = now;
 
-  // Advance phase; most poses use 1 Hz base cycle, speed multiplies
-  animPhase = (animPhase + dt * state.speed * 0.8) % 1;
-
-  // Fit canvas to wrapper size
-  const wrap = previewCanvas.parentElement;
-  const size = Math.min(wrap.clientWidth, wrap.clientHeight) || 320;
-  if (previewCanvas.width !== size || previewCanvas.height !== size) {
-    previewCanvas.width  = size;
-    previewCanvas.height = size;
+  // Advance phase based on speed; die/crouch play once then hold
+  const oneShot = ['die', 'crouch'];
+  if (oneShot.includes(state.pose)) {
+    animPhase = Math.min(animPhase + dt * state.speed * 0.55, 0.999);
+  } else {
+    animPhase = (animPhase + dt * state.speed * 0.75) % 1;
   }
 
-  renderFrame(previewCtx, state.charCanvas, state.bodyInfo,
-    state.pose, animPhase, state.direction);
+  // Resize canvas to wrapper
+  const wrap = previewCanvas.parentElement;
+  const sz   = Math.min(wrap.clientWidth || 320, wrap.clientHeight || 320);
+  if (previewCanvas.width !== sz || previewCanvas.height !== sz) {
+    previewCanvas.width = previewCanvas.height = sz;
+  }
 
+  renderFrame(previewCtx, state.bodyData, state.pose, animPhase, state.direction);
   poseBadge.textContent = `${state.pose.toUpperCase()} · ${state.direction.toUpperCase()}`;
 }
 
@@ -209,21 +225,20 @@ function loop(now) {
 function selectPose(id) {
   state.pose = id;
   animPhase  = 0;
-  poseGrid.querySelectorAll('.pose-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.id === id);
-  });
+  poseGrid.querySelectorAll('.pose-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.id === id));
 }
 
-dirGroup.querySelectorAll('.tog').forEach(btn => {
+dirGroup.querySelectorAll('.tog').forEach(btn =>
   btn.addEventListener('click', () => {
     dirGroup.querySelectorAll('.tog').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     state.direction = btn.dataset.val;
-  });
-});
+  })
+);
 
 speedSlider.addEventListener('input', () => {
-  state.speed    = parseFloat(speedSlider.value);
+  state.speed = parseFloat(speedSlider.value);
   speedVal.textContent = state.speed.toFixed(2) + '×';
 });
 
@@ -232,31 +247,24 @@ framesSlider.addEventListener('input', () => {
   framesVal.textContent = state.frameCount;
 });
 
-sizeSelect.addEventListener('change', () => {
-  state.frameSize = parseInt(sizeSelect.value);
-});
-
-layoutSelect.addEventListener('change', () => {
-  state.layout = layoutSelect.value;
-});
+sizeSelect.addEventListener('change',  () => { state.frameSize = parseInt(sizeSelect.value); });
+layoutSelect.addEventListener('change', () => { state.layout = layoutSelect.value; });
 
 // ════════════════════════════════════════════════════════
 // BAKE
 // ════════════════════════════════════════════════════════
 bakeBtn.addEventListener('click', () => {
-  if (!state.charCanvas || !state.bodyInfo) return;
+  if (!state.bodyData) return;
   bakeBtn.textContent = '⏳ Baking…';
   bakeBtn.disabled    = true;
 
   setTimeout(() => {
     try {
       state.sheetCanvas = bakeSheet(
-        state.charCanvas, state.bodyInfo,
-        state.pose, state.direction,
+        state.bodyData, state.pose, state.direction,
         state.frameCount, state.frameSize, state.layout
       );
 
-      // Show in sheet canvas area
       sheetCanvas.width  = state.sheetCanvas.width;
       sheetCanvas.height = state.sheetCanvas.height;
       sheetCtx.clearRect(0, 0, sheetCanvas.width, sheetCanvas.height);
@@ -272,7 +280,7 @@ bakeBtn.addEventListener('click', () => {
       showToast(`Sprite sheet baked (${state.frameCount} frames) ✓`, 'ok');
     } catch (e) {
       console.error(e);
-      showToast('Bake failed.', 'err');
+      showToast('Bake failed — see console for details.', 'err');
     } finally {
       bakeBtn.textContent = '⚡ BAKE SPRITE SHEET';
       bakeBtn.disabled    = false;
@@ -297,32 +305,33 @@ exportJSONBtn.addEventListener('click', () => {
 });
 
 // ════════════════════════════════════════════════════════
-// SAVE / LOAD  (localStorage)
+// SAVE / LOAD
 // ════════════════════════════════════════════════════════
-const STORAGE_KEY = 'spritesmithStudio_v1';
+const STORAGE_KEY = 'spritesmithStudio_v2';
 
 saveBtn.addEventListener('click', () => {
+  if (!state.bodyData) { showToast('Nothing to save yet.', 'warn'); return; }
   try {
-    if (!state.charCanvas) { showToast('Nothing to save yet.', 'warn'); return; }
+    // Serialise only what we can reproduce: the cleaned character PNG + settings
+    const charDataURL = state.bodyData.parts.torso?.canvas.toDataURL()
+      ?? Object.values(state.bodyData.parts)[0]?.canvas.toDataURL()
+      ?? '';
 
+    // Save the composite — re-render all parts onto one canvas for storage
+    const comp = compositeCharacter(state.bodyData);
     const payload = {
-      charDataURL:  state.charCanvas.toDataURL(),
-      pose:         state.pose,
-      direction:    state.direction,
-      speed:        state.speed,
-      frameCount:   state.frameCount,
-      frameSize:    state.frameSize,
-      layout:       state.layout,
-      savedAt:      new Date().toISOString(),
+      charDataURL: comp.toDataURL(),
+      pose: state.pose, direction: state.direction, speed: state.speed,
+      frameCount: state.frameCount, frameSize: state.frameSize,
+      layout: state.layout, savedAt: new Date().toISOString(),
     };
-
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-
     saveStatus.textContent = 'Saved ✓';
     saveStatus.classList.add('visible');
     setTimeout(() => saveStatus.classList.remove('visible'), 2500);
-    showToast('Project saved to browser ✓', 'ok');
+    showToast('Project saved ✓', 'ok');
   } catch (e) {
+    console.error(e);
     showToast('Save failed (storage full?)', 'err');
   }
 });
@@ -333,78 +342,103 @@ loadBtn.addEventListener('click', async () => {
 
   try {
     const payload = JSON.parse(raw);
-    showToast('Loading saved project…', 'ok');
+    showToast('Loading…', 'ok');
 
     const img = new Image();
-    img.src   = payload.charDataURL;
-    await new Promise(res => { img.onload = res; });
+    await new Promise((res, rej) => {
+      img.onload = res; img.onerror = rej;
+      img.src = payload.charDataURL;
+    });
 
-    const canvas = document.createElement('canvas');
-    canvas.width  = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    canvas.getContext('2d').drawImage(img, 0, 0);
+    // The saved dataURL is already bg-removed — put it on a canvas and re-detect
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    c.getContext('2d').drawImage(img, 0, 0);
 
-    state.charCanvas  = canvas;
-    state.bodyInfo    = detectBodyInfo(canvas);
-
-    // Restore settings
-    state.pose        = payload.pose        || 'idle';
-    state.direction   = payload.direction   || 'right';
-    state.speed       = payload.speed       || 1.0;
-    state.frameCount  = payload.frameCount  || 8;
-    state.frameSize   = payload.frameSize   || 128;
-    state.layout      = payload.layout      || 'horizontal';
-
-    // Sync UI
-    uploadThumb.src = payload.charDataURL;
+    bgBar.classList.remove('hidden');
+    setProgress(0, 'Re-detecting body parts…');
     uploadTrigger.classList.add('hidden');
     uploadPreview.classList.remove('hidden');
+    uploadThumb.src = payload.charDataURL;
+
+    const bodyData = await detectBodyParts(c, p => setProgress(p, bodyDetectLabel(p)));
+    if (!bodyData) { showToast('Could not detect parts from saved image.', 'err'); bgBar.classList.add('hidden'); return; }
+
+    state.bodyData = bodyData;
+
+    // Restore settings
+    state.pose       = payload.pose       || 'idle';
+    state.direction  = payload.direction  || 'right';
+    state.speed      = payload.speed      || 1.0;
+    state.frameCount = payload.frameCount || 8;
+    state.frameSize  = payload.frameSize  || 128;
+    state.layout     = payload.layout     || 'horizontal';
+
+    // Sync UI controls
+    selectPose(state.pose);
+    speedSlider.value = state.speed;
+    speedVal.textContent = state.speed.toFixed(2) + '×';
+    framesSlider.value = state.frameCount;
+    framesVal.textContent = state.frameCount;
+    sizeSelect.value = state.frameSize;
+    layoutSelect.value = state.layout;
+    dirGroup.querySelectorAll('.tog').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === state.direction));
+
     bgBar.classList.add('hidden');
     previewPlhdr.classList.add('hidden');
     bakeBtn.disabled = false;
-
-    selectPose(state.pose);
-    speedSlider.value        = state.speed;
-    speedVal.textContent     = state.speed.toFixed(2) + '×';
-    framesSlider.value       = state.frameCount;
-    framesVal.textContent    = state.frameCount;
-    sizeSelect.value         = state.frameSize;
-    layoutSelect.value       = state.layout;
-
-    dirGroup.querySelectorAll('.tog').forEach(b => {
-      b.classList.toggle('active', b.dataset.val === state.direction);
-    });
-
     startAnimation();
-    showToast(`Project loaded (saved ${timeAgo(payload.savedAt)}) ✓`, 'ok');
+    showToast(`Loaded (saved ${timeAgo(payload.savedAt)}) ✓`, 'ok');
   } catch (e) {
     console.error(e);
-    showToast('Failed to load saved project.', 'err');
+    showToast('Load failed.', 'err');
+    bgBar.classList.add('hidden');
   }
 });
 
 // ════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════
+
+/** Flatten all detected parts back onto one canvas for save storage. */
+function compositeCharacter(bodyData) {
+  const { bb } = bodyData;
+  const c = document.createElement('canvas');
+  c.width = bb.w; c.height = bb.h;
+  const ctx = c.getContext('2d');
+  const order = ['legL','legR','hips','torso','armL','armR','head','hair'];
+  for (const pid of order) {
+    const p = bodyData.parts[pid];
+    if (!p) continue;
+    ctx.drawImage(p.canvas,
+      p.originX - bb.x - p.pad,
+      p.originY - bb.y - p.pad,
+      p.canvas.width, p.canvas.height);
+  }
+  return c;
+}
+
 function setProgress(pct, label) {
-  progFill.style.width  = (pct * 100) + '%';
+  progFill.style.width  = (Math.min(pct, 1) * 100) + '%';
   progLabel.textContent = label;
 }
 
 let toastTimer = null;
+const toastEl = document.getElementById('toast');
 function showToast(msg, type = 'ok') {
-  toast.textContent = msg;
-  toast.className   = `toast ${type} show`;
+  toastEl.textContent = msg;
+  toastEl.className   = `toast ${type} show`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3200);
 }
 
 function timeAgo(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m    = Math.round(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h/24)}d ago`;
+  const d = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (d < 1)  return 'just now';
+  if (d < 60) return `${d}m ago`;
+  const h = Math.floor(d / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h/24)}d ago`;
 }
+
+function tick() { return new Promise(r => setTimeout(r, 0)); }
