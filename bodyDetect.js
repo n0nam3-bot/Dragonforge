@@ -38,8 +38,9 @@ export async function detectSkeleton(charCanvas, onProgress = () => {}) {
       if (y < y0) y0 = y; if (y > y1) y1 = y;
     }
   }
-  if (x0 > x1) return null;
+  if (x0 > x1) return buildFallbackSkeleton(imgData);
   const bb = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  if (bb.w < Math.max(8, W * 0.06) || bb.h < Math.max(8, H * 0.06)) return buildFallbackSkeleton(imgData);
 
   onProgress(0.12);
 
@@ -101,6 +102,59 @@ export async function detectSkeleton(charCanvas, onProgress = () => {}) {
     srcW: W, srcH: H,
     bb, lm, pivots, weights,
     // Convenience: per-row midpoints for hair wave
+    mxArr, lxArr, rxArr, sw,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FALLBACK SKELETON (used when auto-detection cannot find a foreground body)
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildFallbackSkeleton(imgData) {
+  const W = imgData.width, H = imgData.height;
+  const bb = { x: 0, y: 0, w: W, h: H };
+  const mxArr = new Float32Array(H);
+  const lxArr = new Float32Array(H);
+  const rxArr = new Float32Array(H);
+  const wdArr = new Float32Array(H);
+  const dnArr = new Float32Array(H);
+  const midX  = W * 0.5;
+
+  for (let y = 0; y < H; y++) {
+    const t = H <= 1 ? 0 : y / (H - 1);
+    let width;
+    if (t < 0.16) width = lerp(W * 0.20, W * 0.28, t / 0.16);
+    else if (t < 0.34) width = lerp(W * 0.30, W * 0.52, (t - 0.16) / 0.18);
+    else if (t < 0.56) width = lerp(W * 0.48, W * 0.30, (t - 0.34) / 0.22);
+    else if (t < 0.78) width = lerp(W * 0.34, W * 0.42, (t - 0.56) / 0.22);
+    else width = lerp(W * 0.24, W * 0.18, (t - 0.78) / 0.22);
+
+    width = clamp(width, W * 0.12, W * 0.72);
+    mxArr[y] = midX;
+    lxArr[y] = midX - width * 0.5;
+    rxArr[y] = midX + width * 0.5;
+    wdArr[y] = width;
+    dnArr[y] = Math.max(1, Math.round(width * 0.35));
+  }
+
+  const sw = smoothArr(wdArr, 0, H - 1, SMOOTH_WIN);
+  const lm = findLandmarks(sw, dnArr, mxArr, wdArr, 0, H - 1, bb);
+  const pivots = buildPivots(lm, mxArr, lxArr, rxArr, sw, bb);
+  const weights = Array.from({ length: NUM_BONES }, () => new Float32Array(W * H));
+  const tmp = new Float32Array(NUM_BONES);
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      computeWeights(x, y, lm, pivots, mxArr, wdArr, sw, tmp);
+      const pi = y * W + x;
+      for (let b = 0; b < NUM_BONES; b++) weights[b][pi] = tmp[b];
+    }
+  }
+
+  return {
+    srcData: imgData,
+    srcW: W, srcH: H,
+    bb, lm, pivots, weights,
     mxArr, lxArr, rxArr, sw,
   };
 }
