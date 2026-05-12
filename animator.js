@@ -1,410 +1,313 @@
-// animator.js — Linear Blend Skinning backward-warp renderer
-// Every destination pixel samples the source image via weighted bone transforms.
-// No seams. No cutting. The character stays whole.
-
-import { NUM_BONES, B_HAIR, B_HEAD, B_TORSO, B_ARML, B_ARMR,
-         B_HIPS, B_LEGL, B_LEGR, BONE_IDS } from './bodyDetect.js';
+// animator.js — Pivot-based skeletal animation using detected body parts
 
 export const POSES = [
   { id: 'idle',   label: 'IDLE',   ico: '🧍' },
   { id: 'walk',   label: 'WALK',   ico: '🚶' },
   { id: 'run',    label: 'RUN',    ico: '🏃' },
   { id: 'jump',   label: 'JUMP',   ico: '🦘' },
-  { id: 'attack', label: 'ATTACK', ico: '⚔️'  },
+  { id: 'attack', label: 'ATTACK', ico: '⚔️' },
   { id: 'hurt',   label: 'HURT',   ico: '💢' },
   { id: 'die',    label: 'DIE',    ico: '💀' },
   { id: 'crouch', label: 'CROUCH', ico: '🦆' },
   { id: 'cast',   label: 'CAST',   ico: '✨' },
 ];
 
-// ── Math helpers ──────────────────────────────────────────────────────────────
-const PI2    = Math.PI * 2;
-const sin1   = t => Math.sin(t * PI2);
-const cos1   = t => Math.cos(t * PI2);
-const sin2   = t => Math.sin(t * PI2 * 2);
-const abs1   = t => Math.abs(sin1(t));
-const clamp  = (v,lo,hi) => v<lo?lo:v>hi?hi:v;
-const clamp01= v => v<0?0:v>1?1:v;
-const lerp   = (a,b,t) => a+(b-a)*t;
-const ease   = (t,p=2) => t<.5 ? Math.pow(t*2,p)/2 : 1-Math.pow((1-t)*2,p)/2;
-const DEG    = Math.PI/180;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const DEG   = Math.PI / 180;
+const sin1  = t => Math.sin(t * Math.PI * 2);
+const cos1  = t => Math.cos(t * Math.PI * 2);
+const sin2  = t => Math.sin(t * Math.PI * 4);
+const abs1  = t => Math.abs(sin1(t));
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const ease  = (t, p = 2) => t < 0.5
+  ? Math.pow(t * 2, p) / 2
+  : 1 - Math.pow((1 - t) * 2, p) / 2;
 
-// ── 2×3 affine matrix helpers ─────────────────────────────────────────────────
-// Matrix stored as [a,b,c,d,tx,ty]  (row-major, last row implicit [0,0,1])
-// maps (x,y) → (a·x + b·y + tx,  c·x + d·y + ty)
+// ── POSE TABLE ────────────────────────────────────────────────────────────────
+// rot  = radians, clockwise positive, around the part's anchor/joint
+// dx   = horizontal shift as fraction of bb.h (character height)
+// dy   = vertical shift as fraction of bb.h
+// alpha = opacity 0..1
 
-function matIdentity()              { return [1,0,0,1,0,0]; }
-function matTranslate(tx,ty)        { return [1,0,0,1,tx,ty]; }
-function matRotateAround(ang,px,py) {
-  const c=Math.cos(ang), s=Math.sin(ang);
-  return [c,-s,s,c, px-c*px+s*py, py-s*px-c*py];
-}
-// Compose: apply M1 then M2
-function matMul(a,b) {
-  return [
-    b[0]*a[0]+b[2]*a[1],  b[1]*a[0]+b[3]*a[1],
-    b[0]*a[2]+b[2]*a[3],  b[1]*a[2]+b[3]*a[3],
-    b[0]*a[4]+b[2]*a[5]+b[4],  b[1]*a[4]+b[3]*a[5]+b[5],
-  ];
-}
-function matApply(m,x,y) {
-  return { x: m[0]*x + m[1]*y + m[4],
-           y: m[2]*x + m[3]*y + m[5] };
-}
-// Invert a 2×3 affine matrix
-function matInvert(m) {
-  const det = m[0]*m[3] - m[1]*m[2];
-  if (Math.abs(det) < 1e-10) return matIdentity();
-  const inv = 1/det;
-  const a= m[3]*inv, b=-m[1]*inv, c=-m[2]*inv, d= m[0]*inv;
-  return [a,b,c,d, -(a*m[4]+b*m[5]), -(c*m[4]+d*m[5])];
-}
+export function getPoseTransforms(pose, t) {
+  switch (pose) {
 
-// ── Pose definition ───────────────────────────────────────────────────────────
-// getPoseBones(pose, t, pivots, scale) returns an array of 8 forward matrices,
-// one per bone, in destination-canvas space.
-// pivots: { hair,head,torso,armL,armR,hips,legL,legR } in SOURCE pixel coords.
-// scale/ox/oy: mapping from source → dest canvas.
+    // ── IDLE ──────────────────────────────────────────────────────────────────
+    case 'idle': {
+      const breath = sin1(t) * 0.006;
+      const sway   = sin1(t) * 0.5;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: sway * DEG,         dx: 0,     dy: -breath * 0.5, alpha: 1 },
+        head:  { rot: sway * 0.3 * DEG,   dx: 0,     dy: -breath,       alpha: 1 },
+        torso: { rot: sway * 0.2 * DEG,   dx: 0,     dy: -breath * 0.7, alpha: 1 },
+        armL:  { rot: (3 + sin1(t)*3)*DEG,dx: 0.002, dy: 0,             alpha: 1 },
+        armR:  { rot:-(3 + sin1(t)*3)*DEG,dx:-0.002, dy: 0,             alpha: 1 },
+        hips:  { rot: sway*-0.1*DEG,      dx: 0,     dy: breath * 0.4,  alpha: 1 },
+        legL:  { rot: sin1(t)*1.5*DEG,    dx: 0,     dy: breath * 0.5,  alpha: 1 },
+        legR:  { rot:-sin1(t)*1.5*DEG,    dx: 0,     dy: breath * 0.5,  alpha: 1 },
+        globalY: sin1(t) * 0.006,
+        globalRot: 0, alpha: 1, effect: null,
+      };
+    }
 
-export function getPoseBones(pose, t, pivots, scale, ox, oy) {
-  // Convert a source pivot to dest canvas coords
-  const dp = name => ({
-    x: pivots[name].x * scale + ox,
-    y: pivots[name].y * scale + oy,
-  });
+    // ── WALK ──────────────────────────────────────────────────────────────────
+    case 'walk': {
+      const bob    = -abs1(t) * 0.018;
+      const legSwg = sin1(t) * 30;
+      const armSwg = -sin1(t) * 24;
+      const hipRot = sin1(t) * 5;
+      const lean   = 4;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: sin1(t)*5*DEG,      dx: 0, dy: bob*0.4,  alpha: 1 },
+        head:  { rot: lean*0.4*DEG,       dx: 0, dy: bob*0.5,  alpha: 1 },
+        torso: { rot: lean*DEG,           dx: 0, dy: bob*0.4,  alpha: 1 },
+        armL:  { rot: armSwg*DEG,         dx: 0, dy: bob*0.3,  alpha: 1 },
+        armR:  { rot:-armSwg*DEG,         dx: 0, dy: bob*0.3,  alpha: 1 },
+        hips:  { rot: hipRot*DEG,         dx: 0, dy: bob*0.3,  alpha: 1 },
+        legL:  { rot: legSwg*DEG,         dx: 0, dy: 0,        alpha: 1 },
+        legR:  { rot:-legSwg*DEG,         dx: 0, dy: 0,        alpha: 1 },
+        globalY: bob, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
 
-  // Rotation around a dest-space pivot
-  const rot  = (name, ang) => matRotateAround(ang, dp(name).x, dp(name).y);
-  // Translation in dest-canvas pixels
-  const trl  = (dx,dy)     => matTranslate(dx,dy);
-  // Rotation + translation composed
-  const rt   = (name,ang,dx,dy) => matMul(trl(dx,dy), rot(name,ang));
+    // ── RUN ───────────────────────────────────────────────────────────────────
+    case 'run': {
+      const bob    = -abs1(t) * 0.036;
+      const legSwg = sin1(t) * 50;
+      const armSwg = -sin1(t) * 44;
+      const lean   = 11;
+      const hipRot = sin1(t) * 9;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: sin1(t)*14*DEG,     dx: lean*0.001, dy: bob*0.6, alpha: 1 },
+        head:  { rot: lean*0.5*DEG,       dx: 0,          dy: bob*0.6, alpha: 1 },
+        torso: { rot: lean*DEG,           dx: 0,          dy: bob*0.5, alpha: 1 },
+        armL:  { rot: armSwg*DEG,         dx: 0,          dy: bob*0.4, alpha: 1 },
+        armR:  { rot:-armSwg*DEG,         dx: 0,          dy: bob*0.4, alpha: 1 },
+        hips:  { rot: hipRot*DEG,         dx: 0,          dy: bob*0.3, alpha: 1 },
+        legL:  { rot: legSwg*DEG,         dx: 0,          dy: 0,       alpha: 1 },
+        legR:  { rot:-legSwg*DEG,         dx: 0,          dy: 0,       alpha: 1 },
+        globalY: bob, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
 
-  // --- Idle ---
-  if (pose === 'idle') {
-    const breath = sin1(t) * scale * 0.008;
-    const sway   = sin1(t) * 1.2 * DEG;
-    const legRock= sin1(t) * 0.8 * DEG;
-    const ady    = -breath; // all bones rise slightly on inhale
-    return [
-      /* hair  */ rt('hair',  sway * 2,   0, ady*1.4),
-      /* head  */ rt('head',  sway * 0.4, 0, ady),
-      /* torso */ rt('torso', sway * 0.2, 0, ady*0.6),
-      /* armL  */ rt('armL',  sway + 3*DEG,  0, ady*0.5),
-      /* armR  */ rt('armR', -sway - 3*DEG,  0, ady*0.5),
-      /* hips  */ rt('hips', -sway * 0.1, 0, ady*0.3),
-      /* legL  */ rt('legL',  legRock,    0, ady*0.2),
-      /* legR  */ rt('legR', -legRock,    0, ady*0.2),
-    ];
+    // ── JUMP ──────────────────────────────────────────────────────────────────
+    case 'jump': {
+      const arc   = -Math.sin(t * Math.PI);
+      const tuck  = arc * 30;
+      const armUp = arc * -55;
+      const lean  = arc * 8;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: lean*-0.6*DEG,   dx: 0,     dy: arc*-0.04, alpha: 1 },
+        head:  { rot: lean*-0.3*DEG,   dx: 0,     dy: arc*-0.02, alpha: 1 },
+        torso: { rot: lean*DEG,        dx: 0,     dy: 0,          alpha: 1 },
+        armL:  { rot: armUp*DEG,       dx:-0.01,  dy: arc*-0.01,  alpha: 1 },
+        armR:  { rot:-armUp*DEG,       dx: 0.01,  dy: arc*-0.01,  alpha: 1 },
+        hips:  { rot: 0,               dx: 0,     dy: 0,          alpha: 1 },
+        legL:  { rot: tuck*DEG,        dx: 0.012, dy: 0,          alpha: 1 },
+        legR:  { rot:-tuck*DEG,        dx:-0.012, dy: 0,          alpha: 1 },
+        globalY: arc*0.13, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
+
+    // ── ATTACK ────────────────────────────────────────────────────────────────
+    case 'attack': {
+      const slashT = t < 0.3 ? -(t/0.3) : (t-0.3)/0.7;
+      const armRot = slashT * 115;
+      const tw     = slashT * 18;
+      const bob    = -Math.abs(slashT) * 0.012;
+      return {
+        order: ['legR','legL','hips','armL','torso','armR','head','hair'],
+        hair:  { rot: tw*0.5*DEG,        dx: 0, dy: 0,   alpha: 1 },
+        head:  { rot: tw*0.3*DEG,        dx: 0, dy: 0,   alpha: 1 },
+        torso: { rot: tw*DEG,            dx: 0, dy: bob,  alpha: 1 },
+        armL:  { rot:-20*DEG,            dx: 0, dy: 0,   alpha: 1 },
+        armR:  { rot:(armRot-55)*DEG,    dx: 0, dy: 0,   alpha: 1 },
+        hips:  { rot: tw*0.4*DEG,        dx: 0, dy: bob*0.5, alpha: 1 },
+        legL:  { rot:-10*DEG,            dx: 0, dy: 0,   alpha: 1 },
+        legR:  { rot: 16*DEG,            dx: 0, dy: 0,   alpha: 1 },
+        globalY: bob*0.5, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
+
+    // ── HURT ──────────────────────────────────────────────────────────────────
+    case 'hurt': {
+      const recoil = Math.sin(t * Math.PI) * -20;
+      const flash  = t < 0.25 ? 1 : clamp(1-(t-0.25)*5, 0, 1);
+      const shake  = sin2(t) * 3;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot:(recoil*-0.6+shake)*DEG, dx: 0, dy: 0, alpha: 1 },
+        head:  { rot: recoil*-0.4*DEG,        dx: 0, dy: 0, alpha: 1 },
+        torso: { rot: recoil*DEG,             dx: 0, dy: 0, alpha: 1 },
+        armL:  { rot:(recoil+22)*DEG,         dx: 0, dy: 0, alpha: 1 },
+        armR:  { rot:(recoil-22)*DEG,         dx: 0, dy: 0, alpha: 1 },
+        hips:  { rot: recoil*0.4*DEG,         dx: 0, dy: 0, alpha: 1 },
+        legL:  { rot: recoil*0.3*DEG,         dx: 0, dy: 0, alpha: 1 },
+        legR:  { rot: recoil*0.3*DEG,         dx: 0, dy: 0, alpha: 1 },
+        globalY: -Math.sin(t*Math.PI)*0.02,
+        globalRot: shake*0.3*DEG,
+        alpha: 0.45 + 0.55*(1-flash*0.45),
+        effect: { type: 'hurt', flash },
+      };
+    }
+
+    // ── DIE ───────────────────────────────────────────────────────────────────
+    case 'die': {
+      const fall = clamp(ease(t, 2.5), 0, 1);
+      const fade = t > 0.65 ? clamp(1-(t-0.65)/0.35, 0, 1) : 1;
+      return {
+        order: ['hair','head','armL','armR','torso','hips','legL','legR'],
+        hair:  { rot: fall*82*DEG,   dx: 0, dy: fall*0.02, alpha: fade },
+        head:  { rot: fall*72*DEG,   dx: 0, dy: fall*0.01, alpha: fade },
+        torso: { rot: fall*76*DEG,   dx: 0, dy: fall*0.01, alpha: fade },
+        armL:  { rot: fall*105*DEG,  dx: 0, dy: 0,          alpha: fade },
+        armR:  { rot: fall*-42*DEG,  dx: 0, dy: 0,          alpha: fade },
+        hips:  { rot: fall*80*DEG,   dx: 0, dy: 0,          alpha: fade },
+        legL:  { rot: fall*62*DEG,   dx: 0, dy: 0,          alpha: fade },
+        legR:  { rot: fall*52*DEG,   dx: 0, dy: 0,          alpha: fade },
+        globalY: fall*0.07,
+        globalRot: fall*86*DEG,
+        alpha: fade, effect: null,
+      };
+    }
+
+    // ── CROUCH ────────────────────────────────────────────────────────────────
+    case 'crouch': {
+      const depth  = clamp(ease(clamp(t*2,0,1), 2), 0, 1);
+      const spread = depth * 24;
+      const squat  = depth * 0.065;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','head','hair'],
+        hair:  { rot: 0,              dx: 0,     dy: squat,       alpha: 1 },
+        head:  { rot: 11*depth*DEG,   dx: 0,     dy: squat*0.8,   alpha: 1 },
+        torso: { rot: 9*depth*DEG,    dx: 0,     dy: squat*0.6,   alpha: 1 },
+        armL:  { rot: 32*depth*DEG,   dx: 0,     dy: squat*0.4,   alpha: 1 },
+        armR:  { rot:-32*depth*DEG,   dx: 0,     dy: squat*0.4,   alpha: 1 },
+        hips:  { rot: 0,              dx: 0,     dy: squat*0.2,   alpha: 1 },
+        legL:  { rot: spread*DEG,     dx: 0.012, dy: 0,           alpha: 1 },
+        legR:  { rot:-spread*DEG,     dx:-0.012, dy: 0,           alpha: 1 },
+        globalY: squat*0.85, globalRot: 0, alpha: 1, effect: null,
+      };
+    }
+
+    // ── CAST ──────────────────────────────────────────────────────────────────
+    case 'cast': {
+      const raise  = Math.abs(cos1(t)) * -65;
+      const sway   = sin1(t) * 6;
+      const ripple = sin2(t) * 3;
+      const glow   = (1 + sin2(t)) * 0.5;
+      return {
+        order: ['legL','legR','hips','torso','armR','head','armL','hair'],
+        hair:  { rot:(sway*1.5+ripple)*DEG, dx: 0, dy: 0,  alpha: 1 },
+        head:  { rot: sway*0.4*DEG,         dx: 0, dy: -0.005*Math.abs(cos1(t)), alpha: 1 },
+        torso: { rot: sway*0.2*DEG,         dx: 0, dy: 0,  alpha: 1 },
+        armL:  { rot:(raise-10)*DEG,        dx: 0, dy: 0,  alpha: 1 },
+        armR:  { rot: sway*DEG,             dx: 0, dy: 0,  alpha: 1 },
+        hips:  { rot: sway*-0.1*DEG,        dx: 0, dy: 0,  alpha: 1 },
+        legL:  { rot: sway*0.5*DEG,         dx: 0, dy: 0,  alpha: 1 },
+        legR:  { rot:-sway*0.5*DEG,         dx: 0, dy: 0,  alpha: 1 },
+        globalY: 0, globalRot: 0, alpha: 1,
+        effect: { type: 'cast', glow },
+      };
+    }
+
+    default: return getPoseTransforms('idle', t);
   }
-
-  // --- Walk ---
-  if (pose === 'walk') {
-    const bob    = abs1(t) * scale * -0.018;
-    const legSwg = sin1(t) * 28 * DEG;
-    const armSwg = -sin1(t) * 22 * DEG;
-    const hipRot = sin1(t) * 5 * DEG;
-    const lean   = 4 * DEG;
-    const hairSwg= sin1(t) * 6 * DEG;
-    return [
-      /* hair  */ rt('hair',  lean + hairSwg, 0, bob*0.5),
-      /* head  */ rt('head',  lean * 0.4,     0, bob*0.6),
-      /* torso */ rt('torso', lean,            0, bob*0.5),
-      /* armL  */ rt('armL',  armSwg,          0, bob*0.4),
-      /* armR  */ rt('armR', -armSwg,          0, bob*0.4),
-      /* hips  */ rt('hips',  hipRot,          0, bob*0.3),
-      /* legL  */ rt('legL',  legSwg,          0, 0),
-      /* legR  */ rt('legR', -legSwg,          0, 0),
-    ];
-  }
-
-  // --- Run ---
-  if (pose === 'run') {
-    const bob    = abs1(t) * scale * -0.034;
-    const legSwg = sin1(t) * 50 * DEG;
-    const armSwg = -sin1(t) * 44 * DEG;
-    const hipRot = sin1(t) * 9 * DEG;
-    const lean   = 11 * DEG;
-    const hairSwg= sin1(t) * 14 * DEG + lean;
-    return [
-      /* hair  */ rt('hair',  hairSwg,         0, bob*0.6),
-      /* head  */ rt('head',  lean * 0.5,      0, bob*0.7),
-      /* torso */ rt('torso', lean,             0, bob*0.5),
-      /* armL  */ rt('armL',  armSwg,           0, bob*0.4),
-      /* armR  */ rt('armR', -armSwg,           0, bob*0.4),
-      /* hips  */ rt('hips',  hipRot,           0, bob*0.3),
-      /* legL  */ rt('legL',  legSwg,           0, 0),
-      /* legR  */ rt('legR', -legSwg,           0, 0),
-    ];
-  }
-
-  // --- Jump ---
-  if (pose === 'jump') {
-    const arc    = -Math.sin(t * Math.PI);   // 0→peak→0
-    const tuck   = arc * 28 * DEG;
-    const armUp  = arc * -55 * DEG;
-    const lean   = arc * 8 * DEG;
-    const rise   = arc * scale * 0.13;
-    return [
-      /* hair  */ rt('hair', lean * -0.6,     0, rise - arc*scale*0.05),
-      /* head  */ rt('head', lean * -0.3,     0, rise * 0.6),
-      /* torso */ rt('torso', lean,            0, 0),
-      /* armL  */ matMul(trl(-scale*0.012, arc*scale*-0.01), rot('armL', armUp)),
-      /* armR  */ matMul(trl( scale*0.012, arc*scale*-0.01), rot('armR',-armUp)),
-      /* hips  */ matIdentity(),
-      /* legL  */ matMul(trl( scale*0.012, 0), rot('legL', tuck)),
-      /* legR  */ matMul(trl(-scale*0.012, 0), rot('legR',-tuck)),
-    ];
-  }
-
-  // --- Attack ---
-  if (pose === 'attack') {
-    const slashT = t < 0.3 ? -(t/0.3) : (t-0.3)/0.7;
-    const armRot = (slashT * 115 - 55) * DEG;
-    const tw     = slashT * 18 * DEG;
-    const bob    = -Math.abs(slashT) * scale * 0.012;
-    return [
-      /* hair  */ rt('hair',  tw*0.5,  0, bob*0.5),
-      /* head  */ rt('head',  tw*0.3,  0, 0),
-      /* torso */ rt('torso', tw,      0, bob),
-      /* armL  */ rt('armL', -20*DEG,  0, 0),
-      /* armR  */ rt('armR',  armRot,  0, 0),
-      /* hips  */ rt('hips',  tw*0.4,  0, bob*0.5),
-      /* legL  */ rt('legL', -10*DEG,  0, 0),
-      /* legR  */ rt('legR',  16*DEG,  0, 0),
-    ];
-  }
-
-  // --- Hurt ---
-  if (pose === 'hurt') {
-    const recoil = Math.sin(t * Math.PI) * -22 * DEG;
-    const shake  = sin2(t) * 3 * DEG;
-    const rise   = -Math.sin(t * Math.PI) * scale * 0.02;
-    return [
-      /* hair  */ rt('hair',  recoil*-0.6+shake, 0, rise*0.5),
-      /* head  */ rt('head',  recoil*-0.4,       0, rise*0.3),
-      /* torso */ rt('torso', recoil,             0, rise),
-      /* armL  */ rt('armL',  recoil+22*DEG,     0, 0),
-      /* armR  */ rt('armR',  recoil-22*DEG,     0, 0),
-      /* hips  */ rt('hips',  recoil*0.4,        0, rise*0.4),
-      /* legL  */ rt('legL',  recoil*0.3,        0, 0),
-      /* legR  */ rt('legR',  recoil*0.3,        0, 0),
-    ];
-  }
-
-  // --- Die ---
-  if (pose === 'die') {
-    const fall = clamp01(ease(t, 2.5));
-    const lean = fall * 85 * DEG;
-    const drop = fall * scale * 0.07;
-    return [
-      /* hair  */ rt('hair',  lean*0.9,  0, drop*1.0),
-      /* head  */ rt('head',  lean*0.8,  0, drop*0.8),
-      /* torso */ rt('torso', lean*0.85, 0, drop*0.5),
-      /* armL  */ rt('armL',  lean*1.1,  0, drop*0.4),
-      /* armR  */ rt('armR', -lean*0.4,  0, drop*0.4),
-      /* hips  */ rt('hips',  lean*0.8,  0, drop*0.2),
-      /* legL  */ rt('legL',  lean*0.6,  0, 0),
-      /* legR  */ rt('legR',  lean*0.5,  0, 0),
-    ];
-  }
-
-  // --- Crouch ---
-  if (pose === 'crouch') {
-    const depth  = clamp01(ease(clamp01(t*2), 2));
-    const spread = depth * 24 * DEG;
-    const squat  = depth * scale * 0.065;
-    const lean   = depth * 8 * DEG;
-    return [
-      /* hair  */ rt('hair',  0,        0, squat),
-      /* head  */ rt('head',  lean,     0, squat*0.8),
-      /* torso */ rt('torso', lean,     0, squat*0.6),
-      /* armL  */ rt('armL',  32*DEG,   0, squat*0.4),
-      /* armR  */ rt('armR', -32*DEG,   0, squat*0.4),
-      /* hips  */ matIdentity(),
-      /* legL  */ matMul(trl( scale*0.012, 0), rot('legL',  spread)),
-      /* legR  */ matMul(trl(-scale*0.012, 0), rot('legR', -spread)),
-    ];
-  }
-
-  // --- Cast ---
-  if (pose === 'cast') {
-    const raise  = Math.abs(cos1(t)) * -62 * DEG;
-    const sway   = sin1(t) * 6 * DEG;
-    const ripple = sin2(t) * 3 * DEG;
-    const headY  = -Math.abs(cos1(t)) * scale * 0.005;
-    return [
-      /* hair  */ rt('hair',  sway*1.5 + ripple, 0, 0),
-      /* head  */ rt('head',  sway*0.4,           0, headY),
-      /* torso */ rt('torso', sway*0.2,           0, 0),
-      /* armL  */ rt('armL',  raise - 10*DEG,     0, 0),
-      /* armR  */ rt('armR',  sway,               0, 0),
-      /* hips  */ rt('hips', -sway*0.1,           0, 0),
-      /* legL  */ rt('legL',  sway*0.5,           0, 0),
-      /* legR  */ rt('legR', -sway*0.5,           0, 0),
-    ];
-  }
-
-  // Fallback → identity
-  return Array.from({ length: NUM_BONES }, () => matIdentity());
 }
 
 // ── Main render ───────────────────────────────────────────────────────────────
 /**
- * Warp-renders one animation frame via LBS backward sampling.
- *
- * @param {CanvasRenderingContext2D} ctx   destination
- * @param {object} skelData                result from detectSkeleton()
+ * Render one animation frame onto ctx.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {object} bodyData — result from detectBodyParts()
  * @param {string} pose
- * @param {number} t                       phase 0..1
+ * @param {number} t   — phase 0..1
  * @param {'left'|'right'} dir
  */
-export function renderFrame(ctx, skelData, pose, t, dir) {
-  const { srcData, srcW, srcH, bb, pivots, weights } = skelData;
+export function renderFrame(ctx, bodyData, pose, t, dir) {
+  const { parts, bb } = bodyData;
   const DW = ctx.canvas.width;
   const DH = ctx.canvas.height;
 
-  // Scale + offset to centre character in dest canvas
-  const scale = Math.min((DW * 0.78) / bb.w, (DH * 0.82) / bb.h);
-  const ox    = (DW - bb.w * scale) / 2 - bb.x * scale;
-  const oy    = (DH - bb.h * scale) / 2 - bb.y * scale;
+  ctx.clearRect(0, 0, DW, DH);
 
-  // Hurt / die global alpha
-  let globalAlpha = 1;
-  if (pose === 'hurt') {
-    const flash = t < 0.25 ? 1 : clamp01(1 - (t - 0.25) * 5);
-    globalAlpha = 0.45 + 0.55 * (1 - flash * 0.45);
-  }
-  if (pose === 'die') {
-    const fall = clamp01(ease(t, 2.5));
-    if (t > 0.65) globalAlpha = clamp01(1 - (t - 0.65) / 0.35);
-  }
+  const T     = getPoseTransforms(pose, t);
+  const scale = Math.min((DW * 0.75) / bb.w, (DH * 0.80) / bb.h);
 
-  // Build forward bone matrices (source → dest)
-  const fwdMats = getPoseBones(pose, t, pivots, scale, ox, oy);
+  // Centre character bounding box
+  const baseX = (DW - bb.w * scale) / 2;
+  const baseY = (DH - bb.h * scale) / 2 + T.globalY * DH;
 
-  // Invert each bone matrix (dest → source) for backward warp
-  const invMats = fwdMats.map(matInvert);
+  ctx.save();
 
-  // Allocate output image
-  const outImg = ctx.createImageData(DW, DH);
-  const out    = outImg.data;
-  const src    = srcData.data;
-
-  // Precompute bone weights scratch
-  const wScratch = new Float32Array(NUM_BONES);
-  let paintedPx = 0;
-
-  for (let dy = 0; dy < DH; dy++) {
-    for (let dx = 0; dx < DW; dx++) {
-
-      // Step 1: map dest pixel → source pixel via each bone's inverse matrix
-      // then blend by that bone's weight at the (approximate) source location.
-      // We use a single-pass approximation: compute the unweighted source
-      // position first (using the identity mapping), look up weights there,
-      // then compute the weighted blend of all bone inverse transforms.
-
-      // Approximate source pixel (before animation) via inverse scale/offset
-      const approxSX = (dx - ox) / scale;
-      const approxSY = (dy - oy) / scale;
-
-      // Get bone weights at this approximate source position
-      const asx = Math.round(approxSX), asy = Math.round(approxSY);
-      let totalW = 0;
-      for (let b = 0; b < NUM_BONES; b++) {
-        if (asx >= 0 && asx < srcW && asy >= 0 && asy < srcH) {
-          wScratch[b] = weights[b][asy * srcW + asx];
-        } else {
-          wScratch[b] = 0;
-        }
-        totalW += wScratch[b];
-      }
-
-      if (totalW < 0.01) continue;  // outside character entirely
-
-      // Step 2: weighted blend of inverse-mapped source positions
-      let blendSX = 0, blendSY = 0;
-      for (let b = 0; b < NUM_BONES; b++) {
-        if (wScratch[b] < 0.0001) continue;
-        const w   = wScratch[b] / totalW;
-        const sp  = matApply(invMats[b], dx, dy);
-        blendSX  += sp.x * w;
-        blendSY  += sp.y * w;
-      }
-
-      // Dir flip: mirror source x around character centre
-      let finalSX = blendSX, finalSY = blendSY;
-      if (dir === 'left') {
-        const charCentreX = bb.x + bb.w * 0.5;
-        finalSX = 2 * charCentreX - blendSX;
-      }
-
-      // Step 3: bilinear sample from source image
-      const sx0 = Math.floor(finalSX), sy0 = Math.floor(finalSY);
-      const sx1 = sx0 + 1,             sy1 = sy0 + 1;
-      const fx  = finalSX - sx0,       fy  = finalSY - sy0;
-
-      if (sx0 < 0 || sy0 < 0 || sx1 >= srcW || sy1 >= srcH) continue;
-
-      const i00 = (sy0 * srcW + sx0) * 4;
-      const i10 = (sy0 * srcW + sx1) * 4;
-      const i01 = (sy1 * srcW + sx0) * 4;
-      const i11 = (sy1 * srcW + sx1) * 4;
-
-      const wa = (1-fx)*(1-fy), wb = fx*(1-fy),
-            wc = (1-fx)*fy,     wd = fx*fy;
-
-      const oi = (dy * DW + dx) * 4;
-      out[oi]   = src[i00]  *wa + src[i10]  *wb + src[i01]  *wc + src[i11]  *wd;
-      out[oi+1] = src[i00+1]*wa + src[i10+1]*wb + src[i01+1]*wc + src[i11+1]*wd;
-      out[oi+2] = src[i00+2]*wa + src[i10+2]*wb + src[i01+2]*wc + src[i11+2]*wd;
-      out[oi+3] = Math.min(255,
-                    (src[i00+3]*wa + src[i10+3]*wb + src[i01+3]*wc + src[i11+3]*wd)
-                  ) * globalAlpha;
-      if (out[oi+3] > 0) paintedPx++;
-    }
+  // Direction flip
+  if (dir === 'left') {
+    ctx.translate(DW, 0);
+    ctx.scale(-1, 1);
   }
 
-  ctx.putImageData(outImg, 0, 0);
+  // Global rotation for die
+  if (T.globalRot) {
+    ctx.translate(DW / 2, DH * 0.7);
+    ctx.rotate(T.globalRot);
+    ctx.translate(-DW / 2, -DH * 0.7);
+  }
 
-  // Safety fallback: if the warp produced an almost-empty frame,
-  // draw the original image instead of leaving the preview / sheet blank.
-  if (paintedPx < DW * DH * 0.01) {
-    const srcCanvas = document.createElement('canvas');
-    srcCanvas.width = srcW;
-    srcCanvas.height = srcH;
-    srcCanvas.getContext('2d').putImageData(srcData, 0, 0);
+  const order = T.order || Object.keys(parts);
 
-    const fallbackScale = Math.min((DW * 0.78) / srcW, (DH * 0.82) / srcH);
-    const fx = (DW - srcW * fallbackScale) / 2;
-    const fy = (DH - srcH * fallbackScale) / 2;
+  for (const pid of order) {
+    const part = parts[pid];
+    const xf   = T[pid];
+    if (!part || !xf) continue;
+
+    const { canvas, anchorX, anchorY, originX, originY } = part;
+
+    // World-space position of the pivot point
+    const pivotX = baseX + (originX - bb.x + anchorX) * scale;
+    const pivotY = baseY + (originY - bb.y + anchorY) * scale;
 
     ctx.save();
-    ctx.clearRect(0, 0, DW, DH);
-    if (dir === 'left') {
-      ctx.translate(DW, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(srcCanvas, DW - fx - srcW * fallbackScale, fy, srcW * fallbackScale, srcH * fallbackScale);
-    } else {
-      ctx.drawImage(srcCanvas, fx, fy, srcW * fallbackScale, srcH * fallbackScale);
-    }
+    ctx.globalAlpha = clamp((T.alpha ?? 1) * (xf.alpha ?? 1), 0, 1);
+
+    ctx.translate(
+      pivotX + (xf.dx || 0) * DH,
+      pivotY + (xf.dy || 0) * DH
+    );
+    ctx.rotate(xf.rot || 0);
+
+    // Draw part so its anchor aligns with (0,0)
+    ctx.drawImage(
+      canvas,
+      -anchorX  * scale,
+      -anchorY  * scale,
+      canvas.width  * scale,
+      canvas.height * scale
+    );
+
     ctx.restore();
   }
 
   // Effects overlay
-  if (pose === 'cast')  drawCastGlow(ctx, DW, DH, t, dir);
-  if (pose === 'hurt')  drawHurtFlash(ctx, DW, DH, t);
+  if (T.effect) {
+    if (T.effect.type === 'cast') drawCastGlow(ctx, DW, DH, T.effect.glow, dir);
+    if (T.effect.type === 'hurt') drawHurtFlash(ctx, DW, DH, T.effect.flash);
+  }
+
+  ctx.restore();
 }
 
 // ── Effects ───────────────────────────────────────────────────────────────────
-function drawCastGlow(ctx, DW, DH, t, dir) {
-  const glow = (1 + Math.sin(t * Math.PI * 4)) * 0.5;
-  const ex   = dir === 'left' ? DW * 0.35 : DW * 0.65;
-  const ey   = DH * 0.38;
-  const r    = 22 + glow * 28;
-  const g    = ctx.createRadialGradient(ex, ey, 0, ex, ey, r);
+function drawCastGlow(ctx, DW, DH, glow, dir) {
+  const ex = dir === 'left' ? DW * 0.35 : DW * 0.65;
+  const ey = DH * 0.35;
+  const r  = 22 + glow * 28;
+  const g  = ctx.createRadialGradient(ex, ey, 0, ex, ey, r);
   g.addColorStop(0,   `rgba(200,140,255,${0.7 * glow})`);
-  g.addColorStop(0.5, `rgba(130,80,255,${0.3 * glow})`);
+  g.addColorStop(0.4, `rgba(130,80,255,${0.35 * glow})`);
   g.addColorStop(1,   'rgba(80,40,200,0)');
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -413,12 +316,11 @@ function drawCastGlow(ctx, DW, DH, t, dir) {
   ctx.restore();
 }
 
-function drawHurtFlash(ctx, DW, DH, t) {
-  const flash = t < 0.25 ? 1 : clamp01(1 - (t - 0.25) * 5);
-  if (flash < 0.01) return;
+function drawHurtFlash(ctx, DW, DH, flash) {
+  if (!flash) return;
   ctx.save();
   ctx.globalCompositeOperation = 'source-atop';
-  ctx.fillStyle = `rgba(255,50,50,${flash * 0.48})`;
+  ctx.fillStyle = `rgba(255,50,50,${flash * 0.5})`;
   ctx.fillRect(0, 0, DW, DH);
   ctx.restore();
 }
