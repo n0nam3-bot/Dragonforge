@@ -1,15 +1,15 @@
-// app.js — SpriteSmith Studio v3 (LBS warp engine)
+// app.js — SpriteSmith Studio  (v2 — skeletal body detection)
 
-import { removeBackground }                 from './bgremove.js';
-import { detectSkeleton }                   from './bodyDetect.js';
-import { POSES, renderFrame }               from './animator.js';
-import { bakeSheet, exportPNG, exportJSON } from './spritesheet.js';
+import { removeBackground }                  from './bgremove.js';
+import { detectBodyParts }                   from './bodyDetect.js';
+import { POSES, renderFrame }                from './animator.js';
+import { bakeSheet, exportPNG, exportJSON }  from './spritesheet.js';
 
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 // STATE
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 let state = {
-  skelData:    null,   // result from detectSkeleton()
+  bodyData:    null,   // { parts, joints, bb, isFront, landmarks }
   pose:        'idle',
   direction:   'right',
   speed:       1.0,
@@ -23,10 +23,11 @@ let animPhase = 0;
 let lastTime  = null;
 let rafId     = null;
 
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 // ELEMENT REFS
-// ════════════════════════════════════════════════════
-const $         = id => document.getElementById(id);
+// ════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+
 const uploadZone    = $('uploadZone');
 const uploadTrigger = $('uploadTrigger');
 const uploadPreview = $('uploadPreview');
@@ -56,14 +57,13 @@ const sheetBadge    = $('sheetBadge');
 const saveBtn       = $('saveBtn');
 const loadBtn       = $('loadBtn');
 const saveStatus    = $('saveStatus');
-const toastEl       = $('toast');
 
-const previewCtx    = previewCanvas.getContext('2d');
-const sheetCtx      = sheetCanvas.getContext('2d');
+const previewCtx = previewCanvas.getContext('2d');
+const sheetCtx   = sheetCanvas.getContext('2d');
 
-// ════════════════════════════════════════════════════
-// POSE GRID BUILD
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// POSE GRID
+// ════════════════════════════════════════════════════════
 POSES.forEach(p => {
   const btn = document.createElement('button');
   btn.className  = 'pose-btn' + (p.id === state.pose ? ' active' : '');
@@ -73,13 +73,16 @@ POSES.forEach(p => {
   poseGrid.appendChild(btn);
 });
 
-// ════════════════════════════════════════════════════
-// UPLOAD / DRAG-DROP
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// UPLOAD
+// ════════════════════════════════════════════════════════
 uploadTrigger.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+uploadZone.addEventListener('dragover', e => {
+  e.preventDefault(); uploadZone.classList.add('drag-over');
+});
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
 uploadZone.addEventListener('drop', e => {
   e.preventDefault(); uploadZone.classList.remove('drag-over');
@@ -90,39 +93,40 @@ uploadZone.addEventListener('drop', e => {
 clearBtn.addEventListener('click', resetCharacter);
 
 function resetCharacter() {
-  state.skelData   = null;
-  state.sheetCanvas = null;
+  state.bodyData = null;
   uploadTrigger.classList.remove('hidden');
   uploadPreview.classList.add('hidden');
   bgBar.classList.add('hidden');
-  bakeBtn.disabled     = true;
-  exportPNGBtn.disabled = true;
-  exportJSONBtn.disabled = true;
+  bakeBtn.disabled = true;
   previewPlhdr.classList.remove('hidden');
-  sheetPlhdr.classList.remove('hidden');
-  poseBadge.textContent  = '—';
-  sheetBadge.textContent = '—';
   stopAnimation();
   previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-  sheetCtx.clearRect(0, 0, sheetCanvas.width, sheetCanvas.height);
 }
 
 async function handleFile(file) {
-  const objURL = URL.createObjectURL(file);
+  const objectURL = URL.createObjectURL(file);
   const img = new Image();
-  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = objURL; });
+  img.crossOrigin = 'anonymous';
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = objectURL; });
 
-  uploadThumb.src = objURL;
+  // Show raw thumb immediately while processing
+  uploadThumb.src = objectURL;
   bgBar.classList.remove('hidden');
   uploadTrigger.classList.add('hidden');
   uploadPreview.classList.remove('hidden');
   bakeBtn.disabled = true;
 
-  // Stage 1: background removal (0–48%)
   setProgress(0, 'Removing background…');
+
   let cleaned;
   try {
-    cleaned = await removeBackground(img, p => setProgress(p * 0.48, bgLabel(p)));
+    cleaned = await removeBackground(img, p => {
+      const stages = [[0,'Sampling edge colours…'],[0.15,'Flood-filling background…'],
+                      [0.60,'Cleaning fringe pixels…'],[0.80,'Smoothing alpha edges…'],
+                      [0.92,'Finalising…'],[1,'Done!']];
+      const lbl = stages.reduce((a,b) => p >= b[0] ? b : a)[1];
+      setProgress(p * 0.50, lbl); // bg removal = first 50%
+    });
   } catch (e) {
     console.error(e);
     showToast('Background removal failed.', 'err');
@@ -130,88 +134,97 @@ async function handleFile(file) {
     return;
   }
 
+  // Update thumb to cleaned version
   uploadThumb.src = cleaned.toDataURL();
-  URL.revokeObjectURL(objURL);
-
-  // Stage 2: skeleton + weight map detection (48–100%)
-  setProgress(0.50, 'Analysing character structure…');
+  setProgress(0.52, 'Analysing body structure…');
   await tick();
 
-  let skelData;
+  let bodyData;
   try {
-    skelData = await detectSkeleton(cleaned, p => setProgress(0.50 + p * 0.50, skelLabel(p)));
+    bodyData = await detectBodyParts(cleaned, p => {
+      setProgress(0.50 + p * 0.50, bodyDetectLabel(p));
+    });
   } catch (e) {
     console.error(e);
-    showToast('Skeleton detection failed — try a clearer sprite.', 'err');
+    showToast('Body detection failed — try a clearer character image.', 'err');
     bgBar.classList.add('hidden');
     return;
   }
 
-  if (!skelData) {
-    showToast('No character detected. Use a front/side-facing sprite.', 'warn');
+  if (!bodyData) {
+    showToast('No character detected — try a front-facing sprite.', 'warn');
     bgBar.classList.add('hidden');
     return;
   }
 
-  state.skelData = skelData;
+  state.bodyData = bodyData;
+
   bgBar.classList.add('hidden');
   previewPlhdr.classList.add('hidden');
   bakeBtn.disabled = false;
-  showToast('Character loaded — warp engine ready ✓', 'ok');
+
+  // Show detection debug badge
+  const pcount = Object.keys(bodyData.parts).length;
+  showToast(`Character loaded — ${pcount} body parts detected ✓`, 'ok');
+
+  URL.revokeObjectURL(objectURL);
   startAnimation();
 }
 
-const bgLabel   = p => ['Sampling edge colours…','Flood-filling background…',
-                         'Cleaning fringe pixels…','Smoothing alpha edges…',
-                         'Finalising…','Done!']
-  .find((_, i, a) => p < (i + 1) / a.length) ?? 'Done!';
+function bodyDetectLabel(p) {
+  if (p < 0.20) return 'Scanning row profiles…';
+  if (p < 0.40) return 'Finding anatomical landmarks…';
+  if (p < 0.60) return 'Assigning pixels to body parts…';
+  if (p < 0.80) return 'Extracting part canvases…';
+  return 'Computing joint anchors…';
+}
 
-const skelLabel = p => p < 0.20 ? 'Scanning row profiles…'
-                     : p < 0.40 ? 'Finding body landmarks…'
-                     : p < 0.60 ? 'Building bone regions…'
-                     : p < 0.90 ? 'Computing LBS weight maps…'
-                     :            'Finalising skeleton…';
-
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 // ANIMATION LOOP
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 function startAnimation() {
   stopAnimation();
-  lastTime = null; animPhase = 0;
+  lastTime  = null;
+  animPhase = 0;
   rafId = requestAnimationFrame(loop);
 }
-function stopAnimation() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
+
+function stopAnimation() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+}
 
 function loop(now) {
   rafId = requestAnimationFrame(loop);
-  if (!state.skelData) return;
+  if (!state.bodyData) return;
 
-  const dt = lastTime ? (now - lastTime) / 1000 : 0;
-  lastTime = now;
+  const dt  = lastTime ? (now - lastTime) / 1000 : 0;
+  lastTime  = now;
 
+  // Advance phase based on speed; die/crouch play once then hold
   const oneShot = ['die', 'crouch'];
   if (oneShot.includes(state.pose)) {
     animPhase = Math.min(animPhase + dt * state.speed * 0.55, 0.999);
   } else {
-    animPhase = (animPhase + dt * state.speed * 0.72) % 1;
+    animPhase = (animPhase + dt * state.speed * 0.75) % 1;
   }
 
   // Resize canvas to wrapper
   const wrap = previewCanvas.parentElement;
-  const sz   = Math.min(wrap.clientWidth || 320, wrap.clientHeight || 320, 480);
+  const sz   = Math.min(wrap.clientWidth || 320, wrap.clientHeight || 320);
   if (previewCanvas.width !== sz || previewCanvas.height !== sz) {
     previewCanvas.width = previewCanvas.height = sz;
   }
 
-  renderFrame(previewCtx, state.skelData, state.pose, animPhase, state.direction);
+  renderFrame(previewCtx, state.bodyData, state.pose, animPhase, state.direction);
   poseBadge.textContent = `${state.pose.toUpperCase()} · ${state.direction.toUpperCase()}`;
 }
 
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 // CONTROLS
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 function selectPose(id) {
-  state.pose = id; animPhase = 0;
+  state.pose = id;
+  animPhase  = 0;
   poseGrid.querySelectorAll('.pose-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.id === id));
 }
@@ -228,26 +241,27 @@ speedSlider.addEventListener('input', () => {
   state.speed = parseFloat(speedSlider.value);
   speedVal.textContent = state.speed.toFixed(2) + '×';
 });
+
 framesSlider.addEventListener('input', () => {
   state.frameCount = parseInt(framesSlider.value);
   framesVal.textContent = state.frameCount;
 });
-sizeSelect.addEventListener('change',   () => { state.frameSize = parseInt(sizeSelect.value); });
+
+sizeSelect.addEventListener('change',  () => { state.frameSize = parseInt(sizeSelect.value); });
 layoutSelect.addEventListener('change', () => { state.layout = layoutSelect.value; });
 
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 // BAKE
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 bakeBtn.addEventListener('click', () => {
-  if (!state.skelData) return;
+  if (!state.bodyData) return;
   bakeBtn.textContent = '⏳ Baking…';
   bakeBtn.disabled    = true;
 
-  // Run bake async so UI can update
   setTimeout(() => {
     try {
       state.sheetCanvas = bakeSheet(
-        state.skelData, state.pose, state.direction,
+        state.bodyData, state.pose, state.direction,
         state.frameCount, state.frameSize, state.layout
       );
 
@@ -259,12 +273,14 @@ bakeBtn.addEventListener('click', () => {
       sheetPlhdr.classList.add('hidden');
       sheetBadge.textContent =
         `${state.frameCount} frames · ${state.sheetCanvas.width}×${state.sheetCanvas.height}px`;
+
       exportPNGBtn.disabled  = false;
       exportJSONBtn.disabled = false;
+
       showToast(`Sprite sheet baked (${state.frameCount} frames) ✓`, 'ok');
     } catch (e) {
       console.error(e);
-      showToast('Bake failed — see console.', 'err');
+      showToast('Bake failed — see console for details.', 'err');
     } finally {
       bakeBtn.textContent = '⚡ BAKE SPRITE SHEET';
       bakeBtn.disabled    = false;
@@ -272,14 +288,15 @@ bakeBtn.addEventListener('click', () => {
   }, 30);
 });
 
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 // EXPORT
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 exportPNGBtn.addEventListener('click', () => {
   if (!state.sheetCanvas) return;
   exportPNG(state.sheetCanvas, state.pose, state.direction);
   showToast('PNG exported ↓', 'ok');
 });
+
 exportJSONBtn.addEventListener('click', () => {
   if (!state.sheetCanvas) return;
   exportJSON(state.sheetCanvas, state.frameCount, state.frameSize,
@@ -287,23 +304,23 @@ exportJSONBtn.addEventListener('click', () => {
   showToast('JSON + PNG exported ↓', 'ok');
 });
 
-// ════════════════════════════════════════════════════
-// SAVE / LOAD  (localStorage)
-// ════════════════════════════════════════════════════
-const STORAGE_KEY = 'spritesmithStudio_v3';
+// ════════════════════════════════════════════════════════
+// SAVE / LOAD
+// ════════════════════════════════════════════════════════
+const STORAGE_KEY = 'spritesmithStudio_v2';
 
 saveBtn.addEventListener('click', () => {
-  if (!state.skelData) { showToast('Nothing to save yet.', 'warn'); return; }
+  if (!state.bodyData) { showToast('Nothing to save yet.', 'warn'); return; }
   try {
-    // Store the bg-removed character as a compact PNG dataURL
-    const { srcData, srcW, srcH } = state.skelData;
-    const tmp = document.createElement('canvas');
-    tmp.width = srcW; tmp.height = srcH;
-    tmp.getContext('2d').putImageData(srcData, 0, 0);
-    const charDataURL = tmp.toDataURL('image/png');
+    // Serialise only what we can reproduce: the cleaned character PNG + settings
+    const charDataURL = state.bodyData.parts.torso?.canvas.toDataURL()
+      ?? Object.values(state.bodyData.parts)[0]?.canvas.toDataURL()
+      ?? '';
 
+    // Save the composite — re-render all parts onto one canvas for storage
+    const comp = compositeCharacter(state.bodyData);
     const payload = {
-      charDataURL,
+      charDataURL: comp.toDataURL(),
       pose: state.pose, direction: state.direction, speed: state.speed,
       frameCount: state.frameCount, frameSize: state.frameSize,
       layout: state.layout, savedAt: new Date().toISOString(),
@@ -312,7 +329,7 @@ saveBtn.addEventListener('click', () => {
     saveStatus.textContent = 'Saved ✓';
     saveStatus.classList.add('visible');
     setTimeout(() => saveStatus.classList.remove('visible'), 2500);
-    showToast('Project saved to browser ✓', 'ok');
+    showToast('Project saved ✓', 'ok');
   } catch (e) {
     console.error(e);
     showToast('Save failed (storage full?)', 'err');
@@ -325,40 +342,46 @@ loadBtn.addEventListener('click', async () => {
 
   try {
     const payload = JSON.parse(raw);
-    showToast('Loading saved project…', 'ok');
+    showToast('Loading…', 'ok');
 
     const img = new Image();
-    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = payload.charDataURL; });
+    await new Promise((res, rej) => {
+      img.onload = res; img.onerror = rej;
+      img.src = payload.charDataURL;
+    });
 
+    // The saved dataURL is already bg-removed — put it on a canvas and re-detect
     const c = document.createElement('canvas');
     c.width = img.naturalWidth; c.height = img.naturalHeight;
     c.getContext('2d').drawImage(img, 0, 0);
 
     bgBar.classList.remove('hidden');
+    setProgress(0, 'Re-detecting body parts…');
     uploadTrigger.classList.add('hidden');
     uploadPreview.classList.remove('hidden');
     uploadThumb.src = payload.charDataURL;
-    setProgress(0, 'Rebuilding skeleton…');
 
-    const skelData = await detectSkeleton(c, p => setProgress(p, skelLabel(p)));
-    if (!skelData) { showToast('Failed to re-detect skeleton.', 'err'); bgBar.classList.add('hidden'); return; }
+    const bodyData = await detectBodyParts(c, p => setProgress(p, bodyDetectLabel(p)));
+    if (!bodyData) { showToast('Could not detect parts from saved image.', 'err'); bgBar.classList.add('hidden'); return; }
 
-    state.skelData     = skelData;
-    state.pose         = payload.pose       || 'idle';
-    state.direction    = payload.direction  || 'right';
-    state.speed        = payload.speed      || 1.0;
-    state.frameCount   = payload.frameCount || 8;
-    state.frameSize    = payload.frameSize  || 128;
-    state.layout       = payload.layout     || 'horizontal';
+    state.bodyData = bodyData;
 
-    // Sync UI
+    // Restore settings
+    state.pose       = payload.pose       || 'idle';
+    state.direction  = payload.direction  || 'right';
+    state.speed      = payload.speed      || 1.0;
+    state.frameCount = payload.frameCount || 8;
+    state.frameSize  = payload.frameSize  || 128;
+    state.layout     = payload.layout     || 'horizontal';
+
+    // Sync UI controls
     selectPose(state.pose);
-    speedSlider.value     = state.speed;
-    speedVal.textContent  = state.speed.toFixed(2) + '×';
-    framesSlider.value    = state.frameCount;
+    speedSlider.value = state.speed;
+    speedVal.textContent = state.speed.toFixed(2) + '×';
+    framesSlider.value = state.frameCount;
     framesVal.textContent = state.frameCount;
-    sizeSelect.value      = state.frameSize;
-    layoutSelect.value    = state.layout;
+    sizeSelect.value = state.frameSize;
+    layoutSelect.value = state.layout;
     dirGroup.querySelectorAll('.tog').forEach(b =>
       b.classList.toggle('active', b.dataset.val === state.direction));
 
@@ -374,15 +397,35 @@ loadBtn.addEventListener('click', async () => {
   }
 });
 
-// ════════════════════════════════════════════════════
-// UTILITIES
-// ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════
+
+/** Flatten all detected parts back onto one canvas for save storage. */
+function compositeCharacter(bodyData) {
+  const { bb } = bodyData;
+  const c = document.createElement('canvas');
+  c.width = bb.w; c.height = bb.h;
+  const ctx = c.getContext('2d');
+  const order = ['legL','legR','hips','torso','armL','armR','head','hair'];
+  for (const pid of order) {
+    const p = bodyData.parts[pid];
+    if (!p) continue;
+    ctx.drawImage(p.canvas,
+      p.originX - bb.x - p.pad,
+      p.originY - bb.y - p.pad,
+      p.canvas.width, p.canvas.height);
+  }
+  return c;
+}
+
 function setProgress(pct, label) {
   progFill.style.width  = (Math.min(pct, 1) * 100) + '%';
-  if (label) progLabel.textContent = label;
+  progLabel.textContent = label;
 }
 
 let toastTimer = null;
+const toastEl = document.getElementById('toast');
 function showToast(msg, type = 'ok') {
   toastEl.textContent = msg;
   toastEl.className   = `toast ${type} show`;
@@ -391,11 +434,11 @@ function showToast(msg, type = 'ok') {
 }
 
 function timeAgo(iso) {
-  const m = Math.floor((Date.now() - new Date(iso)) / 60000);
-  if (m < 1)  return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+  const d = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (d < 1)  return 'just now';
+  if (d < 60) return `${d}m ago`;
+  const h = Math.floor(d / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h/24)}d ago`;
 }
 
 function tick() { return new Promise(r => setTimeout(r, 0)); }
