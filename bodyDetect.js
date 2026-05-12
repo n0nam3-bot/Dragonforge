@@ -1,22 +1,32 @@
-// bodyDetect.js — Width-profile body segmentation + per-part canvas extraction
-// Works on any humanoid sprite, auto-detects proportions and facing direction.
+// bodyDetect.js
+// Scans the bg-removed character, finds anatomical landmarks, and
+// precomputes Linear Blend Skinning (LBS) weight maps for 8 bone regions.
+// The weight maps are stored as Float32Array[srcW * srcH] per bone — each
+// foreground pixel gets weights that sum to 1 across all bones.
 
-const ALPHA = 20;          // minimum alpha to count as foreground
-const SMOOTH_WIN = 7;      // moving-average window for width profile
-const ARM_SLACK = 0.18;    // fraction of core width added as margin before calling pixels "arm"
+const ALPHA      = 18;   // min alpha to count as foreground
+const SMOOTH_WIN = 9;    // moving-average window for width profile
+const BLEND_PX   = 10;   // pixels of smooth cross-fade at region boundaries
 
-// ── Public types ──────────────────────────────────────────────────────────────
-// parts:  { hair, head, torso, armL, armR, hips, legL, legR }  (any may be missing)
-// Each part: { canvas, anchorX, anchorY }
-//   anchorX/Y = the joint pivot point IN this canvas's local pixel coords
-// joints: { neck, shoulderL, shoulderR, waist, hipL, hipR, kneeL, kneeR, ankleL, ankleR }
-//   All in the original charCanvas pixel coordinate space
+// Bone indices — keep in sync with animator.js
+export const B_HAIR  = 0;
+export const B_HEAD  = 1;
+export const B_TORSO = 2;
+export const B_ARML  = 3;
+export const B_ARMR  = 4;
+export const B_HIPS  = 5;
+export const B_LEGL  = 6;
+export const B_LEGR  = 7;
+export const NUM_BONES = 8;
+
+export const BONE_IDS = ['hair','head','torso','armL','armR','hips','legL','legR'];
 
 // ── Entry point ───────────────────────────────────────────────────────────────
-export async function detectBodyParts(charCanvas, onProgress = () => {}) {
+export async function detectSkeleton(charCanvas, onProgress = () => {}) {
   const W = charCanvas.width, H = charCanvas.height;
   const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const d   = ctx.getImageData(0, 0, W, H).data;
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const d = imgData.data;
 
   onProgress(0.05);
 
@@ -30,386 +40,234 @@ export async function detectBodyParts(charCanvas, onProgress = () => {}) {
   }
   if (x0 > x1) return null;
   const bb = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-  const BH = bb.h;
 
-  onProgress(0.15);
+  onProgress(0.12);
 
-  // ── 2. Row profiles ───────────────────────────────────────────────────────
-  const lx = new Float32Array(BH);   // leftmost pixel per row
-  const rx = new Float32Array(BH);   // rightmost pixel per row
-  const mx = new Float32Array(BH);   // midpoint per row
-  const wd = new Float32Array(BH);   // pixel count per row
-  const density = new Float32Array(BH); // non-transparent pixels per row
+  // ── 2. Row profiles (in full-canvas coords) ───────────────────────────────
+  const lxArr = new Float32Array(H);  // leftmost fg x per row
+  const rxArr = new Float32Array(H);  // rightmost fg x per row
+  const mxArr = new Float32Array(H);  // midpoint x per row
+  const wdArr = new Float32Array(H);  // visible width per row
+  const dnArr = new Float32Array(H);  // fg pixel density per row
 
-  for (let r = 0; r < BH; r++) {
-    const y = bb.y + r;
-    let l = -1, ri = -1, cnt = 0;
-    for (let x = bb.x; x <= x1; x++) {
+  for (let y = y0; y <= y1; y++) {
+    let l = -1, r = -1, cnt = 0;
+    for (let x = x0; x <= x1; x++) {
       if (d[(y * W + x) * 4 + 3] > ALPHA) {
-        if (l < 0) l = x;
-        ri = x;
-        cnt++;
+        if (l < 0) l = x; r = x; cnt++;
       }
     }
-    if (l < 0) { l = ri = (bb.x + x1) >> 1; }
-    lx[r] = l; rx[r] = ri; mx[r] = (l + ri) / 2; wd[r] = ri - l + 1;
-    density[r] = cnt;
+    if (l < 0) { l = r = (x0 + x1) >> 1; }
+    lxArr[y] = l; rxArr[y] = r; mxArr[y] = (l + r) * 0.5;
+    wdArr[y] = r - l + 1; dnArr[y] = cnt;
   }
 
-  // Smoothed width for landmark detection
-  const sw = smooth(wd, SMOOTH_WIN);
+  // Smoothed width
+  const sw = smoothArr(wdArr, y0, y1, SMOOTH_WIN);
 
-  onProgress(0.30);
+  onProgress(0.25);
 
-  // ── 3. Anatomical landmarks ───────────────────────────────────────────────
-  const lm = findLandmarks(sw, density, BH, bb);
+  // ── 3. Landmark detection ────────────────────────────────────────────────
+  const lm = findLandmarks(sw, dnArr, mxArr, wdArr, y0, y1, bb);
 
-  onProgress(0.45);
+  onProgress(0.38);
 
-  // ── 4. Symmetry / facing detection ────────────────────────────────────────
-  const isFront = isSymmetric(lx, rx, mx, BH, lm);
+  // ── 4. Pivot points (in full-canvas pixel coords) ────────────────────────
+  const pivots = buildPivots(lm, mxArr, lxArr, rxArr, sw, bb);
 
-  // ── 5. Pixel-to-part assignment ───────────────────────────────────────────
-  onProgress(0.55);
-  const MASK_HAIR  = 1, MASK_HEAD  = 2, MASK_TORSO = 3,
-        MASK_ARML  = 4, MASK_ARMR  = 5, MASK_HIPS  = 6,
-        MASK_LEGL  = 7, MASK_LEGR  = 8;
+  onProgress(0.50);
 
-  const mask = new Uint8Array(W * H);
-  buildMask(d, mask, W, bb, lm, lx, rx, mx, sw, isFront,
-    MASK_HAIR, MASK_HEAD, MASK_TORSO, MASK_ARML, MASK_ARMR, MASK_HIPS, MASK_LEGL, MASK_LEGR);
+  // ── 5. Per-pixel weight maps ──────────────────────────────────────────────
+  // Allocate 8 float arrays, one per bone, indexed [y*W+x] in full-canvas space
+  const weights = Array.from({ length: NUM_BONES }, () => new Float32Array(W * H));
 
-  onProgress(0.70);
+  const tmp = new Float32Array(NUM_BONES);
 
-  // ── 6. Extract parts to separate canvases ────────────────────────────────
-  const PAD = 6; // pixel padding around each extracted part
-  const extractMap = {
-    hair:  MASK_HAIR,
-    head:  MASK_HEAD,
-    torso: MASK_TORSO,
-    armL:  MASK_ARML,
-    armR:  MASK_ARMR,
-    hips:  MASK_HIPS,
-    legL:  MASK_LEGL,
-    legR:  MASK_LEGR,
+  for (let y = y0; y <= y1; y++) {
+    const lx = lxArr[y], rx = rxArr[y];
+    for (let x = lx; x <= rx; x++) {
+      if (d[(y * W + x) * 4 + 3] <= ALPHA) continue;
+      computeWeights(x, y, lm, pivots, mxArr, wdArr, sw, tmp);
+      const pi = y * W + x;
+      for (let b = 0; b < NUM_BONES; b++) weights[b][pi] = tmp[b];
+    }
+    if ((y - y0) % 30 === 0) onProgress(0.50 + 0.45 * (y - y0) / bb.h);
+  }
+
+  onProgress(0.97);
+
+  return {
+    srcData: imgData,  // Uint8ClampedArray with all pixels
+    srcW: W, srcH: H,
+    bb, lm, pivots, weights,
+    // Convenience: per-row midpoints for hair wave
+    mxArr, lxArr, rxArr, sw,
   };
-  const parts = {};
-  for (const [pid, mv] of Object.entries(extractMap)) {
-    const p = extractPart(d, mask, W, H, mv, PAD);
-    if (p) parts[pid] = p;
-  }
-
-  onProgress(0.88);
-
-  // ── 7. World-space joint positions ────────────────────────────────────────
-  const joints = buildJoints(lm, bb, mx, lx, rx, sw);
-
-  // ── 8. Attach anchor points to each part ─────────────────────────────────
-  attachAnchors(parts, joints, PAD);
-
-  onProgress(1.0);
-  return { parts, joints, bb, isFront, landmarks: lm };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // LANDMARK DETECTION
 // ════════════════════════════════════════════════════════════════════════════
 
-function findLandmarks(sw, density, BH, bb) {
-  const maxW = Math.max(...sw);
-
-  // Helper: find local minimum in sw within [a%,b%] of BH
+function findLandmarks(sw, dn, mx, wd, y0, y1, bb) {
+  const BH = y1 - y0 + 1;
+  const rel = r => y0 + Math.floor(r * BH);          // fraction → absolute y
   const findMin = (a, b) => {
-    let minV = Infinity, minR = Math.floor(a * BH);
-    for (let r = Math.floor(a * BH); r < Math.floor(b * BH); r++) {
-      if (sw[r] < minV && sw[r] > 0) { minV = sw[r]; minR = r; }
-    }
-    return minR;
+    let v = Infinity, row = rel(a);
+    for (let y = rel(a); y <= rel(b); y++) if (sw[y] > 0 && sw[y] < v) { v = sw[y]; row = y; }
+    return row;
   };
-
-  // Helper: find local maximum in sw within [a%,b%] of BH
   const findMax = (a, b) => {
-    let maxV = 0, maxR = Math.floor(a * BH);
-    for (let r = Math.floor(a * BH); r < Math.floor(b * BH); r++) {
-      if (sw[r] > maxV) { maxV = sw[r]; maxR = r; }
-    }
-    return maxR;
+    let v = 0, row = rel(a);
+    for (let y = rel(a); y <= rel(b); y++) if (sw[y] > v) { v = sw[y]; row = y; }
+    return row;
   };
 
-  // --- Head: widest region in top 30%
-  const headMaxRow  = findMax(0.00, 0.30);
-  const headWidth   = sw[headMaxRow];
+  // Head top = y0 (bounding box top)
+  const headTopY = y0;
 
-  // --- Neck: narrowest in [15%, 40%], must be at least 15% narrower than head
-  let neckRow = findMin(0.15, 0.40);
-  if (sw[neckRow] > headWidth * 0.85) neckRow = Math.floor(0.22 * BH); // fallback
+  // Neck = narrowest in top 40%
+  let neckY = findMin(0.15, 0.40);
+  const neckW = sw[neckY];
 
-  // --- Shoulders: widest in [15%, 42%] BELOW neck
-  const shoulderRow = findMax(Math.max(0.15, neckRow / BH), 0.45);
+  // Head max width in top 30%
+  const headMaxY = findMax(0.00, 0.30);
+  const headW = sw[headMaxY];
 
-  // --- Waist: narrowest in [35%, 65%]
-  const waistRow = findMin(0.35, 0.65);
+  // Hair end = roughly between top and 35% of neck
+  const hairEndY = Math.round(headTopY + (neckY - headTopY) * 0.35);
 
-  // --- Hips: widest in [45%, 72%] BELOW waist
-  const hipRow = findMax(Math.max(0.45, waistRow / BH), 0.72);
+  // Shoulder = widest in [15%, 45%]
+  const shoulderY = findMax(0.15, 0.45);
+  const shoulderW = sw[shoulderY];
 
-  // --- Crotch: find where the silhouette splits into two legs
-  //     Look for a density drop in [65%, 80%] that suggests a gap
-  let crotchRow = Math.floor(0.70 * BH);
-  for (let r = Math.floor(0.62 * BH); r < Math.floor(0.80 * BH); r++) {
-    const prev = density[r - 1] || density[r];
-    if (density[r] < prev * 0.75 && density[r] < maxW * 0.55) {
-      crotchRow = r;
-      break;
-    }
+  // Waist = narrowest in [35%, 65%]
+  const waistY = findMin(0.35, 0.65);
+  const waistW = sw[waistY];
+
+  // Hip = widest in [45%, 72%]
+  const hipY = findMax(Math.max(0.45, (waistY - y0) / BH), 0.72);
+  const hipW = sw[hipY];
+
+  // Crotch = density drop below hip (suggests leg gap)
+  let crotchY = rel(0.72);
+  for (let y = hipY; y <= rel(0.85); y++) {
+    if (dn[y] < dn[hipY] * 0.70 && sw[y] < hipW * 0.65) { crotchY = y; break; }
   }
-  // Also try actual gap detection: any row with two separate filled segments
-  const legSplitRow = detectLegGap(density, BH, crotchRow);
-  if (legSplitRow) crotchRow = legSplitRow;
 
-  // --- Knee: midpoint of leg zone
-  const kneeRow = Math.floor((crotchRow + BH) / 2);
+  // Ankle = 88% of leg zone
+  const ankleY = Math.round(crotchY + (y1 - crotchY) * 0.88);
 
-  // --- Ankle: 90% of leg zone
-  const ankleRow = Math.floor(crotchRow + (BH - crotchRow) * 0.85);
-
-  // --- Hair/head split: top 35% of head region
-  const hairEndRow = Math.floor(neckRow * 0.38);
+  // Core half-width at shoulder level: use waist as baseline
+  const coreHalfShoulder = Math.max(waistW / 2, neckW / 2) * 1.10;
+  const coreHalfWaist    = waistW / 2 * 0.95;
 
   return {
-    hairEndRow, neckRow, shoulderRow, waistRow, hipRow, crotchRow, kneeRow, ankleRow,
-    headWidth, maxWidth: maxW, shoulderWidth: sw[shoulderRow], waistWidth: sw[waistRow],
-    hipWidth: sw[hipRow],
+    headTopY, hairEndY, neckY, shoulderY, waistY, hipY, crotchY, ankleY,
+    headW, shoulderW, waistW, hipW, neckW,
+    coreHalfShoulder, coreHalfWaist,
   };
 }
 
-// Look for a row where the silhouette has a genuine horizontal gap (two separate legs)
-function detectLegGap(density, BH, fallback) {
-  // We'd need leftEdge data; use a simplified density-drop heuristic
-  return null; // Handled above with density drop
-}
-
 // ════════════════════════════════════════════════════════════════════════════
-// SYMMETRY / FACING
+// PIVOT POINTS  (full-canvas pixel space)
 // ════════════════════════════════════════════════════════════════════════════
 
-function isSymmetric(lx, rx, mx, BH, lm) {
-  const start = lm.neckRow;
-  const end   = Math.min(BH - 1, lm.waistRow);
-  let asym = 0, count = 0;
-  for (let r = start; r <= end; r++) {
-    const leftD  = mx[r] - lx[r];
-    const rightD = rx[r] - mx[r];
-    const total  = leftD + rightD;
-    if (total > 4) { asym += Math.abs(leftD - rightD) / total; count++; }
-  }
-  return count > 0 && (asym / count) < 0.22; // <22% average asymmetry → front-facing
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// PIXEL MASK BUILDER
-// ════════════════════════════════════════════════════════════════════════════
-
-function buildMask(d, mask, W, bb, lm, lx, rx, mx, sw, isFront,
-  MH, MHD, MT, MAL, MAR, MHP, MLL, MLR) {
-
-  const { hairEndRow, neckRow, shoulderRow, waistRow, crotchRow } = lm;
-
-  for (let r = 0; r < bb.h; r++) {
-    const y   = bb.y + r;
-    const rl  = lx[r] | 0;
-    const rr  = rx[r] | 0;
-    const rMid = mx[r];
-
-    for (let x = rl; x <= rr; x++) {
-      if (d[(y * W + x) * 4 + 3] <= ALPHA) continue;
-      const idx = y * W + x;
-
-      // ── Hair / Head ──
-      if (r < hairEndRow) { mask[idx] = MH;  continue; }
-      if (r < neckRow)    { mask[idx] = MHD; continue; }
-
-      // ── Torso + Arms ──
-      if (r < waistRow) {
-        // Estimate "core torso" width via linear interpolation neck→waist
-        const t        = (r - neckRow) / Math.max(1, waistRow - neckRow);
-        // At neck, core is roughly neck-width; at waist, roughly waist-width
-        const coreW    = lm.waistWidth + (lm.shoulderWidth - lm.waistWidth) * (1 - t);
-        const coreHalf = (coreW / 2) * (1 + ARM_SLACK);
-        const coreL    = rMid - coreHalf;
-        const coreR    = rMid + coreHalf;
-
-        if (x < coreL)      mask[idx] = MAL;
-        else if (x > coreR) mask[idx] = MAR;
-        else                mask[idx] = MT;
-        continue;
-      }
-
-      // ── Hips ──
-      if (r < crotchRow) { mask[idx] = MHP; continue; }
-
-      // ── Legs ── split at the per-row midpoint
-      mask[idx] = (x < rMid) ? MLL : MLR;
-    }
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// PART EXTRACTION
-// ════════════════════════════════════════════════════════════════════════════
-
-function extractPart(d, mask, W, H, maskVal, pad) {
-  // Find bounding box of this mask value
-  let x0 = W, x1 = 0, y0 = H, y1 = 0, count = 0;
-  for (let i = 0; i < W * H; i++) {
-    if (mask[i] === maskVal) {
-      const x = i % W, y = i / W | 0;
-      if (x < x0) x0 = x; if (x > x1) x1 = x;
-      if (y < y0) y0 = y; if (y > y1) y1 = y;
-      count++;
-    }
-  }
-  if (count < 4 || x0 > x1) return null;
-
-  const pw = x1 - x0 + 1 + pad * 2;
-  const ph = y1 - y0 + 1 + pad * 2;
-  const pc = document.createElement('canvas');
-  pc.width = pw; pc.height = ph;
-  const pd = pc.getContext('2d').createImageData(pw, ph);
-
-  for (let i = 0; i < W * H; i++) {
-    if (mask[i] !== maskVal) continue;
-    const sx = i % W, sy = i / W | 0;
-    const dx = sx - x0 + pad, dy = sy - y0 + pad;
-    const si = i * 4, di = (dy * pw + dx) * 4;
-    pd.data[di]     = d[si];
-    pd.data[di + 1] = d[si + 1];
-    pd.data[di + 2] = d[si + 2];
-    pd.data[di + 3] = d[si + 3];
-  }
-  pc.getContext('2d').putImageData(pd, 0, 0);
+function buildPivots(lm, mx, lx, rx, sw, bb) {
+  const mid  = y => mx[clampY(y, bb.y, bb.y + bb.h - 1)];
+  const half = y => sw[clampY(y, bb.y, bb.y + bb.h - 1)] * 0.5;
 
   return {
-    canvas: pc,
-    // canvas-local coordinates of origin pixel (x0,y0) = (pad, pad)
-    originX: x0, originY: y0,   // world coords of top-left of this part
-    pad,
-    // anchorX/Y will be set by attachAnchors() below
-    anchorX: pw / 2, anchorY: ph / 2,
+    hair:  { x: mid(lm.hairEndY),  y: lm.hairEndY  },
+    head:  { x: mid(lm.neckY),     y: lm.neckY     },
+    torso: { x: mid(lm.waistY),    y: lm.waistY    },
+    armL:  { x: mid(lm.shoulderY) - half(lm.shoulderY) * 0.55,
+             y: lm.shoulderY },
+    armR:  { x: mid(lm.shoulderY) + half(lm.shoulderY) * 0.55,
+             y: lm.shoulderY },
+    hips:  { x: mid(lm.waistY),    y: lm.waistY    },
+    legL:  { x: mid(lm.hipY) - half(lm.hipY) * 0.40, y: lm.hipY },
+    legR:  { x: mid(lm.hipY) + half(lm.hipY) * 0.40, y: lm.hipY },
   };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// JOINT POSITIONS  (world / original-canvas coordinates)
+// PER-PIXEL WEIGHT COMPUTATION
 // ════════════════════════════════════════════════════════════════════════════
 
-function buildJoints(lm, bb, mx, lx, rx, sw) {
-  const mid    = (r) => mx[Math.min(r, bb.h - 1)];
-  const worldY = (r) => bb.y + Math.min(r, bb.h - 1);
-  const halfW  = (r) => sw[Math.min(r, bb.h - 1)] / 2;
+function computeWeights(px, py, lm, pivots, mx, wd, sw, out) {
+  const {
+    headTopY, hairEndY, neckY, shoulderY, waistY, hipY, crotchY,
+    coreHalfShoulder, coreHalfWaist,
+  } = lm;
+  const BP = BLEND_PX;
 
-  const neckW = sw[Math.min(lm.neckRow, bb.h - 1)];
+  for (let i = 0; i < NUM_BONES; i++) out[i] = 0;
 
-  return {
-    neck:       { x: mid(lm.neckRow),    y: worldY(lm.neckRow)    },
-    shoulderL:  { x: mid(lm.shoulderRow) - halfW(lm.shoulderRow) * 0.6,
-                  y: worldY(lm.shoulderRow) },
-    shoulderR:  { x: mid(lm.shoulderRow) + halfW(lm.shoulderRow) * 0.6,
-                  y: worldY(lm.shoulderRow) },
-    waist:      { x: mid(lm.waistRow),   y: worldY(lm.waistRow)   },
-    hipL:       { x: mid(lm.hipRow) - halfW(lm.hipRow) * 0.45,
-                  y: worldY(lm.hipRow) },
-    hipR:       { x: mid(lm.hipRow) + halfW(lm.hipRow) * 0.45,
-                  y: worldY(lm.hipRow) },
-    crotch:     { x: mid(lm.crotchRow),  y: worldY(lm.crotchRow)  },
-    kneeL:      { x: lx[Math.min(lm.kneeRow, bb.h - 1)] +
-                      sw[Math.min(lm.kneeRow, bb.h - 1)] * 0.25,
-                  y: worldY(lm.kneeRow) },
-    kneeR:      { x: rx[Math.min(lm.kneeRow, bb.h - 1)] -
-                      sw[Math.min(lm.kneeRow, bb.h - 1)] * 0.25,
-                  y: worldY(lm.kneeRow) },
-    ankleL:     { x: lx[Math.min(lm.ankleRow, bb.h - 1)] +
-                      sw[Math.min(lm.ankleRow, bb.h - 1)] * 0.2,
-                  y: worldY(lm.ankleRow) },
-    ankleR:     { x: rx[Math.min(lm.ankleRow, bb.h - 1)] -
-                      sw[Math.min(lm.ankleRow, bb.h - 1)] * 0.2,
-                  y: worldY(lm.ankleRow) },
-    elbowL:     { x: mid(lm.shoulderRow) - halfW(lm.shoulderRow) * 0.6,
-                  y: worldY(Math.floor((lm.shoulderRow + lm.waistRow) / 2)) },
-    elbowR:     { x: mid(lm.shoulderRow) + halfW(lm.shoulderRow) * 0.6,
-                  y: worldY(Math.floor((lm.shoulderRow + lm.waistRow) / 2)) },
-  };
-}
+  // Per-row mid x and core width interpolated at this y
+  const rowMid  = mx[py];
+  const distFromMid = px - rowMid;
 
-// ════════════════════════════════════════════════════════════════════════════
-// ANCHOR ATTACHMENT — sets anchorX/Y on each extracted part
-// The anchor is the joint pivot WITHIN that part's local canvas coords.
-// ════════════════════════════════════════════════════════════════════════════
+  // Fraction through torso zone for core width interpolation
+  const torsoFrac = clamp01((py - shoulderY) / Math.max(1, waistY - shoulderY));
+  const coreHalf  = lerp(coreHalfShoulder, coreHalfWaist, torsoFrac);
 
-function attachAnchors(parts, joints, pad) {
-  const toLocal = (part, wx, wy) => ({
-    x: wx - part.originX + pad,
-    y: wy - part.originY + pad,
-  });
+  // ── HAIR: above hairEndY, blends into HEAD ─────────────────────────────
+  out[B_HAIR] = ss(neckY, hairEndY, py);   // peaks at top, fades toward neck
 
-  if (parts.hair) {
-    // Hair pivots from its bottom-center (= top of head)
-    const p = parts.hair;
-    p.anchorX = p.canvas.width / 2;
-    p.anchorY = p.canvas.height - pad;
+  // ── HEAD: hairEnd → shoulder zone ─────────────────────────────────────
+  out[B_HEAD] = ss(headTopY, hairEndY, py) *    // rises from hairEnd
+                ss(shoulderY + BP, neckY - BP, py);  // fades at shoulder
+
+  // ── TORSO: neck → waist, within core width ─────────────────────────────
+  {
+    const vW  = ss(neckY - BP, neckY + BP, py) * ss(waistY + BP, waistY - BP, py);
+    const hW  = ss(coreHalf + BP, coreHalf - BP, Math.abs(distFromMid));
+    out[B_TORSO] = vW * hW;
   }
 
-  if (parts.head) {
-    // Head pivots from neck (bottom-center of head region)
-    const p = parts.head;
-    const a = toLocal(p, joints.neck.x, joints.neck.y);
-    p.anchorX = clamp(a.x, pad, p.canvas.width  - pad);
-    p.anchorY = clamp(a.y, pad, p.canvas.height - pad);
+  // ── ARM_L: shoulder → waist, x < core left ────────────────────────────
+  {
+    const vW  = ss(shoulderY - BP, shoulderY + BP, py) * ss(waistY + BP, waistY - BP, py);
+    const distLeft = rowMid - px - coreHalf;   // positive = left of core
+    const hW  = ss(-BP, BP, distLeft);
+    out[B_ARML] = vW * hW;
   }
 
-  if (parts.torso) {
-    // Torso pivots from waist (its bottom)
-    const p = parts.torso;
-    const a = toLocal(p, joints.waist.x, joints.waist.y);
-    p.anchorX = clamp(a.x, pad, p.canvas.width  - pad);
-    p.anchorY = clamp(a.y, pad, p.canvas.height - pad);
+  // ── ARM_R: shoulder → waist, x > core right ───────────────────────────
+  {
+    const vW  = ss(shoulderY - BP, shoulderY + BP, py) * ss(waistY + BP, waistY - BP, py);
+    const distRight = px - rowMid - coreHalf;  // positive = right of core
+    const hW  = ss(-BP, BP, distRight);
+    out[B_ARMR] = vW * hW;
   }
 
-  if (parts.armL) {
-    // Left arm pivots from shoulder
-    const p = parts.armL;
-    const a = toLocal(p, joints.shoulderL.x, joints.shoulderL.y);
-    p.anchorX = clamp(a.x, 0, p.canvas.width  - 1);
-    p.anchorY = clamp(a.y, 0, p.canvas.height - 1);
+  // ── HIPS: waist → crotch ──────────────────────────────────────────────
+  out[B_HIPS] = ss(waistY - BP, waistY + BP, py) * ss(crotchY + BP, crotchY - BP, py);
+
+  // ── LEG_L: crotch → bottom, x left of per-row mid ────────────────────
+  {
+    const vW  = ss(crotchY - BP, crotchY + BP, py);
+    const hW  = ss(rowMid + BP, rowMid - BP, px);   // left of mid
+    out[B_LEGL] = vW * hW;
   }
 
-  if (parts.armR) {
-    const p = parts.armR;
-    const a = toLocal(p, joints.shoulderR.x, joints.shoulderR.y);
-    p.anchorX = clamp(a.x, 0, p.canvas.width  - 1);
-    p.anchorY = clamp(a.y, 0, p.canvas.height - 1);
+  // ── LEG_R: crotch → bottom, x right of per-row mid ───────────────────
+  {
+    const vW  = ss(crotchY - BP, crotchY + BP, py);
+    const hW  = ss(rowMid - BP, rowMid + BP, px);   // right of mid
+    out[B_LEGR] = vW * hW;
   }
 
-  if (parts.hips) {
-    // Hips pivot from waist (top of hips)
-    const p = parts.hips;
-    const a = toLocal(p, joints.waist.x, joints.waist.y);
-    p.anchorX = clamp(a.x, pad, p.canvas.width  - pad);
-    p.anchorY = clamp(a.y, pad, p.canvas.height - pad);
-  }
-
-  if (parts.legL) {
-    const p = parts.legL;
-    const a = toLocal(p, joints.hipL.x, joints.hipL.y);
-    p.anchorX = clamp(a.x, 0, p.canvas.width  - 1);
-    p.anchorY = clamp(a.y, 0, p.canvas.height - 1);
-  }
-
-  if (parts.legR) {
-    const p = parts.legR;
-    const a = toLocal(p, joints.hipR.x, joints.hipR.y);
-    p.anchorX = clamp(a.x, 0, p.canvas.width  - 1);
-    p.anchorY = clamp(a.y, 0, p.canvas.height - 1);
+  // ── Normalize ──────────────────────────────────────────────────────────
+  let sum = 0;
+  for (let i = 0; i < NUM_BONES; i++) sum += out[i];
+  if (sum > 1e-4) {
+    const inv = 1 / sum;
+    for (let i = 0; i < NUM_BONES; i++) out[i] *= inv;
+  } else {
+    // Fallback: assign to nearest vertical region
+    out[B_TORSO] = 1;
   }
 }
 
@@ -417,17 +275,26 @@ function attachAnchors(parts, joints, pad) {
 // UTILITIES
 // ════════════════════════════════════════════════════════════════════════════
 
-function smooth(arr, win) {
+/** Smoothstep: returns 1 at lo, 0 at hi (or reversed if lo > hi). */
+function ss(lo, hi, x) {
+  const t = clamp01((x - lo) / (hi - lo + 1e-6));
+  return t < 0.5 ? 2*t*t : -2*t*t + 4*t - 1;   // smooth Hermite
+}
+
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+function clampY(y, lo, hi) { return y < lo ? lo : y > hi ? hi : y; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function smoothArr(arr, y0, y1, win) {
   const out = new Float32Array(arr.length);
   const h   = win >> 1;
-  for (let i = 0; i < arr.length; i++) {
+  for (let y = y0; y <= y1; y++) {
     let sum = 0, cnt = 0;
-    for (let j = Math.max(0, i - h); j <= Math.min(arr.length - 1, i + h); j++) {
+    for (let j = Math.max(y0, y - h); j <= Math.min(y1, y + h); j++) {
       sum += arr[j]; cnt++;
     }
-    out[i] = sum / cnt;
+    out[y] = sum / cnt;
   }
   return out;
 }
-
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
