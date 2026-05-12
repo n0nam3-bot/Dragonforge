@@ -293,6 +293,7 @@ export function renderFrame(ctx, skelData, pose, t, dir) {
 
   // Precompute bone weights scratch
   const wScratch = new Float32Array(NUM_BONES);
+  let paintedPx = 0;
 
   for (let dy = 0; dy < DH; dy++) {
     for (let dx = 0; dx < DW; dx++) {
@@ -360,10 +361,35 @@ export function renderFrame(ctx, skelData, pose, t, dir) {
       out[oi+3] = Math.min(255,
                     (src[i00+3]*wa + src[i10+3]*wb + src[i01+3]*wc + src[i11+3]*wd)
                   ) * globalAlpha;
+      if (out[oi+3] > 0) paintedPx++;
     }
   }
 
   ctx.putImageData(outImg, 0, 0);
+
+  // Safety fallback: if the warp produced an almost-empty frame,
+  // draw the original image instead of leaving the preview / sheet blank.
+  if (paintedPx < DW * DH * 0.01) {
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = srcW;
+    srcCanvas.height = srcH;
+    srcCanvas.getContext('2d').putImageData(srcData, 0, 0);
+
+    const fallbackScale = Math.min((DW * 0.78) / srcW, (DH * 0.82) / srcH);
+    const fx = (DW - srcW * fallbackScale) / 2;
+    const fy = (DH - srcH * fallbackScale) / 2;
+
+    ctx.save();
+    ctx.clearRect(0, 0, DW, DH);
+    if (dir === 'left') {
+      ctx.translate(DW, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(srcCanvas, DW - fx - srcW * fallbackScale, fy, srcW * fallbackScale, srcH * fallbackScale);
+    } else {
+      ctx.drawImage(srcCanvas, fx, fy, srcW * fallbackScale, srcH * fallbackScale);
+    }
+    ctx.restore();
+  }
 
   // Effects overlay
   if (pose === 'cast')  drawCastGlow(ctx, DW, DH, t, dir);
