@@ -707,6 +707,10 @@
     updateMeta();
   }
 
+  function control(label, inputNode){
+    return E('label', {class:'control'}, [ E('span', {}, label), inputNode ]);
+  }
+
   function controlRange(label, min, max, step, value, onChange){
     return E('label', {class:'control'}, [ E('span', {}, label), E('input', {type:'range', min:String(min), max:String(max), step:String(step), value:String(value), oninput: e => onChange(Number(e.target.value))}) ]);
   }
