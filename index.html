@@ -1,1059 +1,173 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#08101d" />
-  <title>Auto Rig Studio</title>
-  <meta name="description" content="Browser-based automatic sprite rigging and transparent sprite sheet export." />
-  <style>
-    :root{
-      --bg:#08101d; --panel:#0f172a; --text:#edf2ff; --muted:#9bb0d2;
-      --line:rgba(148,163,184,.18); --accent:#6ea8ff; --accent2:#8b5cf6;
-      --ok:#23d37f; --warn:#ffb84d; --shadow:0 24px 60px rgba(0,0,0,.34); --radius:22px;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0}
-    body{
-      background:
-        radial-gradient(circle at top left, rgba(110,168,255,.16), transparent 20%),
-        radial-gradient(circle at bottom right, rgba(139,92,246,.12), transparent 18%),
-        linear-gradient(180deg,#08101d 0%, #09111f 100%);
-      color:var(--text);
-      font:14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      overflow:hidden;
-    }
-    button,input,select{font:inherit}
-    button{cursor:pointer}
-    #app{height:100%}
-    .shell{
-      height:100vh; display:grid; grid-template-columns:minmax(0,1fr) 390px; gap:14px;
-      padding:14px; overflow:hidden; padding-bottom:max(14px, env(safe-area-inset-bottom));
-    }
-    .stage,.sidebar{
-      background:rgba(15,23,42,.86); border:1px solid var(--line); border-radius:var(--radius);
-      box-shadow:var(--shadow); backdrop-filter: blur(18px); overflow:hidden; min-height:0;
-    }
-    .stage{display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-width:0}
-    .topbar{
-      padding:16px 18px 14px; border-bottom:1px solid var(--line);
-      display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;
-    }
-    .badge{display:inline-flex;align-items:center;gap:8px;color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.26em;text-transform:uppercase}
-    .badge .dot{width:10px;height:10px;border-radius:999px;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 0 6px rgba(110,168,255,.12)}
-    h1{margin:8px 0 4px;font-size:clamp(24px,2.9vw,38px);line-height:1.05;letter-spacing:-.03em}
-    .lede{margin:0;max-width:72ch;color:var(--muted);font-size:13px;line-height:1.6}
-    .top-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-    .btn{
-      border:1px solid var(--line); background:#121c36; color:var(--text); padding:10px 14px; border-radius:14px;
-      display:inline-flex; align-items:center; gap:8px; font-weight:700; transition:.16s ease; box-shadow:0 10px 20px rgba(0,0,0,.10);
-    }
-    .btn:hover{transform:translateY(-1px); border-color:rgba(148,163,184,.35)}
-    .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;color:white}
-    .btn.success{background:linear-gradient(135deg,#17c964,#118f54);border-color:transparent;color:white}
-    .btn.small{padding:8px 11px;border-radius:12px;font-size:13px}
-    .preview-wrap{min-height:0;padding:14px;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:12px}
-    .preview-holder{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
-    .preview-meta{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:12px;padding:0 2px;flex-wrap:wrap}
-    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:#111a33;color:#d8e3ff;font-weight:700;font-size:12px}
-    .status{display:inline-flex;align-items:center;gap:8px;color:#cfe0ff}
-    .status i{width:8px;height:8px;border-radius:999px;background:var(--ok);box-shadow:0 0 0 5px rgba(35,211,127,.14)}
-    .canvas-card{
-      background:
-        linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.05) 75%, rgba(255,255,255,.05)),
-        linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.05) 75%, rgba(255,255,255,.05)),
-        linear-gradient(180deg,#f7faff,#d8e2f6);
-      background-size:26px 26px; background-position:0 0,13px 13px,0 0;
-      border-radius:24px; border:1px solid rgba(255,255,255,.12); position:relative; min-height:0; overflow:hidden;
-    }
-    .canvas-card::after{content:"";position:absolute;inset:auto 0 0 0;height:42px;background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.08));pointer-events:none}
-    canvas{display:block;width:100%;height:100%}
-    .action-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-    .action-chip{border:1px solid var(--line);background:#121b34;color:#dce6ff;padding:8px 11px;border-radius:999px;font-size:12px;font-weight:700}
-    .action-chip.active{background:linear-gradient(135deg, rgba(110,168,255,.22), rgba(139,92,246,.22));border-color:rgba(110,168,255,.55)}
-    .sidebar{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0}
-    .sidebar-head{padding:16px 16px 14px;border-bottom:1px solid var(--line)}
-    .sidebar-body{overflow:auto;padding:14px 14px 18px;display:grid;gap:14px;align-content:start;min-height:0}
-    .panel{background:rgba(17,27,51,.88);border:1px solid var(--line);border-radius:20px;padding:14px}
-    .panel h2{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.14em;color:#cad7f7}
-    .control{display:grid;gap:6px}
-    .control span{color:#b7c4e4;text-transform:uppercase;letter-spacing:.1em;font-size:10px;font-weight:800}
-    .control input[type="text"], .control select{
-      width:100%; border:1px solid rgba(148,163,184,.18); background:#0b1327; color:#eef4ff; border-radius:14px; padding:10px 12px; outline:none;
-    }
-    .control input[type="range"]{width:100%;accent-color:var(--accent)}
-    .toggle{
-      display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#0b1327;padding:8px 10px;border-radius:999px;font-size:12px;font-weight:700;color:#dbe6ff
-    }
-    .toggle input{accent-color:var(--accent)}
-    .chip-grid{display:flex;flex-wrap:wrap;gap:8px}
-    .notice{border-radius:16px;padding:12px 14px;background:rgba(110,168,255,.12);border:1px solid rgba(110,168,255,.28);color:#dfeaff;font-size:12px;line-height:1.55}
-    .dropzone{border:1.5px dashed rgba(110,168,255,.5);background:rgba(10,16,32,.55);border-radius:18px;padding:14px;text-align:center}
-    .dropzone strong{display:block;margin-bottom:4px}
-    .dropzone small{color:var(--muted);display:block;line-height:1.5}
-    .sheet-wrap{display:grid;gap:10px}
-    .sheet-canvas{
-      height:240px;border-radius:18px;overflow:hidden;border:1px solid var(--line);
-      background:
-        linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.05) 75%, rgba(255,255,255,.05)),
-        linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.05) 75%, rgba(255,255,255,.05)),
-        linear-gradient(180deg,#f7faff,#d8e2f6);
-      background-size:20px 20px;background-position:0 0,10px 10px,0 0;
-    }
-    .codebox{
-      width:100%; min-height:120px; border-radius:16px; border:1px solid var(--line); background:#07101f; color:#cfe0ff;
-      padding:12px; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; white-space:pre-wrap; word-break:break-word; overflow:auto;
-    }
-    .footer-actions{display:flex;flex-wrap:wrap;gap:8px}
-    .small{font-size:12px;color:#b5c3e5;line-height:1.55}
-    .toast{
-      position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#08101f; color:#fff; padding:12px 16px;
-      border-radius:999px; box-shadow:0 16px 40px rgba(0,0,0,.35); z-index:9999; font-weight:700; max-width: calc(100vw - 24px); text-align:center;
-    }
-    .warn{color:var(--warn)}
-    @media (max-width: 1160px){ .shell{grid-template-columns:1fr;grid-template-rows:minmax(42vh,48vh) minmax(0,1fr)} }
-    @media (max-width: 760px){ body{overflow:auto} .shell{min-height:100vh;height:auto;overflow:visible} .stage{min-height:44vh} .sidebar{min-height:55vh} .topbar{padding:14px} .preview-wrap{padding:12px} }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>SpriteSmith Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app"></div>
-
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2/dist/posenet.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.1/dist/body-pix.min.js"></script>
-
-<script>
-(() => {
-  const app = document.getElementById('app');
-  const ACTIONS = ['Idle', 'Walk', 'Run', 'Jump', 'Attack', 'Cast', 'Hurt', 'Victory'];
-
-  const state = {
-    action: 'Walk', speed: 1, intensity: 1, removeBackground: true, mirror: false, showGuides: true,
-    frameCount: 8, exportScale: 1, fileName: 'sprite', imageName: 'No image loaded',
-    status: 'Upload an image to begin.', modelStatus: 'Loading models...', sourceCanvas: null,
-    pose: null, segmentation: null, rig: null, previewFrame: null, animTime: 0, playhead: 0, currentURL: ''
-  };
-
-  const dom = {};
-  let poseNet = null, bodyPixModel = null, toastTimer = 0, resizeTimer = 0;
-
-  const KP = {
-    nose:'nose', ls:'leftShoulder', rs:'rightShoulder', le:'leftElbow', re:'rightElbow', lw:'leftWrist', rw:'rightWrist',
-    lh:'leftHip', rh:'rightHip', lk:'leftKnee', rk:'rightKnee', la:'leftAnkle', ra:'rightAnkle'
-  };
-
-  const PARTS = {
-    torso:[12,13], upperArmL:[2,3], lowerArmL:[6,7], upperArmR:[4,5], lowerArmR:[8,9],
-    upperLegL:[14,15], lowerLegL:[18,19], upperLegR:[16,17], lowerLegR:[20,21],
-    handL:[10], handR:[11], footL:[22], footR:[23]
-  };
-
-  const E = (tag, attrs={}, children=[]) => {
-    const n = document.createElement(tag);
-    for (const [k,v] of Object.entries(attrs)) {
-      if (k === 'class') n.className = v;
-      else if (k === 'html') n.innerHTML = v;
-      else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v);
-      else if (v !== undefined && v !== null) n.setAttribute(k, String(v));
-    }
-    for (const c of [].concat(children)) if (c !== null && c !== undefined) n.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
-    return n;
-  };
-
-  const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
-  const smoothstep = (e0,e1,x)=>{ const t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); };
-  const pt = (x,y)=>({x,y});
-  const mid = (a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
-  const dist = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-  const ang = (a,b)=>Math.atan2(b.y-a.y,b.x-a.x);
-  const polar = (o,len,th)=>({x:o.x+Math.cos(th)*len,y:o.y+Math.sin(th)*len});
-  const sanitize = s => String(s||'sprite').trim().replace(/[^\w\-]+/g,'_').replace(/_+/g,'_').replace(/^_+|_+$/g,'') || 'sprite';
-
-  function toast(msg){
-    document.querySelector('.toast')?.remove();
-    const t = E('div', {class:'toast'}, msg);
-    document.body.appendChild(t);
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=>t.remove(), 1600);
-  }
-
-  function makeCanvas(w,h){ const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(w)); c.height=Math.max(1,Math.round(h)); return c; }
-
-  function downloadCanvas(canvas, filename){
-    canvas.toBlob(blob => {
-      if (!blob) return;
-      const u = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = u; a.download = filename; a.click();
-      setTimeout(()=>URL.revokeObjectURL(u), 1000);
-    }, 'image/png');
-  }
-
-  function downloadText(filename, text){
-    const u = URL.createObjectURL(new Blob([text], {type:'application/json;charset=utf-8'}));
-    const a = document.createElement('a');
-    a.href = u; a.download = filename; a.click();
-    setTimeout(()=>URL.revokeObjectURL(u), 1000);
-  }
-
-  function renderChecker(ctx,w,h){
-    const g = ctx.createLinearGradient(0,0,w,h);
-    g.addColorStop(0,'#ecf3ff'); g.addColorStop(1,'#c9d7ee');
-    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
-    ctx.fillStyle = 'rgba(0,0,0,.08)';
-    ctx.beginPath(); ctx.ellipse(w*0.5,h*0.83,w*0.26,h*0.06,0,0,Math.PI*2); ctx.fill();
-  }
-
-  function placeholder(canvas, text){
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    renderChecker(ctx, canvas.width, canvas.height);
-    ctx.fillStyle = '#1e315d';
-    ctx.font = `${Math.max(16, Math.floor(canvas.width * 0.03))}px Inter, sans-serif`;
-    ctx.fillText(text, canvas.width*0.1, canvas.height*0.5);
-  }
-
-  function kp(pose, part, fallback){
-    const k = pose?.keypoints?.find(x => x.part === part);
-    return k && k.score >= 0.2 ? pt(k.position.x, k.position.y) : fallback;
-  }
-
-  function boundsAlpha(canvas){
-    const ctx = canvas.getContext('2d', {willReadFrequently:true});
-    const img = ctx.getImageData(0,0,canvas.width,canvas.height);
-    const d = img.data;
-    let minX=canvas.width, minY=canvas.height, maxX=-1, maxY=-1;
-    for (let y=0; y<canvas.height; y++) for (let x=0; x<canvas.width; x++){
-      const p = (y*canvas.width + x)*4;
-      if (d[p+3] > 0){ if (x<minX) minX=x; if (y<minY) minY=y; if (x>maxX) maxX=x; if (y>maxY) maxY=y; }
-    }
-    return maxX < 0 ? {x:0,y:0,w:canvas.width,h:canvas.height} : {x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1};
-  }
-
-  function trim(canvas, pad=4){
-    const b = boundsAlpha(canvas);
-    const x = clamp(b.x-pad, 0, canvas.width-1), y = clamp(b.y-pad, 0, canvas.height-1);
-    const w = clamp(b.w + pad*2, 1, canvas.width - x), h = clamp(b.h + pad*2, 1, canvas.height - y);
-    const out = makeCanvas(w,h);
-    out.getContext('2d').drawImage(canvas, x,y,w,h,0,0,w,h);
-    return {canvas:out, bounds:{x,y,w,h}};
-  }
-
-  function cleanCutout(sourceCanvas){
-    const sw = sourceCanvas.width, sh = sourceCanvas.height;
-    const ctx = sourceCanvas.getContext('2d', {willReadFrequently:true});
-    const img = ctx.getImageData(0,0,sw,sh);
-    const d = img.data;
-    const samples = [[0,0],[sw-1,0],[0,sh-1],[sw-1,sh-1],[Math.floor(sw/2),0],[Math.floor(sw/2),sh-1],[0,Math.floor(sh/2)],[sw-1,Math.floor(sh/2)]];
-    const ref = [0,0,0];
-    for (const [x,y] of samples){
-      const p=(y*sw+x)*4; ref[0]+=d[p]; ref[1]+=d[p+1]; ref[2]+=d[p+2];
-    }
-    ref[0]/=samples.length; ref[1]/=samples.length; ref[2]/=samples.length;
-    const out = makeCanvas(sw,sh); const octx = out.getContext('2d'); const outImg = octx.createImageData(sw,sh);
-    const threshold = 42, feather = 18;
-    for (let i=0; i<sw*sh; i++){
-      const p=i*4;
-      const distC = Math.hypot(d[p]-ref[0], d[p+1]-ref[1], d[p+2]-ref[2]);
-      let a = d[p+3];
-      if (state.removeBackground){
-        if (distC <= threshold) a = 0;
-        else if (distC < threshold + feather) a = Math.floor(a * smoothstep(threshold, threshold + feather, distC));
-      }
-      outImg.data[p]=d[p]; outImg.data[p+1]=d[p+1]; outImg.data[p+2]=d[p+2]; outImg.data[p+3]=a;
-    }
-    octx.putImageData(outImg,0,0);
-    return out;
-  }
-
-  function cropLayer(canvas, seg, ids, pivot){
-    if (!seg || !seg.data) return null;
-    const sw = canvas.width, sh = canvas.height;
-    const ctx = canvas.getContext('2d', {willReadFrequently:true});
-    const img = ctx.getImageData(0,0,sw,sh).data;
-    const mask = seg.data;
-    let minX=sw, minY=sh, maxX=-1, maxY=-1;
-    for (let y=0; y<sh; y++) for (let x=0; x<sw; x++){
-      const i = y*sw+x;
-      if (!ids.includes(mask[i])) continue;
-      const p = i*4;
-      if (img[p+3] <= 0) continue;
-      if (x<minX) minX=x; if (y<minY) minY=y; if (x>maxX) maxX=x; if (y>maxY) maxY=y;
-    }
-    if (maxX < 0) return null;
-    const w = maxX-minX+1, h = maxY-minY+1;
-    const out = makeCanvas(w,h);
-    const octx = out.getContext('2d');
-    const outImg = octx.createImageData(w,h);
-    const dst = outImg.data;
-    for (let y=minY; y<=maxY; y++) for (let x=minX; x<=maxX; x++){
-      const i = y*sw+x;
-      if (!ids.includes(mask[i])) continue;
-      const p = i*4, q = ((y-minY)*w + (x-minX))*4;
-      dst[q]=img[p]; dst[q+1]=img[p+1]; dst[q+2]=img[p+2]; dst[q+3]=img[p+3];
-    }
-    octx.putImageData(outImg,0,0);
-    return {canvas:out, bounds:{x:minX,y:minY,w,h}, pivot:{x:pivot.x-minX, y:pivot.y-minY}};
-  }
-
-  function cropEllipse(canvas, seg, cx, cy, rx, ry, pivot){
-    if (!seg || !seg.data) return null;
-    const sw = canvas.width, sh = canvas.height;
-    const ctx = canvas.getContext('2d', {willReadFrequently:true});
-    const img = ctx.getImageData(0,0,sw,sh).data;
-    const mask = seg.data;
-    let minX=sw, minY=sh, maxX=-1, maxY=-1;
-    for (let y=0; y<sh; y++) for (let x=0; x<sw; x++){
-      const i = y*sw+x;
-      if (mask[i] === -1) continue;
-      const dx=(x-cx)/rx, dy=(y-cy)/ry, d=Math.sqrt(dx*dx+dy*dy);
-      if (d > 1.12) continue;
-      const p = i*4;
-      if (img[p+3] <= 0) continue;
-      if (x<minX) minX=x; if (y<minY) minY=y; if (x>maxX) maxX=x; if (y>maxY) maxY=y;
-    }
-    if (maxX < 0) return null;
-    const w = maxX-minX+1, h = maxY-minY+1;
-    const out = makeCanvas(w,h);
-    const octx = out.getContext('2d');
-    const outImg = octx.createImageData(w,h);
-    const dst = outImg.data;
-    for (let y=minY; y<=maxY; y++) for (let x=minX; x<=maxX; x++){
-      const i=y*sw+x;
-      if (mask[i] === -1) continue;
-      const dx=(x-cx)/rx, dy=(y-cy)/ry, d=Math.sqrt(dx*dx+dy*dy);
-      if (d > 1.12) continue;
-      const p=i*4, q=((y-minY)*w + (x-minX))*4;
-      const edge = d <= 1 ? 1 : 1 - smoothstep(1, 1.12, d);
-      dst[q]=img[p]; dst[q+1]=img[p+1]; dst[q+2]=img[p+2]; dst[q+3]=Math.floor(img[p+3]*edge);
-    }
-    octx.putImageData(outImg,0,0);
-    return {canvas:out, bounds:{x:minX,y:minY,w,h}, pivot:{x:pivot.x-minX, y:pivot.y-minY}};
-  }
-
-  function createRig(pose, sourceCanvas, seg){
-    const sw = sourceCanvas.width, sh = sourceCanvas.height;
-    const n = kp(pose, KP.nose, pt(sw/2, sh/5));
-    const ls = kp(pose, KP.ls, pt(sw*0.42, sh*0.35));
-    const rs = kp(pose, KP.rs, pt(sw*0.58, sh*0.35));
-    const le = kp(pose, KP.le, pt(sw*0.34, sh*0.50));
-    const re = kp(pose, KP.re, pt(sw*0.66, sh*0.50));
-    const lw = kp(pose, KP.lw, pt(sw*0.30, sh*0.62));
-    const rw = kp(pose, KP.rw, pt(sw*0.70, sh*0.62));
-    const lh = kp(pose, KP.lh, pt(sw*0.46, sh*0.60));
-    const rh = kp(pose, KP.rh, pt(sw*0.54, sh*0.60));
-    const lk = kp(pose, KP.lk, pt(sw*0.43, sh*0.82));
-    const rk = kp(pose, KP.rk, pt(sw*0.57, sh*0.82));
-    const la = kp(pose, KP.la, pt(sw*0.42, sh*0.96));
-    const ra = kp(pose, KP.ra, pt(sw*0.58, sh*0.96));
-    const sm = mid(ls, rs), hm = mid(lh, rh);
-    const h = Math.max(100, dist(sm, hm) + dist(sm, n) * 1.2);
-    const shoulderSpan = Math.max(24, dist(ls, rs));
-    const headRx = Math.max(18, shoulderSpan * 0.31), headRy = Math.max(20, shoulderSpan * 0.38);
-
-    const layers = {
-      torso: cropLayer(sourceCanvas, seg, PARTS.torso, sm),
-      upperArmL: cropLayer(sourceCanvas, seg, PARTS.upperArmL, ls),
-      lowerArmL: cropLayer(sourceCanvas, seg, PARTS.lowerArmL, le),
-      upperArmR: cropLayer(sourceCanvas, seg, PARTS.upperArmR, rs),
-      lowerArmR: cropLayer(sourceCanvas, seg, PARTS.lowerArmR, re),
-      upperLegL: cropLayer(sourceCanvas, seg, PARTS.upperLegL, lh),
-      lowerLegL: cropLayer(sourceCanvas, seg, PARTS.lowerLegL, lk),
-      upperLegR: cropLayer(sourceCanvas, seg, PARTS.upperLegR, rh),
-      lowerLegR: cropLayer(sourceCanvas, seg, PARTS.lowerLegR, rk),
-      handL: cropLayer(sourceCanvas, seg, PARTS.handL, lw),
-      handR: cropLayer(sourceCanvas, seg, PARTS.handR, rw),
-      footL: cropLayer(sourceCanvas, seg, PARTS.footL, la),
-      footR: cropLayer(sourceCanvas, seg, PARTS.footR, ra),
-      head: cropEllipse(sourceCanvas, seg, n.x, n.y - headRy*0.16, headRx, headRy, n),
-      hair: cropEllipse(sourceCanvas, seg, n.x, n.y - headRy*0.20, headRx*1.16, headRy*1.30, n),
-    };
-    for (const k of Object.keys(layers)){
-      if (!layers[k]) layers[k] = { canvas: sourceCanvas, bounds:{x:0,y:0,w:sourceCanvas.width,h:sourceCanvas.height}, pivot:{x:sourceCanvas.width*0.5,y:sourceCanvas.height*0.5} };
-    }
-    return {
-      layers,
-      metrics: { n, ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra, sm, hm, h },
-      bodyBounds: boundsAlpha(sourceCanvas)
-    };
-  }
-
-  function actionParams(action){
-    switch(action){
-      case 'Walk': return { stride:0.78, arm:0.72, bob:0.18, lean:0.05 };
-      case 'Run': return { stride:1.10, arm:1.00, bob:0.28, lean:0.11 };
-      case 'Jump': return { stride:0.14, arm:0.22, bob:-0.42, lean:-0.04 };
-      case 'Attack': return { stride:0.16, arm:1.02, bob:0.09, lean:0.10 };
-      case 'Cast': return { stride:0.10, arm:0.86, bob:0.04, lean:-0.02 };
-      case 'Hurt': return { stride:0.08, arm:0.46, bob:-0.07, lean:-0.10 };
-      case 'Victory': return { stride:0.13, arm:0.92, bob:0.04, lean:-0.04 };
-      default: return { stride:0.10, arm:0.10, bob:0.02, lean:0.02 };
-    }
-  }
-
-  function motion(rig, phase, action){
-    const m = rig.metrics, p = actionParams(action), t = phase * Math.PI * 2;
-    const dir = state.mirror ? -1 : 1;
-    const bodyHeight = Math.max(90, m.h);
-    const scale = Math.min(3.2, Math.max(1.45, 220 / bodyHeight)) * (0.86 + (state.intensity - 1) * 0.08);
-    const torsoLean = p.lean * Math.sin(t) * state.intensity;
-    const bob = Math.sin(t * 2) * p.bob * bodyHeight;
-    const sm = pt(m.sm.x, m.sm.y + Math.sin(t*2)*1.3*state.intensity);
-    const hm = pt(m.hm.x, m.hm.y + Math.sin(t*2)*1.7*state.intensity);
-
-    function limb(side, arm){
-      const start = arm ? (side === 'L' ? m.ls : m.rs) : (side === 'L' ? m.lh : m.rh);
-      const joint = arm ? (side === 'L' ? m.le : m.re) : (side === 'L' ? m.lk : m.rk);
-      const end = arm ? (side === 'L' ? m.lw : m.rw) : (side === 'L' ? m.la : m.ra);
-      const b1 = ang(start, joint), b2 = ang(joint, end), ph = side === 'L' ? t : t + Math.PI;
-      let a1 = b1, a2 = b2;
-      if (action === 'Idle'){ a1 += Math.sin(t) * (arm ? 0.05 : 0.03); a2 += Math.cos(t) * (arm ? 0.02 : 0.02); }
-      else if (action === 'Walk'){ a1 += Math.sin(ph) * (arm ? p.arm : p.stride) + torsoLean; a2 += Math.sin(ph + Math.PI*0.18) * (arm ? 0.26 : 0.46) * (arm ? p.arm : p.stride); }
-      else if (action === 'Run'){ a1 += Math.sin(ph) * (arm ? p.arm*1.18 : p.stride*1.18) + torsoLean; a2 += Math.sin(ph + Math.PI*0.16) * (arm ? 0.42 : 0.72); }
-      else if (action === 'Jump'){ a1 += arm ? -0.3 : -0.8; a2 += arm ? -0.1 : -0.2; }
-      else if (action === 'Attack'){ if (arm){ const front = side === 'R' ? 1 : -1; a1 += front * 1.0 + Math.sin(t)*0.15; a2 += front * 0.68; } else { a1 += side === 'L' ? 0.08 : -0.18; a2 += side === 'L' ? 0.02 : -0.08; } }
-      else if (action === 'Cast'){ a1 += arm ? (side === 'L' ? -0.15 : -0.95) : 0.06; a2 += arm ? 0.30 : 0.02; }
-      else if (action === 'Hurt'){ a1 += arm ? (side === 'L' ? -0.28 : 0.14) : -0.12; a2 += arm ? 0.06 : -0.02; }
-      else if (action === 'Victory'){ a1 += arm ? (side === 'L' ? -1.0 : 0.62) : 0.04; a2 += arm ? 0.10 : 0.02; }
-      return { start, joint: polar(start, dist(start,joint), a1), end: polar(polar(start, dist(start,joint), a1), dist(joint,end), a2), a1, a2 };
-    }
-
-    return {
-      scale, dir, bob, torsoLean, bodyCenter: pt(sm.x, hm.y - bodyHeight * 0.04),
-      neck: pt(sm.x, sm.y - bodyHeight*0.10), head: pt(sm.x, sm.y - bodyHeight*0.28),
-      armL: limb('L', true), armR: limb('R', true), legL: limb('L', false), legR: limb('R', false),
-      action, phase
-    };
-  }
-
-  function drawLayer(ctx, layer, pivot, rotate=0, flipX=1, alpha=1){
-    if (!layer || !layer.canvas) return;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(pivot.x, pivot.y);
-    ctx.rotate(rotate);
-    ctx.scale(flipX, 1);
-    ctx.drawImage(layer.canvas, -layer.pivot.x, -layer.pivot.y);
-    ctx.restore();
-  }
-
-  function composeFrame(rig, m, backdrop=false){
-    const out = makeCanvas(768, 768), ctx = out.getContext('2d');
-    if (backdrop) renderChecker(ctx, out.width, out.height);
-    const base = { x: out.width*0.5, y: out.height*0.55 };
-    const map = p => ({ x: base.x + (p.x - m.bodyCenter.x) * m.scale * m.dir, y: base.y + (p.y - m.bodyCenter.y) * m.scale + m.bob * m.scale * 0.55 });
-
-    ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(base.x, base.y + 160, 96, 18, 0, 0, Math.PI*2); ctx.fill(); ctx.restore();
-
-    const backLeg = m.dir === 1 ? m.legL : m.legR, frontLeg = m.dir === 1 ? m.legR : m.legL;
-    const backArm = m.dir === 1 ? m.armL : m.armR, frontArm = m.dir === 1 ? m.armR : m.armL;
-    const backUL = m.dir === 1 ? rig.layers.upperLegL : rig.layers.upperLegR;
-    const backLL = m.dir === 1 ? rig.layers.lowerLegL : rig.layers.lowerLegR;
-    const frontUL = m.dir === 1 ? rig.layers.upperLegR : rig.layers.upperLegL;
-    const frontLL = m.dir === 1 ? rig.layers.lowerLegR : rig.layers.lowerLegL;
-    const backUA = m.dir === 1 ? rig.layers.upperArmL : rig.layers.upperArmR;
-    const backLA = m.dir === 1 ? rig.layers.lowerArmL : rig.layers.lowerArmR;
-    const frontUA = m.dir === 1 ? rig.layers.upperArmR : rig.layers.upperArmL;
-    const frontLA = m.dir === 1 ? rig.layers.lowerArmR : rig.layers.lowerArmL;
-    const backHand = m.dir === 1 ? rig.layers.handL : rig.layers.handR;
-    const frontHand = m.dir === 1 ? rig.layers.handR : rig.layers.handL;
-    const backFoot = m.dir === 1 ? rig.layers.footL : rig.layers.footR;
-    const frontFoot = m.dir === 1 ? rig.layers.footR : rig.layers.footL;
-
-    drawLayer(ctx, rig.layers.hair, map(m.head), m.torsoLean*0.2 + Math.sin(m.phase*2)*0.04, m.dir);
-    drawLayer(ctx, backUL, map(backLeg.start), backLeg.a1 + Math.PI*0.5, m.dir);
-    drawLayer(ctx, backLL, map(backLeg.joint), backLeg.a2 + Math.PI*0.5, m.dir);
-    drawLayer(ctx, backUA, map(backArm.start), backArm.a1 + Math.PI*0.5, m.dir);
-    drawLayer(ctx, backLA, map(backArm.joint), backArm.a2 + Math.PI*0.5, m.dir);
-
-    drawLayer(ctx, rig.layers.torso, map(m.bodyCenter), m.torsoLean, m.dir);
-
-    drawLayer(ctx, frontUL, map(frontLeg.start), frontLeg.a1 + Math.PI*0.5, m.dir);
-    drawLayer(ctx, frontLL, map(frontLeg.joint), frontLeg.a2 + Math.PI*0.5, m.dir);
-    drawLayer(ctx, frontUA, map(frontArm.start), frontArm.a1 + Math.PI*0.5, m.dir);
-    drawLayer(ctx, frontLA, map(frontArm.joint), frontArm.a2 + Math.PI*0.5, m.dir);
-
-    drawLayer(ctx, backHand, map(backArm.end), backArm.a2 + Math.PI*0.5, m.dir, 0.96);
-    drawLayer(ctx, frontHand, map(frontArm.end), frontArm.a2 + Math.PI*0.5, m.dir, 0.96);
-    drawLayer(ctx, backFoot, map(backLeg.end), backLeg.a2 + Math.PI*0.5, m.dir, 0.96);
-    drawLayer(ctx, frontFoot, map(frontLeg.end), frontLeg.a2 + Math.PI*0.5, m.dir, 0.96);
-
-    drawLayer(ctx, rig.layers.head, map(m.neck), m.torsoLean*0.12, m.dir);
-    drawLayer(ctx, rig.layers.hair, map(m.head), m.torsoLean*0.18 + Math.sin(m.phase*2 + 0.5)*0.04, m.dir);
-    if (state.showGuides && backdrop){
-      ctx.save(); ctx.strokeStyle = 'rgba(110,168,255,.22)'; ctx.setLineDash([8,8]); ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(base.x,0); ctx.lineTo(base.x,out.height); ctx.moveTo(0,base.y); ctx.lineTo(out.width,base.y); ctx.stroke(); ctx.restore();
-    }
-    return out;
-  }
-
-  function buildFrames(){
-    if (!state.rig) return [];
-    const frames = [];
-    for (const action of ACTIONS){
-      for (let i=0; i<state.frameCount; i++){
-        const phase = state.frameCount <= 1 ? 0 : i / state.frameCount;
-        const mo = motion(state.rig, phase, action);
-        const raw = composeFrame(state.rig, mo, false);
-        const trimmed = trim(raw, 4);
-        frames.push({action, phase, raw, trimmed:trimmed.canvas, trim:trimmed.bounds});
-      }
-    }
-    return frames;
-  }
-
-  function currentPreviewFrame(){
-    if (!state.rig) return null;
-    const mo = motion(state.rig, state.playhead, state.action);
-    return trim(composeFrame(state.rig, mo, false), 4).canvas;
-  }
-
-  function fitCanvas(canvas, minW, minH){
-    const rect = canvas.parentElement.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(minW, Math.floor(rect.width * dpr));
-    const h = Math.max(minH, Math.floor(rect.height * dpr));
-    if (canvas.width !== w) canvas.width = w;
-    if (canvas.height !== h) canvas.height = h;
-    return {w,h};
-  }
-
-  function renderPreview(){
-    if (!dom.previewCanvas) return;
-    const {w,h} = fitCanvas(dom.previewCanvas, 320, 320);
-    const ctx = dom.previewCanvas.getContext('2d');
-    ctx.clearRect(0,0,w,h);
-    if (!state.previewFrame){ placeholder(dom.previewCanvas, state.rig ? 'Rendering...' : 'Upload an image to begin'); return; }
-    renderChecker(ctx,w,h);
-    const fit = Math.min(w/state.previewFrame.width, h/state.previewFrame.height) * 0.96;
-    const dw = state.previewFrame.width * fit, dh = state.previewFrame.height * fit;
-    ctx.drawImage(state.previewFrame, (w-dw)/2, (h-dh)/2, dw, dh);
-  }
-
-  function renderSheet(){
-    if (!dom.sheetCanvas) return;
-    fitCanvas(dom.sheetCanvas, 280, 240);
-    const cell = Math.max(96, Math.floor(176 * state.exportScale));
-    const total = ACTIONS.length * state.frameCount;
-    const rows = Math.ceil(total / 4);
-    const h = Math.max(240, rows * cell);
-    if (dom.sheetCanvas.height !== h) dom.sheetCanvas.height = h;
-    const ctx = dom.sheetCanvas.getContext('2d');
-    ctx.clearRect(0,0,dom.sheetCanvas.width,dom.sheetCanvas.height);
-    if (!state.rig){ placeholder(dom.sheetCanvas, 'Load an image to bake a sheet'); return; }
-    const frames = buildFrames();
-    let idx = 0;
-    for (const frame of frames){
-      const x = (idx % 4) * cell, y = Math.floor(idx / 4) * cell;
-      ctx.save();
-      ctx.translate(x,y);
-      ctx.beginPath(); ctx.rect(0,0,cell,cell); ctx.clip();
-      const fit = Math.min((cell * 0.92) / frame.trimmed.width, (cell * 0.92) / frame.trimmed.height);
-      const dw = frame.trimmed.width * fit, dh = frame.trimmed.height * fit;
-      ctx.drawImage(frame.trimmed, (cell-dw)/2, (cell-dh)/2, dw, dh);
-      ctx.restore();
-      idx++;
-    }
-  }
-
-  function updateMeta(){
-    const s = app.querySelector('[data-status]');
-    const m = app.querySelector('[data-model-status]');
-    if (s) s.textContent = state.status;
-    if (m) m.textContent = state.modelStatus;
-    const spec = app.querySelector('[data-spec]');
-    if (spec){
-      spec.textContent = JSON.stringify({
-        imageName: state.imageName, action: state.action, removeBackground: state.removeBackground, mirror: state.mirror,
-        showGuides: state.showGuides, frameCount: state.frameCount, loaded: !!state.rig, poseDetected: !!state.pose,
-        segmentationDetected: !!state.segmentation
-      }, null, 2);
-    }
-    document.querySelectorAll('[data-action-chip]').forEach(btn => btn.classList.toggle('active', btn.dataset.action === state.action));
-  }
-
-  function rebuildAll(){
-    state.previewFrame = currentPreviewFrame();
-    renderPreview();
-    renderSheet();
-    updateMeta();
-  }
-
-  function exportJSON(){
-    if (!state.rig) return toast('Load an image first.');
-    downloadText(`${sanitize(state.fileName)}.json`, JSON.stringify({
-      app:'Auto Rig Studio', version:1, imageName:state.imageName, action:state.action,
-      frameCount:state.frameCount, removeBackground:state.removeBackground, mirror:state.mirror, showGuides:state.showGuides,
-      frames: buildFrames().map((f,i)=>({index:i,action:f.action,width:f.trimmed.width,height:f.trimmed.height,trim:f.trim}))
-    }, null, 2));
-    toast('JSON exported.');
-  }
-
-  function exportPreviewPNG(){
-    if (!state.previewFrame) return toast('Load an image first.');
-    downloadCanvas(state.previewFrame, `${sanitize(state.fileName)}-preview.png`);
-    toast('Preview exported.');
-  }
-
-  function exportSheetPNG(){
-    if (!state.rig) return toast('Load an image first.');
-    renderSheet();
-    downloadCanvas(dom.sheetCanvas, `${sanitize(state.fileName)}-sheet.png`);
-    toast('Sprite sheet exported.');
-  }
-
-  function createUI(){
-    app.innerHTML = '';
-    dom.previewCanvas = makeCanvas(10,10);
-    dom.sheetCanvas = makeCanvas(10,10);
-
-    const shell = E('div', {class:'shell'}, [
-      E('section', {class:'stage'}, [
-        E('div', {class:'topbar'}, [
-          E('div', {}, [
-            E('div', {class:'badge'}, [E('span', {class:'dot'}), 'Auto Rig Studio']),
-            E('h1', {}, 'Automatic sprite rigging from one uploaded image'),
-            E('p', {class:'lede'}, 'Upload a character image, let the browser detect pose and body parts, then export a transparent trimmed sprite sheet. The preview is rendered from the animated crop instead of the source silhouette.')
-          ]),
-          E('div', {class:'top-actions'}, [
-            E('button', {class:'btn primary', type:'button', onclick: exportSheetPNG}, '⬇ PNG sheet'),
-            E('button', {class:'btn', type:'button', onclick: exportJSON}, '⬇ JSON'),
-            E('button', {class:'btn', type:'button', onclick: exportPreviewPNG}, '⬇ Preview PNG')
-          ])
-        ]),
-        E('div', {class:'preview-wrap'}, [
-          E('div', {class:'preview-holder'}, [
-            E('div', {class:'preview-meta'}, [
-              E('div', {class:'status'}, [E('i'), E('span', {'data-status':''}, state.status)]),
-              E('div', {class:'pill'}, [E('span', {'data-model-status':''}, state.modelStatus)])
-            ]),
-            E('div', {class:'canvas-card'}, [dom.previewCanvas])
-          ]),
-          E('div', {class:'preview-meta'}, [
-            E('div', {class:'action-bar'}, ACTIONS.map(a => E('button', {
-              class:'action-chip', type:'button', 'data-action-chip':'1', 'data-action':a,
-              onclick: () => { state.action = a; rebuildAll(); }
-            }, a))),
-            E('div', {class:'small warn'}, 'Preview stays visible. The baked sheet uses trimmed transparent frames.')
-          ])
-        ]),
-        E('div', {class:'topbar', style:'border-top:1px solid var(--line);border-bottom:none;border-radius:0 0 var(--radius) var(--radius);padding-top:14px;padding-bottom:14px;'}, [
-          E('div', {class:'small'}, 'Loaded image: ' + state.imageName),
-          E('div', {class:'footer-actions'}, [
-            E('button', {class:'btn small primary', type:'button', onclick: exportSheetPNG}, 'Bake sheet'),
-            E('button', {class:'btn small', type:'button', onclick: clearImage}, 'Clear image')
-          ])
-        ])
-      ]),
-      E('aside', {class:'sidebar'}, [
-        E('div', {class:'sidebar-head'}, [
-          E('div', {class:'badge'}, [E('span', {class:'dot'}), 'Controls']),
-          E('div', {class:'small', style:'margin-top:6px'}, 'Only uploaded-image controls remain. No character builder.')
-        ]),
-        E('div', {class:'sidebar-body'}, [
-          panel('Upload image', [
-            E('div', {class:'dropzone'}, [
-              E('strong', {}, 'Drop an image here or choose a file'),
-              E('small', {}, 'PNG, JPG, and WebP are supported. On mobile, use the button below to open your gallery or camera.'),
-              E('input', {
-                id:'filePicker',
-                type:'file',
-                accept:'image/*',
-                capture:'environment',
-                style:'position:absolute;left:-9999px;width:1px;height:1px;opacity:0;',
-                onchange: e => loadFile(e.target.files && e.target.files[0])
-              }),
-              E('div', {class:'footer-actions', style:'justify-content:center;margin-top:12px;'}, [
-                E('button', {
-                  class:'btn primary',
-                  type:'button',
-                  onclick: () => document.getElementById('filePicker')?.click()
-                }, 'Choose image'),
-                E('button', {class:'btn', type:'button', onclick: clearImage}, 'Clear')
-              ])
-            ])
-          ]),
-          panel('Motion', [
-            control('Action', E('select', {onchange: e => { state.action = e.target.value; rebuildAll(); }}, ACTIONS.map(a => E('option', {value:a, selected: state.action === a ? 'selected' : null}, a)))),
-            controlRange('Playback speed', 0.5, 2.0, 0.05, state.speed, v => { state.speed = v; }),
-            controlRange('Motion intensity', 0.2, 1.8, 0.05, state.intensity, v => { state.intensity = v; rebuildAll(); }),
-            controlRange('Frames per action', 4, 16, 1, state.frameCount, v => { state.frameCount = v; rebuildAll(); }),
-            E('div', {class:'chip-grid'}, [
-              toggle('Mirror character', state.mirror, v => { state.mirror = v; rebuildAll(); }),
-              toggle('Show guides', state.showGuides, v => { state.showGuides = v; rebuildAll(); })
-            ]),
-            E('div', {class:'notice'}, 'The walk cycle bends the upper and lower limbs separately, so the body actually changes pose instead of sliding as one rigid image.')
-          ]),
-          panel('Background removal', [
-            toggle('Remove background', state.removeBackground, v => { state.removeBackground = v; if (state.sourceCanvas) rebuildFromLoadedImage(); }),
-            E('div', {class:'small'}, 'The cutout pass removes edge-connected background color and softens the alpha at the border.')
-          ]),
-          panel('Export', [
-            controlText('File name', state.fileName, v => { state.fileName = v; }),
-            controlRange('Sheet scale', 0.75, 2.0, 0.05, state.exportScale, v => { state.exportScale = v; renderSheet(); }),
-            E('div', {class:'footer-actions'}, [
-              E('button', {class:'btn success', type:'button', onclick: exportSheetPNG}, 'PNG sheet'),
-              E('button', {class:'btn', type:'button', onclick: exportJSON}, 'JSON')
-            ]),
-            E('div', {class:'sheet-wrap', style:'margin-top:12px;'}, [
-              E('div', {class:'small'}, 'Sheet preview'),
-              E('div', {class:'canvas-card', style:'height:240px;'}, [dom.sheetCanvas])
-            ])
-          ]),
-          panel('Current state', [ E('div', {class:'codebox', 'data-spec':''}, '') ])
-        ])
-      ])
-    ]);
-
-    app.appendChild(shell);
-    fitCanvas(dom.previewCanvas, 320, 320);
-    fitCanvas(dom.sheetCanvas, 280, 240);
-    placeholder(dom.previewCanvas, 'Upload an image to begin');
-    placeholder(dom.sheetCanvas, 'Load an image to bake a sheet');
-    updateMeta();
-  }
-
-  function control(label, inputNode){
-    return E('label', {class:'control'}, [ E('span', {}, label), inputNode ]);
-  }
-
-  function controlRange(label, min, max, step, value, onChange){
-    return E('label', {class:'control'}, [ E('span', {}, label), E('input', {type:'range', min:String(min), max:String(max), step:String(step), value:String(value), oninput: e => onChange(Number(e.target.value))}) ]);
-  }
-
-  function controlText(label, value, onChange){
-    return E('label', {class:'control'}, [ E('span', {}, label), E('input', {type:'text', value, oninput: e => onChange(e.target.value)}) ]);
-  }
-
-  function toggle(label, value, onChange){
-    return E('label', {class:'toggle'}, [
-      E('input', {type:'checkbox', checked: value ? 'checked' : null, onchange: e => onChange(e.target.checked)}),
-      E('span', {}, label)
-    ]);
-  }
-
-  function panel(title, children){ return E('section', {class:'panel'}, [E('h2', {}, title), ...children]); }
-
-  async function initModels(){
-    try {
-      state.modelStatus = 'Loading TensorFlow...'; updateMeta();
-      await tf.ready();
-      try { await tf.setBackend('webgl'); } catch (_) {}
-      state.modelStatus = 'Loading pose model...'; updateMeta();
-      poseNet = await posenet.load({architecture:'MobileNetV1', outputStride:16, inputResolution:257, multiplier:0.75});
-      state.modelStatus = 'Loading body-part model...'; updateMeta();
-      bodyPixModel = await bodyPix.load({architecture:'MobileNetV1', outputStride:16, multiplier:0.75, quantBytes:2});
-      state.modelStatus = 'Models ready.'; state.status = 'Upload an image to begin.'; updateMeta();
-    } catch (err) {
-      console.error(err);
-      state.modelStatus = 'Model load failed.'; state.status = 'Refresh and try again.';
-      updateMeta();
-      toast('Model loading failed.');
-    }
-  }
-
-  function clearImage(){
-    if (state.currentURL) { URL.revokeObjectURL(state.currentURL); state.currentURL = ''; }
-    state.imageName = 'No image loaded';
-    state.fileName = 'sprite';
-    state.status = 'Upload an image to begin.';
-    state.sourceCanvas = null; state.pose = null; state.segmentation = null; state.rig = null; state.previewFrame = null;
-    placeholder(dom.previewCanvas, 'Upload an image to begin');
-    placeholder(dom.sheetCanvas, 'Load an image to bake a sheet');
-    updateMeta();
-  }
-
-  function fallbackRig(sourceCanvas){
-    const sw = sourceCanvas.width, sh = sourceCanvas.height;
-    const fakePose = {
-      keypoints:[
-        {part:KP.nose, position:{x:sw*0.5,y:sh*0.2}, score:1},
-        {part:KP.ls, position:{x:sw*0.42,y:sh*0.34}, score:1},
-        {part:KP.rs, position:{x:sw*0.58,y:sh*0.34}, score:1},
-        {part:KP.le, position:{x:sw*0.34,y:sh*0.48}, score:1},
-        {part:KP.re, position:{x:sw*0.66,y:sh*0.48}, score:1},
-        {part:KP.lw, position:{x:sw*0.28,y:sh*0.62}, score:1},
-        {part:KP.rw, position:{x:sw*0.72,y:sh*0.62}, score:1},
-        {part:KP.lh, position:{x:sw*0.46,y:sh*0.58}, score:1},
-        {part:KP.rh, position:{x:sw*0.54,y:sh*0.58}, score:1},
-        {part:KP.lk, position:{x:sw*0.43,y:sh*0.80}, score:1},
-        {part:KP.rk, position:{x:sw*0.57,y:sh*0.80}, score:1},
-        {part:KP.la, position:{x:sw*0.42,y:sh*0.95}, score:1},
-        {part:KP.ra, position:{x:sw*0.58,y:sh*0.95}, score:1},
-      ]
-    };
-    const cut = cleanCutout(sourceCanvas);
-    return createRig(fakePose, sourceCanvas, { data:new Int32Array(sw*sh).fill(-1), width:sw, height:sh });
-  }
-
-  async function loadFile(file){
-    if (!file) return;
-
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = async () => {
-      if (state.currentURL) URL.revokeObjectURL(state.currentURL);
-      state.currentURL = url;
-      const source = makeCanvas(img.naturalWidth || img.width, img.naturalHeight || img.height);
-      source.getContext('2d').drawImage(img, 0, 0);
-      state.sourceCanvas = source;
-      state.imageName = file.name;
-      state.fileName = file.name.replace(/\.[^.]+$/, '');
-
-      const modelsReady = !!poseNet && !!bodyPixModel;
-      state.status = modelsReady ? 'Detecting pose and body parts...' : 'Using fallback rig while models load...';
-      updateMeta();
-
-      try {
-        if (poseNet && bodyPixModel) {
-          const pose = await poseNet.estimateSinglePose(source, { flipHorizontal:false });
-          let segmentation = null;
-          if (bodyPixModel.segmentPersonParts) {
-            segmentation = await bodyPixModel.segmentPersonParts(source, { internalResolution:'medium', segmentationThreshold:0.7 });
-          } else if (bodyPixModel.estimatePartSegmentation) {
-            segmentation = await bodyPixModel.estimatePartSegmentation(source, 16, 0.5);
-          } else if (bodyPixModel.segmentPerson) {
-            segmentation = await bodyPixModel.segmentPerson(source, { internalResolution:'medium', segmentationThreshold:0.7 });
-          }
-          state.pose = pose;
-          state.segmentation = segmentation;
-          state.rig = createRig(pose, source, segmentation || { data:new Int32Array(source.width*source.height).fill(-1), width:source.width, height:source.height });
-          state.status = `Loaded ${file.name}. Automatic rig built.`;
-        } else {
-          state.pose = null;
-          state.segmentation = null;
-          state.rig = fallbackRig(source);
-          state.status = `Loaded ${file.name}. Fallback rig active until models finish loading.`;
-        }
-
-        state.previewFrame = currentPreviewFrame();
-        updateMeta(); renderPreview(); renderSheet(); toast('Image loaded.');
-      } catch (err) {
-        console.error(err);
-        state.pose = null;
-        state.segmentation = null;
-        state.rig = fallbackRig(source);
-        state.previewFrame = currentPreviewFrame();
-        state.status = 'Detection failed. Using fallback rig.';
-        updateMeta(); renderPreview(); renderSheet(); toast('Fallback used.');
-      }
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); toast('Could not load that image.'); };
-    img.src = url;
-  }
-
-  function rebuildFromLoadedImage(){
-    if (!state.sourceCanvas || !state.pose) return;
-    state.rig = createRig(state.pose, state.sourceCanvas, state.segmentation || { data:new Int32Array(state.sourceCanvas.width*state.sourceCanvas.height).fill(-1), width:state.sourceCanvas.width, height:state.sourceCanvas.height });
-    state.status = `Loaded ${state.imageName}. Background ${state.removeBackground ? 'removed' : 'kept'}.`;
-    rebuildAll();
-  }
-
-  function buildFrames(){ /* populated below */ return []; }
-
-  function currentPreviewFrame(){
-    if (!state.rig) return null;
-    const mo = motion(state.rig, state.playhead, state.action);
-    return trim(composeFrame(state.rig, mo, false), 4).canvas;
-  }
-
-  function buildFramesInternal(){
-    if (!state.rig) return [];
-    const frames = [];
-    for (const action of ACTIONS){
-      for (let i=0; i<state.frameCount; i++){
-        const phase = state.frameCount <= 1 ? 0 : i / state.frameCount;
-        const mo = motion(state.rig, phase, action);
-        const raw = composeFrame(state.rig, mo, false);
-        const t = trim(raw, 4);
-        frames.push({action, phase, raw, trimmed:t.canvas, trim:t.bounds});
-      }
-    }
-    return frames;
-  }
-  buildFrames = buildFramesInternal;
-
-  function renderSheet(){
-    if (!dom.sheetCanvas) return;
-    fitCanvas(dom.sheetCanvas, 280, 240);
-    const cell = Math.max(96, Math.floor(176 * state.exportScale));
-    const total = ACTIONS.length * state.frameCount;
-    const rows = Math.ceil(total / 4);
-    const h = Math.max(240, rows * cell);
-    if (dom.sheetCanvas.height !== h) dom.sheetCanvas.height = h;
-    const ctx = dom.sheetCanvas.getContext('2d');
-    ctx.clearRect(0,0,dom.sheetCanvas.width,dom.sheetCanvas.height);
-    if (!state.rig){ placeholder(dom.sheetCanvas, 'Load an image to bake a sheet'); return; }
-    const frames = buildFrames();
-    let idx = 0;
-    for (const frame of frames){
-      const x = (idx % 4) * cell, y = Math.floor(idx / 4) * cell;
-      ctx.save();
-      ctx.translate(x,y);
-      ctx.beginPath(); ctx.rect(0,0,cell,cell); ctx.clip();
-      const fit = Math.min((cell * 0.92)/frame.trimmed.width, (cell * 0.92)/frame.trimmed.height);
-      const dw = frame.trimmed.width * fit, dh = frame.trimmed.height * fit;
-      ctx.drawImage(frame.trimmed, (cell-dw)/2, (cell-dh)/2, dw, dh);
-      ctx.restore();
-      idx++;
-    }
-  }
-
-  function rebuildAll(){
-    state.previewFrame = currentPreviewFrame();
-    renderPreview();
-    renderSheet();
-    updateMeta();
-  }
-
-  function exportJSON(){
-    if (!state.rig) return toast('Load an image first.');
-    downloadText(`${sanitize(state.fileName)}.json`, JSON.stringify({
-      app:'Auto Rig Studio', version:1, imageName:state.imageName, action:state.action, frameCount:state.frameCount,
-      removeBackground:state.removeBackground, mirror:state.mirror, showGuides:state.showGuides,
-      frames: buildFrames().map((f,i)=>({index:i,action:f.action,width:f.trimmed.width,height:f.trimmed.height,trim:f.trim}))
-    }, null, 2));
-    toast('JSON exported.');
-  }
-
-  function exportPreviewPNG(){ if (!state.previewFrame) return toast('Load an image first.'); downloadCanvas(state.previewFrame, `${sanitize(state.fileName)}-preview.png`); toast('Preview exported.'); }
-  function exportSheetPNG(){ if (!state.rig) return toast('Load an image first.'); renderSheet(); downloadCanvas(dom.sheetCanvas, `${sanitize(state.fileName)}-sheet.png`); toast('Sprite sheet exported.'); }
-
-  function createUI(){
-    app.innerHTML = '';
-    dom.previewCanvas = makeCanvas(10,10);
-    dom.sheetCanvas = makeCanvas(10,10);
-
-    const shell = E('div', {class:'shell'}, [
-      E('section', {class:'stage'}, [
-        E('div', {class:'topbar'}, [
-          E('div', {}, [
-            E('div', {class:'badge'}, [E('span',{class:'dot'}), 'Auto Rig Studio']),
-            E('h1', {}, 'Automatic sprite rigging from one uploaded image'),
-            E('p', {class:'lede'}, 'Upload a character image, let the browser detect pose and body parts, then export a transparent trimmed sprite sheet. The preview is rendered from the animated crop instead of the source silhouette.')
-          ]),
-          E('div', {class:'top-actions'}, [
-            E('button', {class:'btn primary', type:'button', onclick: exportSheetPNG}, '⬇ PNG sheet'),
-            E('button', {class:'btn', type:'button', onclick: exportJSON}, '⬇ JSON'),
-            E('button', {class:'btn', type:'button', onclick: exportPreviewPNG}, '⬇ Preview PNG')
-          ])
-        ]),
-        E('div', {class:'preview-wrap'}, [
-          E('div', {class:'preview-holder'}, [
-            E('div', {class:'preview-meta'}, [
-              E('div', {class:'status'}, [E('i'), E('span', {'data-status':''}, state.status)]),
-              E('div', {class:'pill'}, [E('span', {'data-model-status':''}, state.modelStatus)])
-            ]),
-            E('div', {class:'canvas-card'}, [dom.previewCanvas])
-          ]),
-          E('div', {class:'preview-meta'}, [
-            E('div', {class:'action-bar'}, ACTIONS.map(a => E('button', {
-              class:'action-chip', type:'button', 'data-action-chip':'1', 'data-action':a,
-              onclick: () => { state.action = a; rebuildAll(); }
-            }, a))),
-            E('div', {class:'small warn'}, 'Preview stays visible. The baked sheet uses trimmed transparent frames.')
-          ])
-        ]),
-        E('div', {class:'topbar', style:'border-top:1px solid var(--line);border-bottom:none;border-radius:0 0 var(--radius) var(--radius);padding-top:14px;padding-bottom:14px;'}, [
-          E('div', {class:'small'}, 'Loaded image: ' + state.imageName),
-          E('div', {class:'footer-actions'}, [
-            E('button', {class:'btn small primary', type:'button', onclick: exportSheetPNG}, 'Bake sheet'),
-            E('button', {class:'btn small', type:'button', onclick: clearImage}, 'Clear image')
-          ])
-        ])
-      ]),
-      E('aside', {class:'sidebar'}, [
-        E('div', {class:'sidebar-head'}, [
-          E('div', {class:'badge'}, [E('span',{class:'dot'}), 'Controls']),
-          E('div', {class:'small', style:'margin-top:6px'}, 'Only uploaded-image controls remain. No character builder.')
-        ]),
-        E('div', {class:'sidebar-body'}, [
-          panel('Upload image', [
-            E('div', {class:'dropzone'}, [
-              E('strong', {}, 'Drop an image here or choose a file'),
-              E('small', {}, 'PNG, JPG, and WebP are supported. Solid backgrounds work best, but the browser cutout pass also removes the background automatically.'),
-              E('div', {class:'footer-actions', style:'justify-content:center;margin-top:12px;'}, [
-                E('label', {class:'btn primary'}, [
-                  'Choose file',
-                  E('input', {type:'file', accept:'image/*', style:'display:none', onchange:e => loadFile(e.target.files && e.target.files[0])})
-                ]),
-                E('button', {class:'btn', type:'button', onclick: clearImage}, 'Clear')
-              ])
-            ])
-          ]),
-          panel('Motion', [
-            control('Action', E('select', {onchange:e => { state.action = e.target.value; rebuildAll(); }}, ACTIONS.map(a => E('option', {value:a, selected:state.action===a ? 'selected' : null}, a)))),
-            controlRange('Playback speed', 0.5, 2.0, 0.05, state.speed, v => { state.speed = v; }),
-            controlRange('Motion intensity', 0.2, 1.8, 0.05, state.intensity, v => { state.intensity = v; rebuildAll(); }),
-            controlRange('Frames per action', 4, 16, 1, state.frameCount, v => { state.frameCount = v; rebuildAll(); }),
-            E('div', {class:'chip-grid'}, [
-              toggle('Mirror character', state.mirror, v => { state.mirror = v; rebuildAll(); }),
-              toggle('Show guides', state.showGuides, v => { state.showGuides = v; rebuildAll(); })
-            ]),
-            E('div', {class:'notice'}, 'The walk cycle bends the upper and lower limbs separately, so the body actually changes pose instead of sliding as one rigid image.')
-          ]),
-          panel('Background removal', [
-            toggle('Remove background', state.removeBackground, v => { state.removeBackground = v; if (state.sourceCanvas) rebuildFromLoadedImage(); }),
-            E('div', {class:'small'}, 'The cutout pass removes edge-connected background color and softens the alpha at the border.')
-          ]),
-          panel('Export', [
-            controlText('File name', state.fileName, v => { state.fileName = v; }),
-            controlRange('Sheet scale', 0.75, 2.0, 0.05, state.exportScale, v => { state.exportScale = v; renderSheet(); }),
-            E('div', {class:'footer-actions'}, [
-              E('button', {class:'btn success', type:'button', onclick: exportSheetPNG}, 'PNG sheet'),
-              E('button', {class:'btn', type:'button', onclick: exportJSON}, 'JSON')
-            ]),
-            E('div', {class:'sheet-wrap', style:'margin-top:12px;'}, [
-              E('div', {class:'small'}, 'Sheet preview'),
-              E('div', {class:'canvas-card', style:'height:240px;'}, [dom.sheetCanvas])
-            ])
-          ]),
-          panel('Current state', [E('div', {class:'codebox', 'data-spec':''}, '')])
-        ])
-      ])
-    ]);
-
-    app.appendChild(shell);
-    fitCanvas(dom.previewCanvas, 320, 320);
-    fitCanvas(dom.sheetCanvas, 280, 240);
-    placeholder(dom.previewCanvas, 'Upload an image to begin');
-    placeholder(dom.sheetCanvas, 'Load an image to bake a sheet');
-    updateMeta();
-  }
-
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      fitCanvas(dom.previewCanvas, 320, 320);
-      fitCanvas(dom.sheetCanvas, 280, 240);
-      renderPreview();
-      renderSheet();
-    }, 120);
-  });
-
-  window.addEventListener('drop', e => {
-    e.preventDefault();
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f && f.type.startsWith('image/')) loadFile(f);
-  });
-  document.addEventListener('change', e => {
-    const input = e.target;
-    if (input && input.type === 'file' && input.accept && input.accept.includes('image/')) loadFile(input.files && input.files[0]);
-  }, true);
-
-  createUI();
-  initModels();
-  requestAnimationFrame(function tick(now){
-    const dt = (now - (tick.last || now)) / 1000; tick.last = now;
-    state.animTime += dt * state.speed * 1.2;
-    state.playhead = state.animTime % 1;
-    if (state.rig) {
-      state.previewFrame = currentPreviewFrame();
-      renderPreview();
-    }
-    requestAnimationFrame(tick);
-  });
-})();
-</script>
+<div id="scanlines"></div>
+
+<header id="header">
+  <div class="header-logo">
+    <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="30" height="30" rx="3" stroke="currentColor" stroke-width="1.5"/>
+      <rect x="6"  y="6"  width="8" height="8" fill="currentColor" opacity="0.8"/>
+      <rect x="18" y="6"  width="8" height="8" fill="currentColor" opacity="0.4"/>
+      <rect x="6"  y="18" width="8" height="8" fill="currentColor" opacity="0.4"/>
+      <rect x="18" y="18" width="8" height="8" fill="currentColor" opacity="0.9"/>
+    </svg>
+    <div class="logo-text">
+      <span class="logo-name">SpriteSmith</span>
+      <span class="logo-tag">STUDIO v5.0 · PUPPET ENGINE</span>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span id="saveStatus" class="save-status"></span>
+    <button id="saveBtn" class="btn btn-ghost">💾 Save</button>
+    <button id="loadBtn" class="btn btn-ghost">📂 Load</button>
+  </div>
+</header>
+
+<div id="layout">
+  <aside id="sidebar">
+
+    <!-- 01 UPLOAD -->
+    <section class="panel">
+      <div class="panel-hdr"><span class="panel-num">01</span><span class="panel-ttl">UPLOAD CHARACTER</span></div>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <div class="upload-inner" id="uploadTrigger">
+          <div class="upload-ico">⬆</div>
+          <p class="upload-msg">Drop image here or <u>browse</u></p>
+          <p class="upload-sub">PNG · JPG · WebP</p>
+        </div>
+        <div class="upload-prev hidden" id="uploadPreview">
+          <img id="uploadThumb" alt="Character">
+          <button id="clearBtn" class="clear-btn" title="Remove">✕</button>
+        </div>
+      </div>
+      <div id="bgBar" class="bg-bar hidden">
+        <div class="prog-track"><div id="progFill" class="prog-fill"></div></div>
+        <div id="progLabel" class="prog-label">Processing…</div>
+      </div>
+    </section>
+
+    <!-- 02 SKELETON -->
+    <section class="panel" id="skelSection">
+      <div class="panel-hdr"><span class="panel-num">02</span><span class="panel-ttl">SKELETON TUNING</span></div>
+      <p class="panel-note" id="skelNote">Upload a character to detect body parts.</p>
+      <div id="skelControls" class="hidden">
+        <div class="ctl-row">
+          <span class="ctl-lbl">NECK <span id="neckVal" class="ctl-accent">—</span></span>
+          <input type="range" id="neckSlider" class="slider" min="-20" max="20" step="1" value="0">
+        </div>
+        <div class="ctl-row">
+          <span class="ctl-lbl">SHOULDER <span id="shoulderVal" class="ctl-accent">—</span></span>
+          <input type="range" id="shoulderSlider" class="slider" min="-20" max="20" step="1" value="0">
+        </div>
+        <div class="ctl-row">
+          <span class="ctl-lbl">WAIST <span id="waistVal" class="ctl-accent">—</span></span>
+          <input type="range" id="waistSlider" class="slider" min="-20" max="20" step="1" value="0">
+        </div>
+        <div class="ctl-row">
+          <span class="ctl-lbl">HIPS <span id="hipsVal" class="ctl-accent">—</span></span>
+          <input type="range" id="hipsSlider" class="slider" min="-20" max="20" step="1" value="0">
+        </div>
+        <button id="recutBtn" class="btn btn-ghost btn-w100">✂ Re-cut Parts</button>
+        <div id="partsPreview" class="parts-preview"></div>
+      </div>
+    </section>
+
+    <!-- 03 POSE -->
+    <section class="panel">
+      <div class="panel-hdr"><span class="panel-num">03</span><span class="panel-ttl">POSE &amp; ANIMATION</span></div>
+      <div id="poseGrid" class="pose-grid"></div>
+      <div class="ctl-row">
+        <span class="ctl-lbl">DIRECTION</span>
+        <div class="tog-grp" id="dirGroup">
+          <button class="tog active" data-val="right">→ RIGHT</button>
+          <button class="tog"        data-val="left">← LEFT</button>
+        </div>
+      </div>
+      <div class="ctl-row">
+        <span class="ctl-lbl">SPEED <span id="speedVal" class="ctl-accent">1.0×</span></span>
+        <input type="range" id="speedSlider" class="slider" min="0.25" max="3" step="0.25" value="1">
+      </div>
+    </section>
+
+    <!-- 04 SPRITE SHEET -->
+    <section class="panel">
+      <div class="panel-hdr"><span class="panel-num">04</span><span class="panel-ttl">SPRITE SHEET</span></div>
+      <div class="ctl-row">
+        <span class="ctl-lbl">FRAMES <span id="framesVal" class="ctl-accent">8</span></span>
+        <input type="range" id="framesSlider" class="slider" min="4" max="24" step="2" value="8">
+      </div>
+      <div class="ctl-row">
+        <span class="ctl-lbl">FRAME SIZE</span>
+        <select id="sizeSelect" class="sel">
+          <option value="64">64 × 64</option>
+          <option value="96">96 × 96</option>
+          <option value="128" selected>128 × 128</option>
+          <option value="192">192 × 192</option>
+          <option value="256">256 × 256</option>
+        </select>
+      </div>
+      <div class="ctl-row">
+        <span class="ctl-lbl">LAYOUT</span>
+        <select id="layoutSelect" class="sel">
+          <option value="horizontal">Horizontal strip</option>
+          <option value="grid">Grid</option>
+        </select>
+      </div>
+      <button id="bakeBtn" class="btn btn-primary btn-w100" disabled>⚡ BAKE SPRITE SHEET</button>
+    </section>
+
+    <!-- 05 EXPORT -->
+    <section class="panel">
+      <div class="panel-hdr"><span class="panel-num">05</span><span class="panel-ttl">EXPORT</span></div>
+      <div class="export-col">
+        <button id="exportPNG"  class="btn btn-amber btn-w100" disabled>↓ Export PNG</button>
+        <button id="exportJSON" class="btn btn-amber btn-w100" disabled>↓ Export JSON</button>
+      </div>
+    </section>
+
+  </aside>
+
+  <main id="workspace">
+    <div class="ws-col">
+      <div class="ws-lbl">
+        <span>LIVE PREVIEW</span>
+        <span id="poseBadge" class="ws-badge">—</span>
+      </div>
+      <div class="cw" id="previewWrap">
+        <canvas id="previewCanvas" width="400" height="400"></canvas>
+        <div class="cw-placeholder" id="previewPlaceholder">
+          <div class="ph-ico">🎮</div>
+          <p>Upload a character<br>to start animating</p>
+        </div>
+      </div>
+    </div>
+    <div class="ws-col">
+      <div class="ws-lbl">
+        <span>SPRITE SHEET PREVIEW</span>
+        <span id="sheetBadge" class="ws-badge">—</span>
+      </div>
+      <div class="cw cw-sheet" id="sheetWrap">
+        <canvas id="sheetCanvas" width="512" height="128"></canvas>
+        <div class="cw-placeholder" id="sheetPlaceholder">
+          <div class="ph-ico">🗂</div>
+          <p>Press <strong>Bake</strong> to generate<br>your sprite sheet</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script type="module" src="app.js"></script>
 </body>
 </html>
