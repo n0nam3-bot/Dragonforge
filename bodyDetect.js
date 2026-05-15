@@ -1,9 +1,179 @@
-// bodyDetect.js — Voronoi puppet segmentation
-// This version is tuned for side-scroller characters that are slightly tilted.
-// It keeps the drag-and-drop workflow, but biases the region assignment so the
-// skeleton follows the character's spine instead of assuming a perfectly frontal pose.
+// bodyDetect.js — skeleton-aware puppet segmentation
+// Replaces raw screen-space Voronoi with a tilt-aware body frame + capsule scoring.
+// The goal is to keep side-view / 3⁄4-view sprites segmented by actual anatomy,
+// not just by nearest on-screen point.
 
 const ALPHA = 18;
+const EPS   = 1e-6;
+
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+function dot(ax, ay, bx, by) { return ax * bx + ay * by; }
+
+function normalize(x, y) {
+  const len = Math.hypot(x, y) || 1;
+  return { x: x / len, y: y / len };
+}
+
+function projectPoint(pt, origin, axis, perp) {
+  const dx = pt.x - origin.x;
+  const dy = pt.y - origin.y;
+  return {
+    u: dot(dx, dy, axis.x, axis.y),
+    v: dot(dx, dy, perp.x, perp.y),
+  };
+}
+
+function pointToSegmentScore(px, py, ax, ay, bx, by, radius, endPenalty = 2.0) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy || 1;
+
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  const clampedT = clamp(t, 0, 1);
+  const qx = ax + dx * clampedT;
+  const qy = ay + dy * clampedT;
+
+  const dist2 = (px - qx) * (px - qx) + (py - qy) * (py - qy);
+  let score = dist2 / Math.max(radius * radius, EPS);
+
+  if (t < 0) score += (-t) * (-t) * endPenalty;
+  else if (t > 1) score += (t - 1) * (t - 1) * endPenalty;
+
+  return score;
+}
+
+function bandPenalty(u, minU, maxU, softness) {
+  if (u < minU) return ((minU - u) / Math.max(softness, EPS)) ** 2;
+  if (u > maxU) return ((u - maxU) / Math.max(softness, EPS)) ** 2;
+  return 0;
+}
+
+function alphaStats(charCanvas, bb = null) {
+  const W = charCanvas.width, H = charCanvas.height;
+  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
+  const data = ctx.getImageData(0, 0, W, H).data;
+
+  let sumX = 0, sumY = 0, sum = 0;
+  let minX = W, minY = H, maxX = -1, maxY = -1;
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const a = data[(y * W + x) * 4 + 3];
+      if (a <= ALPHA) continue;
+      sumX += x * a;
+      sumY += y * a;
+      sum  += a;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (!sum) {
+    const fallback = bb || { x: 0, y: 0, w: W, h: H };
+    return {
+      cx: fallback.x + fallback.w * 0.5,
+      cy: fallback.y + fallback.h * 0.5,
+      axisX: 0,
+      axisY: 1,
+      perpX: 1,
+      perpY: 0,
+      angle: Math.PI / 2,
+      w: fallback.w,
+      h: fallback.h,
+      hasData: false,
+    };
+  }
+
+  const cx = sumX / sum;
+  const cy = sumY / sum;
+
+  let cxx = 0, cxy = 0, cyy = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const a = data[(y * W + x) * 4 + 3];
+      if (a <= ALPHA) continue;
+      const dx = x - cx;
+      const dy = y - cy;
+      cxx += a * dx * dx;
+      cxy += a * dx * dy;
+      cyy += a * dy * dy;
+    }
+  }
+
+  const trace = cxx + cyy;
+  const det   = cxx * cyy - cxy * cxy;
+  const root  = Math.sqrt(Math.max(0, trace * trace * 0.25 - det));
+  const l1    = trace * 0.5 + root;
+  let ax = cxy;
+  let ay = l1 - cxx;
+
+  if (Math.abs(ax) + Math.abs(ay) < EPS) {
+    // Fallback to the tall axis of the bbox.
+    ax = 0;
+    ay = 1;
+  } else {
+    const n = normalize(ax, ay);
+    ax = n.x;
+    ay = n.y;
+  }
+
+  // Make the axis point downward for a stable body frame.
+  if (ay < 0) {
+    ax = -ax;
+    ay = -ay;
+  }
+
+  const px = -ay;
+  const py = ax;
+
+  return {
+    cx,
+    cy,
+    axisX: ax,
+    axisY: ay,
+    perpX: px,
+    perpY: py,
+    angle: Math.atan2(ay, ax),
+    w: (bb ? bb.w : (maxX >= minX ? (maxX - minX + 1) : W)),
+    h: (bb ? bb.h : (maxY >= minY ? (maxY - minY + 1) : H)),
+    hasData: true,
+  };
+}
+
+function deriveBodyFrame(charCanvas, joints = null, bb = null) {
+  const stats = alphaStats(charCanvas, bb);
+
+  let origin = { x: stats.cx, y: stats.cy };
+  let axis   = { x: stats.axisX, y: stats.axisY };
+  let perp   = { x: stats.perpX, y: stats.perpY };
+
+  // If joints are available, they are usually more stable than raw alpha PCA.
+  const has = (id) => joints && joints[id] && Number.isFinite(joints[id].x) && Number.isFinite(joints[id].y);
+  if (has('head') && has('hips')) {
+    const d = normalize(joints.hips.x - joints.head.x, joints.hips.y - joints.head.y);
+    axis = d;
+    if (axis.y < 0) axis = { x: -axis.x, y: -axis.y };
+    perp = { x: -axis.y, y: axis.x };
+    origin = { x: joints.torso?.x ?? stats.cx, y: joints.torso?.y ?? stats.cy };
+  } else if (has('neck') && has('hips')) {
+    const d = normalize(joints.hips.x - joints.neck.x, joints.hips.y - joints.neck.y);
+    axis = d;
+    if (axis.y < 0) axis = { x: -axis.x, y: -axis.y };
+    perp = { x: -axis.y, y: axis.x };
+    origin = { x: joints.torso?.x ?? stats.cx, y: joints.torso?.y ?? stats.cy };
+  } else if (has('torso') && has('hips')) {
+    const d = normalize(joints.hips.x - joints.torso.x, joints.hips.y - joints.torso.y);
+    axis = d;
+    if (axis.y < 0) axis = { x: -axis.x, y: -axis.y };
+    perp = { x: -axis.y, y: axis.x };
+    origin = { x: joints.torso.x, y: joints.torso.y };
+  }
+
+  return { origin, axis, perp, stats };
+}
 
 // Joint definitions — id, label, colour, parent (for skeleton bones)
 export const JOINT_DEFS = [
@@ -18,83 +188,37 @@ export const JOINT_DEFS = [
   { id:'legR',     label:'Leg R',   color:'#c084fc', parent:'hips'     },
 ];
 
-const BODY_WEIGHTS = {
-  head:  { u: 0.85, v: 2.35 },
-  hair:  { u: 0.70, v: 2.75 },
-  neck:  { u: 0.95, v: 2.10 },
-  torso: { u: 1.15, v: 1.85 },
-  hips:  { u: 1.10, v: 1.70 },
-  armL:  { u: 1.55, v: 0.95 },
-  armR:  { u: 1.55, v: 0.95 },
-  legL:  { u: 1.45, v: 0.90 },
-  legR:  { u: 1.45, v: 0.90 },
-};
-
-function _sign(v) {
-  return v < 0 ? -1 : 1;
-}
-
-function _cross(ax, ay, bx, by) {
-  return ax * by - ay * bx;
-}
-
-function _norm(x, y) {
-  const len = Math.hypot(x, y) || 1;
-  return { x: x / len, y: y / len, len };
-}
-
-function _jointGroup(id) {
-  if (id === 'armL' || id === 'armR') return 'arm';
-  if (id === 'legL' || id === 'legR') return 'leg';
-  return 'center';
+function toWorld(origin, axis, perp, along, side) {
+  return {
+    x: origin.x + axis.x * along + perp.x * side,
+    y: origin.y + axis.y * along + perp.y * side,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Auto-place joints given character bounding box (initial guess)
+// Auto-place joints given the visible body frame.
+// This is tilt-aware, so side-view / 3⁄4 sprites get better defaults.
 // Returns { id → {x,y} } in source canvas pixel space.
-// options:
-//   facing: 'left' | 'right'  (used to bias the pose for side-scrollers)
-//   tilt:   number            (0.0..0.2-ish, spine lean amount)
 // ─────────────────────────────────────────────────────────────────────────────
-export function autoPlaceJoints(bb, options = {}) {
-  const { x, y, w, h } = bb;
-  const facing = options.facing === 'left' ? 'left' : 'right';
-  const tilt   = typeof options.tilt === 'number' ? options.tilt : 0.08;
-  const dir    = facing === 'left' ? -1 : 1;
+export function autoPlaceJoints(bb, charCanvas = null) {
+  const frame = charCanvas ? deriveBodyFrame(charCanvas, null, bb) : null;
+  const origin = frame?.origin || { x: bb.x + bb.w * 0.5, y: bb.y + bb.h * 0.48 };
+  const axis   = frame?.axis   || { x: 0, y: 1 };
+  const perp   = frame?.perp   || { x: 1, y: 0 };
 
-  const cx = x + w * 0.5;
-
-  // Slight diagonal spine to better match side-scroller / tilted characters.
-  const spineX = (frac) => cx + dir * w * tilt * (frac - 0.5);
-  const sy     = (frac) => y + h * frac;
-
-  const headY  = 0.12;
-  const hairY  = 0.04;
-  const neckY  = 0.23;
-  const torsoY = 0.41;
-  const hipsY  = 0.57;
-  const armY   = 0.34;
-  const legY   = 0.78;
-
-  // Mirror-friendly offsets: the leading side is pushed slightly farther out.
-  const leadX  = w * (0.26 + tilt * 0.12);
-  const trailX = w * (0.17 + tilt * 0.06);
-  const leadLeg= w * (0.19 + tilt * 0.10);
-  const trailLeg=w * (0.12 + tilt * 0.05);
+  const H = bb.h;
+  const W = bb.w;
 
   return {
-    hair:  { x: spineX(hairY), y: sy(hairY) },
-    head:  { x: spineX(headY),  y: sy(headY)  },
-    neck:  { x: spineX(neckY),  y: sy(neckY)  },
-    torso: { x: spineX(torsoY), y: sy(torsoY) },
-    hips:  { x: spineX(hipsY),  y: sy(hipsY)  },
-
-    // Screen-left vs screen-right labels. The side facing the camera is nudged
-    // a little farther away from the body axis so the regions separate cleanly.
-    armL:  { x: spineX(armY) - trailX * dir, y: sy(armY) },
-    armR:  { x: spineX(armY) + leadX  * dir, y: sy(armY) },
-    legL:  { x: spineX(legY) - trailLeg * dir, y: sy(legY) },
-    legR:  { x: spineX(legY) + leadLeg  * dir, y: sy(legY) },
+    hair:  toWorld(origin, axis, perp, -H * 0.39, 0),
+    head:  toWorld(origin, axis, perp, -H * 0.28, 0),
+    neck:  toWorld(origin, axis, perp, -H * 0.15, 0),
+    torso: toWorld(origin, axis, perp, -H * 0.01, 0),
+    hips:  toWorld(origin, axis, perp,  H * 0.15, 0),
+    armL:  toWorld(origin, axis, perp, -H * 0.02, -W * 0.24),
+    armR:  toWorld(origin, axis, perp, -H * 0.02,  W * 0.24),
+    legL:  toWorld(origin, axis, perp,  H * 0.30, -W * 0.11),
+    legR:  toWorld(origin, axis, perp,  H * 0.30,  W * 0.11),
   };
 }
 
@@ -105,108 +229,189 @@ export function computeBB(charCanvas) {
   const W = charCanvas.width, H = charCanvas.height;
   const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
   const d   = ctx.getImageData(0, 0, W, H).data;
-  let x0 = W, x1 = 0, y0 = H, y1 = 0;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (d[(y * W + x) * 4 + 3] > ALPHA) {
-        if (x < x0) x0 = x;
-        if (x > x1) x1 = x;
-        if (y < y0) y0 = y;
-        if (y > y1) y1 = y;
-      }
+  let x0=W, x1=-1, y0=H, y1=-1;
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
+    if (d[(y*W+x)*4+3] > ALPHA) {
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
     }
   }
-  if (x0 > x1) return null;
-  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  if (x0>x1) return null;
+  return { x:x0, y:y0, w:x1-x0+1, h:y1-y0+1 };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Body frame helpers for tilted / side-facing sprites
-// ─────────────────────────────────────────────────────────────────────────────
-function buildBodyFrame(joints) {
-  const neck = joints.neck || joints.torso || joints.head;
-  const hips = joints.hips || joints.torso || joints.neck;
-  if (!neck || !hips) return null;
+function buildRegionProfiles(joints, frame, bb) {
+  const { origin, axis, perp } = frame;
+  const projected = (j) => projectPoint(j, origin, axis, perp);
+  const H = Math.max(1, bb.h);
+  const W = Math.max(1, bb.w);
 
-  const axis = _norm(hips.x - neck.x, hips.y - neck.y);
-  const perp = { x: -axis.y, y: axis.x };
-  const len2  = axis.len * axis.len;
-
-  const jointFrame = {};
-  for (const [id, j] of Object.entries(joints)) {
-    const dx = j.x - neck.x;
-    const dy = j.y - neck.y;
-    jointFrame[id] = {
-      u: (dx * axis.x + dy * axis.y) / axis.len,
-      v: (dx * perp.x + dy * perp.y) / axis.len,
-      side: _sign(_cross(axis.x, axis.y, dx, dy)),
-    };
+  const jp = {};
+  for (const id of Object.keys(joints)) {
+    if (joints[id]) jp[id] = projected(joints[id]);
   }
 
-  return { neck, hips, axis, perp, len: axis.len, len2, jointFrame };
+  const profiles = {};
+  const make = (id, data) => { profiles[id] = { id, ...data }; };
+
+  make('hair', {
+    segA: joints.head || origin,
+    segB: joints.hair || joints.head || origin,
+    radius: Math.max(6, W * 0.18),
+    endPenalty: 2.3,
+    bandMin: (jp.head?.u ?? 0) - H * 0.36,
+    bandMax: (jp.head?.u ?? 0) + H * 0.08,
+    bandSoft: H * 0.10,
+    centerBias: 0.25,
+    bias: -0.08,
+    sideBias: 0,
+  });
+
+  make('head', {
+    segA: joints.neck || origin,
+    segB: joints.head || origin,
+    radius: Math.max(6, W * 0.16),
+    endPenalty: 2.0,
+    bandMin: (jp.neck?.u ?? 0) - H * 0.14,
+    bandMax: (jp.head?.u ?? 0) + H * 0.18,
+    bandSoft: H * 0.08,
+    centerBias: 0.18,
+    bias: 0,
+    sideBias: 0,
+  });
+
+  make('neck', {
+    segA: joints.torso || origin,
+    segB: joints.neck || origin,
+    radius: Math.max(4, W * 0.08),
+    endPenalty: 3.2,
+    bandMin: (jp.head?.u ?? 0) - H * 0.05,
+    bandMax: (jp.torso?.u ?? 0) + H * 0.10,
+    bandSoft: H * 0.06,
+    centerBias: 0.10,
+    bias: 0,
+    sideBias: 0,
+  });
+
+  make('torso', {
+    segA: joints.neck || origin,
+    segB: joints.hips || joints.torso || origin,
+    radius: Math.max(10, W * 0.22),
+    endPenalty: 1.5,
+    bandMin: (jp.neck?.u ?? 0) - H * 0.06,
+    bandMax: (jp.hips?.u ?? 0) + H * 0.14,
+    bandSoft: H * 0.10,
+    centerBias: 0.55,
+    bias: 0,
+    sideBias: 0,
+  });
+
+  make('hips', {
+    segA: joints.torso || origin,
+    segB: joints.hips || origin,
+    radius: Math.max(8, W * 0.18),
+    endPenalty: 1.9,
+    bandMin: (jp.torso?.u ?? 0) - H * 0.02,
+    bandMax: (jp.hips?.u ?? 0) + H * 0.18,
+    bandSoft: H * 0.09,
+    centerBias: 0.30,
+    bias: 0,
+    sideBias: 0,
+  });
+
+  for (const id of ['armL', 'armR']) {
+    const joint = joints[id] || origin;
+    const jpHere = jp[id] || projected(joint);
+    const tp = jp.torso || projected(joints.torso || origin);
+    const lo = Math.min(tp.u, jpHere.u) - H * 0.12;
+    const hi = Math.max(tp.u, jpHere.u) + H * 0.12;
+    make(id, {
+      segA: joints.torso || origin,
+      segB: joint,
+      radius: Math.max(7, W * 0.11),
+      endPenalty: 2.8,
+      bandMin: lo,
+      bandMax: hi,
+      bandSoft: H * 0.10,
+      centerBias: 0.06,
+      bias: 0,
+      sideBias: Math.max(1.2, W * 0.10),
+      jointSide: Math.sign(jpHere.v),
+    });
+  }
+
+  for (const id of ['legL', 'legR']) {
+    const joint = joints[id] || origin;
+    const jpHere = jp[id] || projected(joint);
+    const hp = jp.hips || projected(joints.hips || origin);
+    const lo = Math.min(hp.u, jpHere.u) - H * 0.10;
+    const hi = Math.max(hp.u, jpHere.u) + H * 0.14;
+    make(id, {
+      segA: joints.hips || origin,
+      segB: joint,
+      radius: Math.max(7, W * 0.12),
+      endPenalty: 2.6,
+      bandMin: lo,
+      bandMax: hi,
+      bandSoft: H * 0.12,
+      centerBias: 0.05,
+      bias: 0,
+      sideBias: Math.max(1.0, W * 0.12),
+      jointSide: Math.sign(jpHere.v),
+    });
+  }
+
+  return { profiles, projected };
 }
 
-function framePoint(frame, x, y) {
-  const dx = x - frame.neck.x;
-  const dy = y - frame.neck.y;
-  return {
-    u: (dx * frame.axis.x + dy * frame.axis.y) / frame.len,
-    v: (dx * frame.perp.x + dy * frame.perp.y) / frame.len,
-    side: _sign(_cross(frame.axis.x, frame.axis.y, dx, dy)),
-  };
+function regionScore(px, py, id, profile, joints, frame, bb) {
+  const pv = projectPoint({ x: px, y: py }, frame.origin, frame.axis, frame.perp);
+  let score = pointToSegmentScore(
+    px, py,
+    profile.segA.x, profile.segA.y,
+    profile.segB.x, profile.segB.y,
+    profile.radius,
+    profile.endPenalty,
+  );
+
+  score += bandPenalty(pv.u, profile.bandMin, profile.bandMax, profile.bandSoft);
+  score += Math.abs(pv.v) / Math.max(bb.w * 0.5, EPS) * (profile.centerBias || 0);
+
+  if (profile.sideBias > 0 && profile.jointSide) {
+    const pSide = Math.sign(pv.v);
+    if (pSide && pSide !== profile.jointSide) score += profile.sideBias;
+  }
+
+  score += profile.bias || 0;
+  return score;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Build Voronoi assignment map:
-//   pixelJoint[y*W+x] = joint id string  (for fg pixels)
-// The score is still nearest-neighbour, but with an anatomy-aware bias so a
-// tilted character does not get split like a front-facing mannequin.
+// Build skeleton-aware assignment map.
+//   pixelJoint[y*W+x] = joint id string (for fg pixels)
 // ─────────────────────────────────────────────────────────────────────────────
 export function buildVoronoi(charCanvas, joints) {
   const W   = charCanvas.width, H = charCanvas.height;
   const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const d   = ctx.getImageData(0, 0, W, H).data;
-  const ids = Object.keys(joints);
-  const map  = new Array(W * H).fill(null);
-
-  const frame = buildBodyFrame(joints);
-  const jointFrame = frame ? frame.jointFrame : null;
-  const limbPenalty = frame ? frame.len2 * 0.18 : 0;
-  const centerPenalty = frame ? frame.len2 * 0.05 : 0;
+  const img = ctx.getImageData(0, 0, W, H);
+  const d   = img.data;
+  const map = new Array(W * H).fill(null);
+  const bb  = computeBB(charCanvas);
+  const frame = deriveBodyFrame(charCanvas, joints, bb);
+  const { profiles } = buildRegionProfiles(joints, frame, bb);
+  const ids = JOINT_DEFS.map(d => d.id).filter(id => joints[id]);
 
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      if (d[(y * W + x) * 4 + 3] <= ALPHA) continue;
+      const i = (y * W + x) * 4;
+      if (d[i + 3] <= ALPHA) continue;
 
-      const p = frame ? framePoint(frame, x, y) : null;
       let best = null;
       let bestScore = Infinity;
 
       for (const id of ids) {
-        const j = joints[id];
-        const dx = x - j.x;
-        const dy = y - j.y;
-        let score = dx * dx + dy * dy;
-
-        if (frame && jointFrame[id]) {
-          const jf = jointFrame[id];
-          const w  = BODY_WEIGHTS[id] || BODY_WEIGHTS.torso;
-          const du = p.u - jf.u;
-          const dv = p.v - jf.v;
-
-          // Tilt-aware bias in the body's local coordinate system.
-          score += (du * du * w.u + dv * dv * w.v) * frame.len2;
-
-          // Keep center joints close to the body axis; keep limbs on their own side.
-          const group = _jointGroup(id);
-          if (group === 'center') {
-            score += Math.abs(p.v - jf.v) * centerPenalty;
-          } else {
-            const sideMatch = p.side === jf.side;
-            if (!sideMatch) score += limbPenalty;
-          }
-        }
-
+        const profile = profiles[id];
+        if (!profile) continue;
+        const score = regionScore(x, y, id, profile, joints, frame, bb);
         if (score < bestScore) {
           bestScore = score;
           best = id;
@@ -217,7 +422,7 @@ export function buildVoronoi(charCanvas, joints) {
     }
   }
 
-  return { map, W, H, srcData: ctx.getImageData(0, 0, W, H) };
+  return { map, W, H, srcData: img, frame, bb };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -232,36 +437,24 @@ export function extractParts(voronoi, joints) {
   for (const def of JOINT_DEFS) {
     const id = def.id;
     // Find bounding box of this region
-    let rx0 = W, rx1 = 0, ry0 = H, ry1 = 0, cnt = 0;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      if (map[y * W + x] !== id) continue;
-      if (x < rx0) rx0 = x;
-      if (x > rx1) rx1 = x;
-      if (y < ry0) ry0 = y;
-      if (y > ry1) ry1 = y;
-      cnt++;
+    let rx0=W, rx1=-1, ry0=H, ry1=-1, cnt=0;
+    for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
+      if (map[y*W+x] !== id) continue;
+      if(x<rx0)rx0=x; if(x>rx1)rx1=x; if(y<ry0)ry0=y; if(y>ry1)ry1=y; cnt++;
     }
-    if (cnt < 4 || rx0 > rx1) {
-      parts[id] = null;
-      continue;
-    }
+    if (cnt < 4 || rx0 > rx1) { parts[id] = null; continue; }
 
-    const pw = rx1 - rx0 + 1, ph = ry1 - ry0 + 1;
+    const pw = rx1-rx0+1, ph = ry1-ry0+1;
     const pc = document.createElement('canvas');
-    pc.width = pw;
-    pc.height = ph;
+    pc.width = pw; pc.height = ph;
     const pCtx = pc.getContext('2d');
     const pImg = pCtx.createImageData(pw, ph);
-    const pd = pImg.data;
+    const pd   = pImg.data;
 
-    for (let y = ry0; y <= ry1; y++) for (let x = rx0; x <= rx1; x++) {
-      if (map[y * W + x] !== id) continue;
-      const si = (y * W + x) * 4;
-      const di = ((y - ry0) * pw + (x - rx0)) * 4;
-      pd[di]     = d[si];
-      pd[di + 1] = d[si + 1];
-      pd[di + 2] = d[si + 2];
-      pd[di + 3] = d[si + 3];
+    for (let y=ry0; y<=ry1; y++) for (let x=rx0; x<=rx1; x++) {
+      if (map[y*W+x] !== id) continue;
+      const si = (y*W+x)*4, di = ((y-ry0)*pw+(x-rx0))*4;
+      pd[di]=d[si]; pd[di+1]=d[si+1]; pd[di+2]=d[si+2]; pd[di+3]=d[si+3];
     }
     pCtx.putImageData(pImg, 0, 0);
 
@@ -271,12 +464,10 @@ export function extractParts(voronoi, joints) {
 
     parts[id] = {
       canvas:  pc,
-      anchorX: Math.max(0, Math.min(pw - 1, ax)),
-      anchorY: Math.max(0, Math.min(ph - 1, ay)),
-      srcX: rx0,
-      srcY: ry0,
-      w: pw,
-      h: ph,
+      anchorX: Math.max(0, Math.min(pw-1, ax)),
+      anchorY: Math.max(0, Math.min(ph-1, ay)),
+      srcX: rx0, srcY: ry0,
+      w: pw, h: ph,
     };
   }
   return parts;
@@ -286,7 +477,7 @@ export function extractParts(voronoi, joints) {
 // Build the final puppet object consumed by animator.js
 // ─────────────────────────────────────────────────────────────────────────────
 export function buildPuppet(charCanvas, joints) {
-  const bb = computeBB(charCanvas);
+  const bb      = computeBB(charCanvas);
   if (!bb) return null;
   const voronoi = buildVoronoi(charCanvas, joints);
   const parts   = extractParts(voronoi, joints);

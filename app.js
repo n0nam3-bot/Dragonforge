@@ -167,7 +167,7 @@ async function handleFile(file) {
 
   S.cleanCanvas   = cleaned;
   S.bb            = bb;
-  S.defaultJoints = autoPlaceJoints(bb, { facing: 'right', tilt: 0.08 });
+  S.defaultJoints = autoPlaceJoints(bb, S.cleanCanvas);
   S.joints        = JSON.parse(JSON.stringify(S.defaultJoints));
 
   setProgress(1,'Ready!'); await tick();
@@ -372,7 +372,7 @@ loadBtn.addEventListener('click', async () => {
     uploadTrigger.classList.add('hidden'); uploadPreview.classList.remove('hidden');
     S.cleanCanvas=c;
     S.bb=computeBB(c);
-    S.defaultJoints=autoPlaceJoints(S.bb);
+    S.defaultJoints=autoPlaceJoints(S.bb, S.cleanCanvas);
 
     initSkelEditor();
     // Override with saved joints
