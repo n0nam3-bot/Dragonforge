@@ -1,7 +1,7 @@
 // app.js — SpriteSmith Studio v6
 
 import { removeBackground }                        from './bgremove.js';
-import { JOINT_DEFS, autoPlaceJoints, computeBB,
+import { JOINT_DEFS, BODY_PART_LIBRARY, getPartDefs, autoPlaceJoints, computeBB,
          buildPuppet }                             from './bodyDetect.js';
 import { SkelEditor }                              from './skelEditor.js';
 import { POSES, renderFrame }                      from './animator.js';
@@ -21,6 +21,7 @@ let S = {
   frameSize:    128,
   layout:       'horizontal',
   sheetCanvas:  null,
+  activeParts:  JOINT_DEFS.map(d => d.id),
 };
 let animPhase = 0, lastTime = null, rafId = null;
 
@@ -40,6 +41,9 @@ const skelControls  = $('skelControls');
 const showRegions   = $('showRegions');
 const showSkeleton  = $('showSkeleton');
 const regionLegend  = $('regionLegend');
+const partSelect    = $('partSelect');
+const addPartBtn    = $('addPartBtn');
+const partList      = $('partList');
 const resetJointsBtn= $('resetJointsBtn');
 const applyBtn      = $('applyBtn');
 const poseGrid      = $('poseGrid');
@@ -69,13 +73,61 @@ const toastEl       = $('toast');
 const previewCtx = previewCanvas.getContext('2d');
 const sheetCtx   = sheetCanvas.getContext('2d');
 
-// ── Region legend ─────────────────────────────────────────────────────────────
-JOINT_DEFS.forEach(def => {
-  const chip = document.createElement('div');
-  chip.className = 'legend-chip';
-  chip.innerHTML = `<span class="legend-dot" style="background:${def.color}"></span>${def.label}`;
-  regionLegend.appendChild(chip);
-});
+// ── Region legend + body part chooser ────────────────────────────────────────
+function renderBodyPartControls() {
+  partSelect.innerHTML = '';
+  for (const def of BODY_PART_LIBRARY) {
+    const opt = document.createElement('option');
+    opt.value = def.id;
+    opt.textContent = def.label;
+    partSelect.appendChild(opt);
+  }
+
+  const refresh = () => {
+    const defs = getPartDefs(S.activeParts);
+    regionLegend.innerHTML = '';
+    partList.innerHTML = '';
+
+    defs.forEach(def => {
+      const chip = document.createElement('div');
+      chip.className = 'legend-chip';
+      chip.innerHTML = `<span class="legend-dot" style="background:${def.color}"></span>${def.label}`;
+      regionLegend.appendChild(chip);
+
+      const item = document.createElement('div');
+      item.className = 'part-item';
+      item.innerHTML = `<span class="part-dot" style="background:${def.color}"></span><span class="part-name">${def.label}</span><button class="part-x" title="Remove">✕</button>`;
+      const removeBtn = item.querySelector('button');
+      removeBtn.addEventListener('click', () => {
+        if (def.required) { showToast(`${def.label} is required for the rig.`, 'warn'); return; }
+        S.activeParts = S.activeParts.filter(id => id !== def.id);
+        refresh();
+        if (S.editor) {
+          S.editor.partDefs = getPartDefs(S.activeParts);
+          S.editor._buildOverlay();
+          S.editor.draw();
+        }
+      });
+      partList.appendChild(item);
+    });
+  };
+
+  addPartBtn.onclick = () => {
+    const id = partSelect.value;
+    if (!id) return;
+    if (!S.activeParts.includes(id)) S.activeParts.push(id);
+    refresh();
+    if (S.editor) {
+      S.editor.partDefs = getPartDefs(S.activeParts);
+      S.editor._buildOverlay();
+      S.editor.draw();
+    }
+  };
+
+  refresh();
+  return refresh;
+}
+const refreshBodyParts = renderBodyPartControls();
 
 // ── Pose grid ─────────────────────────────────────────────────────────────────
 POSES.forEach(p => {
@@ -113,6 +165,8 @@ showRegions.addEventListener('change',  () => S.editor?.setShowRegions(showRegio
 showSkeleton.addEventListener('change', () => S.editor?.setShowSkeleton(showSkeleton.checked));
 resetJointsBtn.addEventListener('click', () => {
   if (S.editor && S.defaultJoints) S.editor.resetJoints(S.defaultJoints);
+  S.activeParts = JOINT_DEFS.map(d => d.id);
+  refreshBodyParts();
 });
 applyBtn.addEventListener('click', applyJoints);
 
@@ -130,6 +184,7 @@ clearBtn.addEventListener('click', resetAll);
 
 function resetAll() {
   S.cleanCanvas = S.bb = S.defaultJoints = S.joints = S.puppet = null;
+  S.activeParts = JOINT_DEFS.map(d => d.id);
   if (S.editor) { S.editor.destroy(); S.editor = null; }
   stopAnimation();
   uploadTrigger.classList.remove('hidden'); uploadPreview.classList.add('hidden');
@@ -169,6 +224,7 @@ async function handleFile(file) {
   S.bb            = bb;
   S.defaultJoints = autoPlaceJoints(bb, S.cleanCanvas);
   S.joints        = JSON.parse(JSON.stringify(S.defaultJoints));
+  S.activeParts   = JOINT_DEFS.map(d => d.id);
 
   setProgress(1,'Ready!'); await tick();
   bgBar.classList.add('hidden');
@@ -190,10 +246,12 @@ function initSkelEditor() {
     skelCanvas,
     S.cleanCanvas,
     S.joints,
-    (updatedJoints) => { S.joints = updatedJoints; }
+    (updatedJoints) => { S.joints = updatedJoints; },
+    getPartDefs(S.activeParts)
   );
   S.editor.setShowRegions(showRegions.checked);
   S.editor.setShowSkeleton(showSkeleton.checked);
+  refreshBodyParts();
 }
 
 function fitSkelCanvas() {
@@ -212,7 +270,7 @@ function applyJoints() {
 
   setTimeout(() => {
     try {
-      const puppet = buildPuppet(S.cleanCanvas, S.joints);
+      const puppet = buildPuppet(S.cleanCanvas, S.joints, getPartDefs(S.activeParts));
       if (!puppet) { showToast('Puppet build failed.','err'); return; }
       S.puppet = puppet;
       previewPlhdr.classList.add('hidden');
@@ -334,6 +392,7 @@ saveBtn.addEventListener('click', () => {
     const payload={
       charDataURL: S.cleanCanvas.toDataURL('image/png'),
       joints:      S.joints,
+      activeParts: S.activeParts,
       pose:        S.pose, direction:S.direction, speed:S.speed,
       frameCount:  S.frameCount, frameSize:S.frameSize, layout:S.layout,
       savedAt:     new Date().toISOString(),
@@ -353,6 +412,7 @@ loadBtn.addEventListener('click', async () => {
     S.pose=p.pose||'idle'; S.direction=p.direction||'right'; S.speed=p.speed||1;
     S.frameCount=p.frameCount||8; S.frameSize=p.frameSize||128; S.layout=p.layout||'horizontal';
     S.joints=p.joints;
+    S.activeParts=Array.isArray(p.activeParts) && p.activeParts.length ? p.activeParts : JOINT_DEFS.map(d=>d.id);
 
     // sync controls
     speedSlider.value=S.speed; speedVal.textContent=S.speed.toFixed(2)+'×';
@@ -381,6 +441,7 @@ loadBtn.addEventListener('click', async () => {
     skelNote.textContent='Saved skeleton loaded. Click Apply to animate.';
     skelControls.classList.remove('hidden');
     applyBtn.disabled=false;
+    refreshBodyParts();
     showToast(`Loaded (saved ${timeAgo(p.savedAt)}) ✓`,'ok');
   } catch(e){ console.error(e); showToast('Load failed.','err'); }
 });

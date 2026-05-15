@@ -175,18 +175,48 @@ function deriveBodyFrame(charCanvas, joints = null, bb = null) {
   return { origin, axis, perp, stats };
 }
 
-// Joint definitions — id, label, colour, parent (for skeleton bones)
-export const JOINT_DEFS = [
-  { id:'head',     label:'Head',    color:'#60d4f0', parent:'neck'     },
-  { id:'hair',     label:'Hair',    color:'#a78bfa', parent:'head'     },
-  { id:'neck',     label:'Neck',    color:'#f0e060', parent:'torso'    },
-  { id:'torso',    label:'Torso',   color:'#4ade80', parent:'hips'     },
-  { id:'hips',     label:'Hips',    color:'#60a5fa', parent:null       },
-  { id:'armL',     label:'Arm L',   color:'#f59e0b', parent:'torso'    },
-  { id:'armR',     label:'Arm R',   color:'#fb923c', parent:'torso'    },
-  { id:'legL',     label:'Leg L',   color:'#f87171', parent:'hips'     },
-  { id:'legR',     label:'Leg R',   color:'#c084fc', parent:'hips'     },
+
+// Body-part definitions. The core rig stays stable for animation, while the
+// optional parts are used as region labels / segmentation targets.
+export const CORE_PART_IDS = ['head','hair','neck','torso','hips','armL','armR','legL','legR'];
+
+export const BODY_PART_LIBRARY = [
+  { id:'head',      label:'Head',      color:'#60d4f0', parent:'neck',  aliasOf:'head', required:true  },
+  { id:'hair',      label:'Hair',      color:'#a78bfa', parent:'head',  aliasOf:'hair', required:false },
+  { id:'neck',      label:'Neck',      color:'#f0e060', parent:'torso', aliasOf:'neck', required:true  },
+  { id:'torso',     label:'Torso',     color:'#4ade80', parent:'hips',  aliasOf:'torso', required:true  },
+  { id:'hips',      label:'Hips',      color:'#60a5fa', parent:null,    aliasOf:'hips',  required:true  },
+  { id:'shoulderL', label:'Shoulder L', color:'#34d399', parent:'torso', aliasOf:'armL',  required:false },
+  { id:'shoulderR', label:'Shoulder R', color:'#f97316', parent:'torso', aliasOf:'armR',  required:false },
+  { id:'armL',      label:'Arm L',     color:'#f59e0b', parent:'torso', aliasOf:'armL',   required:true  },
+  { id:'armR',      label:'Arm R',     color:'#fb923c', parent:'torso', aliasOf:'armR',   required:true  },
+  { id:'elbowL',    label:'Elbow L',   color:'#fbbf24', parent:'armL',  aliasOf:'armL',   required:false },
+  { id:'elbowR',    label:'Elbow R',    color:'#fdba74', parent:'armR',  aliasOf:'armR',   required:false },
+  { id:'handL',     label:'Hand L',    color:'#fde68a', parent:'armL',  aliasOf:'armL',   required:false },
+  { id:'handR',     label:'Hand R',    color:'#fed7aa', parent:'armR',  aliasOf:'armR',   required:false },
+  { id:'legL',      label:'Leg L',     color:'#f87171', parent:'hips',  aliasOf:'legL',   required:true  },
+  { id:'legR',      label:'Leg R',     color:'#c084fc', parent:'hips',  aliasOf:'legR',   required:true  },
+  { id:'kneeL',     label:'Knee L',    color:'#fb7185', parent:'legL',  aliasOf:'legL',   required:false },
+  { id:'kneeR',     label:'Knee R',    color:'#e879f9', parent:'legR',  aliasOf:'legR',   required:false },
+  { id:'footL',     label:'Foot L',    color:'#fca5a5', parent:'legL',  aliasOf:'legL',   required:false },
+  { id:'footR',     label:'Foot R',    color:'#d8b4fe', parent:'legR',  aliasOf:'legR',   required:false },
+  { id:'weapon',    label:'Weapon',    color:'#cbd5e1', parent:'handR', aliasOf:'armR',   required:false },
+  { id:'shield',    label:'Shield',    color:'#94a3b8', parent:'handL', aliasOf:'armL',   required:false },
+  { id:'cape',      label:'Cape',      color:'#f472b6', parent:'torso', aliasOf:'torso',  required:false },
+  { id:'tail',      label:'Tail',      color:'#22c55e', parent:'hips',  aliasOf:'hips',   required:false },
+  { id:'accessory', label:'Accessory', color:'#facc15', parent:'head',  aliasOf:'hair',   required:false },
 ];
+
+export const JOINT_DEFS = BODY_PART_LIBRARY.filter(p => CORE_PART_IDS.includes(p.id));
+
+export function getPartDefs(ids = CORE_PART_IDS) {
+  const wanted = new Set(ids);
+  const out = BODY_PART_LIBRARY.filter(p => wanted.has(p.id));
+  for (const id of CORE_PART_IDS) {
+    if (!out.some(p => p.id === id)) out.push(BODY_PART_LIBRARY.find(p => p.id === id));
+  }
+  return out;
+}
 
 function toWorld(origin, axis, perp, along, side) {
   return {
@@ -239,7 +269,7 @@ export function computeBB(charCanvas) {
   return { x:x0, y:y0, w:x1-x0+1, h:y1-y0+1 };
 }
 
-function buildRegionProfiles(joints, frame, bb) {
+function buildRegionProfiles(joints, frame, bb, partDefs = JOINT_DEFS) {
   const { origin, axis, perp } = frame;
   const projected = (j) => projectPoint(j, origin, axis, perp);
   const H = Math.max(1, bb.h);
@@ -249,6 +279,7 @@ function buildRegionProfiles(joints, frame, bb) {
   for (const id of Object.keys(joints)) {
     if (joints[id]) jp[id] = projected(joints[id]);
   }
+  const defById = Object.fromEntries(partDefs.map(d => [d.id, d]));
 
   const profiles = {};
   const make = (id, data) => { profiles[id] = { id, ...data }; };
@@ -360,6 +391,30 @@ function buildRegionProfiles(joints, frame, bb) {
     });
   }
 
+  // Extra semantic regions reuse the nearest core joint profile so the user can
+  // label more body parts without breaking the rig.
+  for (const part of partDefs) {
+    if (profiles[part.id]) continue;
+    const alias = defById[part.aliasOf] || defById[part.parent] || defById.torso || defById.hips;
+    if (!alias) continue;
+    const jId = joints[part.aliasOf] ? part.aliasOf : (joints[part.id] ? part.id : (alias.aliasOf || alias.id));
+    const joint = joints[jId] || joints[alias.aliasOf] || joints[alias.id] || origin;
+    const parentId = alias.parent || 'torso';
+    const parentJoint = joints[parentId] || origin;
+    make(part.id, {
+      segA: parentJoint,
+      segB: joint,
+      radius: Math.max(6, W * 0.10),
+      endPenalty: 2.2,
+      bandMin: -H * 0.5,
+      bandMax:  H * 0.5,
+      bandSoft: H * 0.2,
+      centerBias: 0.03,
+      bias: 0,
+      sideBias: 0,
+    });
+  }
+
   return { profiles, projected };
 }
 
@@ -389,7 +444,7 @@ function regionScore(px, py, id, profile, joints, frame, bb) {
 // Build skeleton-aware assignment map.
 //   pixelJoint[y*W+x] = joint id string (for fg pixels)
 // ─────────────────────────────────────────────────────────────────────────────
-export function buildVoronoi(charCanvas, joints) {
+export function buildVoronoi(charCanvas, joints, partDefs = JOINT_DEFS) {
   const W   = charCanvas.width, H = charCanvas.height;
   const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
   const img = ctx.getImageData(0, 0, W, H);
@@ -397,8 +452,8 @@ export function buildVoronoi(charCanvas, joints) {
   const map = new Array(W * H).fill(null);
   const bb  = computeBB(charCanvas);
   const frame = deriveBodyFrame(charCanvas, joints, bb);
-  const { profiles } = buildRegionProfiles(joints, frame, bb);
-  const ids = JOINT_DEFS.map(d => d.id).filter(id => joints[id]);
+  const { profiles } = buildRegionProfiles(joints, frame, bb, partDefs);
+  const ids = partDefs.map(d => d.id);
 
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -429,12 +484,12 @@ export function buildVoronoi(charCanvas, joints) {
 // Extract one joint's pixels into its own canvas + compute anchor
 // anchor = the joint position in the part-canvas's local pixel space
 // ─────────────────────────────────────────────────────────────────────────────
-export function extractParts(voronoi, joints) {
+export function extractParts(voronoi, joints, partDefs = JOINT_DEFS) {
   const { map, W, H, srcData } = voronoi;
   const d = srcData.data;
   const parts = {};
 
-  for (const def of JOINT_DEFS) {
+  for (const def of partDefs) {
     const id = def.id;
     // Find bounding box of this region
     let rx0=W, rx1=-1, ry0=H, ry1=-1, cnt=0;
@@ -458,9 +513,12 @@ export function extractParts(voronoi, joints) {
     }
     pCtx.putImageData(pImg, 0, 0);
 
-    // Anchor = joint position in local canvas coords
-    const ax = joints[id].x - rx0;
-    const ay = joints[id].y - ry0;
+    // Anchor = the chosen joint position in local canvas coords
+    const sourceId = joints[id] ? id : (def.aliasOf || id);
+    const srcJoint = joints[sourceId] || joints[def.parent] || null;
+    if (!srcJoint) { parts[id] = null; continue; }
+    const ax = srcJoint.x - rx0;
+    const ay = srcJoint.y - ry0;
 
     parts[id] = {
       canvas:  pc,
@@ -476,11 +534,11 @@ export function extractParts(voronoi, joints) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Build the final puppet object consumed by animator.js
 // ─────────────────────────────────────────────────────────────────────────────
-export function buildPuppet(charCanvas, joints) {
+export function buildPuppet(charCanvas, joints, partDefs = JOINT_DEFS) {
   const bb      = computeBB(charCanvas);
   if (!bb) return null;
-  const voronoi = buildVoronoi(charCanvas, joints);
-  const parts   = extractParts(voronoi, joints);
+  const voronoi = buildVoronoi(charCanvas, joints, partDefs);
+  const parts   = extractParts(voronoi, joints, partDefs);
   const groundY = bb.y + bb.h - 1;
   return { parts, joints, bb, groundY, voronoi };
 }

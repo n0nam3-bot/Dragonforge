@@ -13,12 +13,14 @@ export class SkelEditor {
    * @param {HTMLCanvasElement} charCanvas — bg-removed character
    * @param {object} joints  — { id: {x,y} } in SOURCE (charCanvas) pixel space
    * @param {function} onJointsChanged
+   * @param {Array} partDefs
    */
-  constructor(canvas, charCanvas, joints, onJointsChanged) {
+  constructor(canvas, charCanvas, joints, onJointsChanged, partDefs = JOINT_DEFS) {
     this.canvas         = canvas;
     this.charCanvas     = charCanvas;
     this.joints         = JSON.parse(JSON.stringify(joints)); // deep copy
     this.onJointsChanged= onJointsChanged;
+    this.partDefs       = partDefs;
     this.showRegions    = true;
     this.showSkeleton   = true;
 
@@ -65,10 +67,10 @@ export class SkelEditor {
   _buildOverlay() {
     const W = this.srcW, H = this.srcH;
     const colorMap = {};
-    for (const def of JOINT_DEFS) colorMap[def.id] = _hexToRgb(def.color);
+    for (const def of this.partDefs) colorMap[def.id] = _hexToRgb(def.color);
 
     // Build voronoi map
-    const voro = buildVoronoi(this.charCanvas, this.joints);
+    const voro = buildVoronoi(this.charCanvas, this.joints, this.partDefs);
     const { map } = voro;
     const charData = this.charCanvas.getContext('2d', { willReadFrequently: true })
                          .getImageData(0, 0, W, H);
@@ -219,7 +221,7 @@ export class SkelEditor {
 
     // 3. Skeleton bones
     const colorMap = {};
-    for (const def of JOINT_DEFS) colorMap[def.id] = def.color;
+    for (const def of this.partDefs) colorMap[def.id] = def.color;
 
     for (const def of JOINT_DEFS) {
       if (!def.parent) continue;
@@ -241,8 +243,8 @@ export class SkelEditor {
     }
 
     // 4. Joint handles
-    for (const def of JOINT_DEFS) {
-      const j = this.joints[def.id];
+    for (const def of this.partDefs) {
+      const j = this.joints[def.id] || this.joints[def.aliasOf] || this.joints[def.parent];
       if (!j) continue;
       const jx = j.x * scale + ox;
       const jy = j.y * scale + oy;

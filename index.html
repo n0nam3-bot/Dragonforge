@@ -90,9 +90,21 @@
       </div>
     </section>
 
-    <!-- 03 POSE -->
+    <!-- 03 BODY PARTS -->
+    <section class="panel" id="partsPanel">
+      <div class="panel-hdr"><span class="panel-num">03</span><span class="panel-ttl">BODY PARTS</span></div>
+      <p class="panel-note">Choose the parts the region builder should use. Core rig parts stay enabled so the animator remains valid.</p>
+      <div class="part-add-row">
+        <select id="partSelect" class="sel"></select>
+        <button id="addPartBtn" class="btn btn-primary part-add-btn">Add</button>
+      </div>
+      <div id="partList" class="part-list"></div>
+      <p class="panel-note">The extra labels are used by the region builder and saved with the project.</p>
+    </section>
+
+    <!-- 04 POSE -->
     <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">03</span><span class="panel-ttl">POSE &amp; ANIMATION</span></div>
+      <div class="panel-hdr"><span class="panel-num">04</span><span class="panel-ttl">POSE &amp; ANIMATION</span></div>
       <div id="poseGrid" class="pose-grid"></div>
       <div class="ctl-row">
         <span class="ctl-lbl">DIRECTION</span>
@@ -109,7 +121,7 @@
 
     <!-- 04 SPRITE SHEET -->
     <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">04</span><span class="panel-ttl">SPRITE SHEET</span></div>
+      <div class="panel-hdr"><span class="panel-num">05</span><span class="panel-ttl">SPRITE SHEET</span></div>
       <div class="ctl-row">
         <span class="ctl-lbl">FRAMES <span id="framesVal" class="ctl-accent">8</span></span>
         <input type="range" id="framesSlider" class="slider" min="4" max="24" step="2" value="8">
@@ -136,7 +148,7 @@
 
     <!-- 05 EXPORT -->
     <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">05</span><span class="panel-ttl">EXPORT</span></div>
+      <div class="panel-hdr"><span class="panel-num">06</span><span class="panel-ttl">EXPORT</span></div>
       <div class="export-col">
         <button id="exportPNG"  class="btn btn-amber btn-w100" disabled>↓ Export PNG</button>
         <button id="exportJSON" class="btn btn-amber btn-w100" disabled>↓ Export JSON</button>
