@@ -167,7 +167,7 @@ async function handleFile(file) {
 
   S.cleanCanvas   = cleaned;
   S.bb            = bb;
-  S.defaultJoints = autoPlaceJoints(bb);
+  S.defaultJoints = autoPlaceJoints(bb, { facing: 'right', tilt: 0.08 });
   S.joints        = JSON.parse(JSON.stringify(S.defaultJoints));
 
   setProgress(1,'Ready!'); await tick();
