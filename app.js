@@ -22,6 +22,7 @@ let S = {
   layout:       'horizontal',
   sheetCanvas:  null,
   activeParts:  JOINT_DEFS.map(d => d.id),
+  partConfig:   {},
 };
 let animPhase = 0, lastTime = null, rafId = null;
 
@@ -73,6 +74,23 @@ const toastEl       = $('toast');
 const previewCtx = previewCanvas.getContext('2d');
 const sheetCtx   = sheetCanvas.getContext('2d');
 
+function getConfiguredPartDefs() {
+  return getPartDefs(S.activeParts).map(def => ({
+    ...def,
+    ...(S.partConfig[def.id] || {}),
+  }));
+}
+
+function updateEditorPartDefs() {
+  if (!S.editor) return;
+  const defs = getConfiguredPartDefs();
+  S.editor.setPartDefs ? S.editor.setPartDefs(defs) : (() => {
+    S.editor.partDefs = defs;
+    S.editor._buildOverlay();
+    S.editor.draw();
+  })();
+}
+
 // ── Region legend + body part chooser ────────────────────────────────────────
 function renderBodyPartControls() {
   partSelect.innerHTML = '';
@@ -83,8 +101,25 @@ function renderBodyPartControls() {
     partSelect.appendChild(opt);
   }
 
+  const fillSelect = (sel, current, includeNone = false) => {
+    sel.innerHTML = '';
+    if (includeNone) {
+      const none = document.createElement('option');
+      none.value = '';
+      none.textContent = '— none —';
+      sel.appendChild(none);
+    }
+    for (const def of BODY_PART_LIBRARY) {
+      const opt = document.createElement('option');
+      opt.value = def.id;
+      opt.textContent = def.label;
+      sel.appendChild(opt);
+    }
+    sel.value = current || '';
+  };
+
   const refresh = () => {
-    const defs = getPartDefs(S.activeParts);
+    const defs = getConfiguredPartDefs();
     regionLegend.innerHTML = '';
     partList.innerHTML = '';
 
@@ -96,17 +131,40 @@ function renderBodyPartControls() {
 
       const item = document.createElement('div');
       item.className = 'part-item';
-      item.innerHTML = `<span class="part-dot" style="background:${def.color}"></span><span class="part-name">${def.label}</span><button class="part-x" title="Remove">✕</button>`;
+
+      const parentCurrent = S.partConfig[def.id]?.parent ?? def.parent ?? '';
+      const aliasCurrent  = S.partConfig[def.id]?.aliasOf ?? def.aliasOf ?? '';
+
+      item.innerHTML = `
+        <span class="part-dot" style="background:${def.color}"></span>
+        <div class="part-meta">
+          <div class="part-name">${def.label}</div>
+          <div class="part-mini-row">
+            <label class="part-field"><span>Parent</span><select class="sel part-sel part-parent"></select></label>
+            <label class="part-field"><span>Source</span><select class="sel part-sel part-source"></select></label>
+          </div>
+        </div>
+        <button class="part-x" title="Remove">✕</button>`;
+
+      const parentSel = item.querySelector('.part-parent');
+      const sourceSel = item.querySelector('.part-source');
+      fillSelect(parentSel, parentCurrent, true);
+      fillSelect(sourceSel, aliasCurrent, true);
+      parentSel.addEventListener('change', () => {
+        S.partConfig[def.id] = { ...(S.partConfig[def.id] || {}), parent: parentSel.value || null };
+        updateEditorPartDefs();
+      });
+      sourceSel.addEventListener('change', () => {
+        S.partConfig[def.id] = { ...(S.partConfig[def.id] || {}), aliasOf: sourceSel.value || null };
+        updateEditorPartDefs();
+      });
+
       const removeBtn = item.querySelector('button');
       removeBtn.addEventListener('click', () => {
-        if (def.required) { showToast(`${def.label} is required for the rig.`, 'warn'); return; }
         S.activeParts = S.activeParts.filter(id => id !== def.id);
+        delete S.partConfig[def.id];
         refresh();
-        if (S.editor) {
-          S.editor.partDefs = getPartDefs(S.activeParts);
-          S.editor._buildOverlay();
-          S.editor.draw();
-        }
+        updateEditorPartDefs();
       });
       partList.appendChild(item);
     });
@@ -116,12 +174,12 @@ function renderBodyPartControls() {
     const id = partSelect.value;
     if (!id) return;
     if (!S.activeParts.includes(id)) S.activeParts.push(id);
-    refresh();
-    if (S.editor) {
-      S.editor.partDefs = getPartDefs(S.activeParts);
-      S.editor._buildOverlay();
-      S.editor.draw();
+    if (!S.partConfig[id]) {
+      const lib = BODY_PART_LIBRARY.find(d => d.id === id);
+      S.partConfig[id] = { parent: lib?.parent ?? null, aliasOf: lib?.aliasOf ?? null };
     }
+    refresh();
+    updateEditorPartDefs();
   };
 
   refresh();
@@ -166,7 +224,9 @@ showSkeleton.addEventListener('change', () => S.editor?.setShowSkeleton(showSkel
 resetJointsBtn.addEventListener('click', () => {
   if (S.editor && S.defaultJoints) S.editor.resetJoints(S.defaultJoints);
   S.activeParts = JOINT_DEFS.map(d => d.id);
+  S.partConfig = {};
   refreshBodyParts();
+  updateEditorPartDefs();
 });
 applyBtn.addEventListener('click', applyJoints);
 
@@ -185,6 +245,7 @@ clearBtn.addEventListener('click', resetAll);
 function resetAll() {
   S.cleanCanvas = S.bb = S.defaultJoints = S.joints = S.puppet = null;
   S.activeParts = JOINT_DEFS.map(d => d.id);
+  S.partConfig = {};
   if (S.editor) { S.editor.destroy(); S.editor = null; }
   stopAnimation();
   uploadTrigger.classList.remove('hidden'); uploadPreview.classList.add('hidden');
@@ -225,6 +286,7 @@ async function handleFile(file) {
   S.defaultJoints = autoPlaceJoints(bb, S.cleanCanvas);
   S.joints        = JSON.parse(JSON.stringify(S.defaultJoints));
   S.activeParts   = JOINT_DEFS.map(d => d.id);
+  S.partConfig    = {};
 
   setProgress(1,'Ready!'); await tick();
   bgBar.classList.add('hidden');
@@ -247,11 +309,12 @@ function initSkelEditor() {
     S.cleanCanvas,
     S.joints,
     (updatedJoints) => { S.joints = updatedJoints; },
-    getPartDefs(S.activeParts)
+    getConfiguredPartDefs()
   );
   S.editor.setShowRegions(showRegions.checked);
   S.editor.setShowSkeleton(showSkeleton.checked);
   refreshBodyParts();
+  updateEditorPartDefs();
 }
 
 function fitSkelCanvas() {
@@ -270,7 +333,7 @@ function applyJoints() {
 
   setTimeout(() => {
     try {
-      const puppet = buildPuppet(S.cleanCanvas, S.joints, getPartDefs(S.activeParts));
+      const puppet = buildPuppet(S.cleanCanvas, S.joints, getConfiguredPartDefs());
       if (!puppet) { showToast('Puppet build failed.','err'); return; }
       S.puppet = puppet;
       previewPlhdr.classList.add('hidden');
@@ -393,6 +456,7 @@ saveBtn.addEventListener('click', () => {
       charDataURL: S.cleanCanvas.toDataURL('image/png'),
       joints:      S.joints,
       activeParts: S.activeParts,
+      partConfig:  S.partConfig,
       pose:        S.pose, direction:S.direction, speed:S.speed,
       frameCount:  S.frameCount, frameSize:S.frameSize, layout:S.layout,
       savedAt:     new Date().toISOString(),
@@ -413,6 +477,7 @@ loadBtn.addEventListener('click', async () => {
     S.frameCount=p.frameCount||8; S.frameSize=p.frameSize||128; S.layout=p.layout||'horizontal';
     S.joints=p.joints;
     S.activeParts=Array.isArray(p.activeParts) && p.activeParts.length ? p.activeParts : JOINT_DEFS.map(d=>d.id);
+    S.partConfig= p.partConfig && typeof p.partConfig === 'object' ? p.partConfig : {};
 
     // sync controls
     speedSlider.value=S.speed; speedVal.textContent=S.speed.toFixed(2)+'×';
@@ -442,6 +507,7 @@ loadBtn.addEventListener('click', async () => {
     skelControls.classList.remove('hidden');
     applyBtn.disabled=false;
     refreshBodyParts();
+    updateEditorPartDefs();
     showToast(`Loaded (saved ${timeAgo(p.savedAt)}) ✓`,'ok');
   } catch(e){ console.error(e); showToast('Load failed.','err'); }
 });

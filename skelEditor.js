@@ -2,7 +2,7 @@
 // Renders the character with a Voronoi region colour overlay + draggable joint handles.
 // Calls onJointsChanged(joints) whenever any joint is moved.
 
-import { JOINT_DEFS, buildVoronoi } from './bodyDetect.js';
+import { JOINT_DEFS, buildVoronoi, ensureJointsForPartDefs } from './bodyDetect.js';
 
 const JOINT_RADIUS = 9;    // px hit radius for dragging
 const HANDLE_R     = 7;    // drawn handle radius
@@ -18,7 +18,7 @@ export class SkelEditor {
   constructor(canvas, charCanvas, joints, onJointsChanged, partDefs = JOINT_DEFS) {
     this.canvas         = canvas;
     this.charCanvas     = charCanvas;
-    this.joints         = JSON.parse(JSON.stringify(joints)); // deep copy
+    this.joints         = ensureJointsForPartDefs(joints, partDefs, null, charCanvas); // deep copy + seed
     this.onJointsChanged= onJointsChanged;
     this.partDefs       = partDefs;
     this.showRegions    = true;
@@ -62,6 +62,13 @@ export class SkelEditor {
 
   setShowRegions(v)  { this.showRegions  = v; this.draw(); }
   setShowSkeleton(v) { this.showSkeleton = v; this.draw(); }
+
+  setPartDefs(partDefs) {
+    this.partDefs = partDefs;
+    this.joints = ensureJointsForPartDefs(this.joints, this.partDefs, null, this.charCanvas);
+    this._buildOverlay();
+    this.draw();
+  }
 
   // Rebuild the voronoi colour overlay at source resolution
   _buildOverlay() {
@@ -277,7 +284,7 @@ export class SkelEditor {
   getJoints() { return JSON.parse(JSON.stringify(this.joints)); }
 
   resetJoints(defaultJoints) {
-    this.joints = JSON.parse(JSON.stringify(defaultJoints));
+    this.joints = ensureJointsForPartDefs(defaultJoints, this.partDefs, null, this.charCanvas);
     this._buildOverlay();
     this.draw();
     this.onJointsChanged(this.joints);

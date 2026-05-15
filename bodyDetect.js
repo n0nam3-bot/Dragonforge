@@ -181,21 +181,21 @@ function deriveBodyFrame(charCanvas, joints = null, bb = null) {
 export const CORE_PART_IDS = ['head','hair','neck','torso','hips','armL','armR','legL','legR'];
 
 export const BODY_PART_LIBRARY = [
-  { id:'head',      label:'Head',      color:'#60d4f0', parent:'neck',  aliasOf:'head', required:true  },
+  { id:'head',      label:'Head',      color:'#60d4f0', parent:'neck',  aliasOf:'head', required:false  },
   { id:'hair',      label:'Hair',      color:'#a78bfa', parent:'head',  aliasOf:'hair', required:false },
-  { id:'neck',      label:'Neck',      color:'#f0e060', parent:'torso', aliasOf:'neck', required:true  },
-  { id:'torso',     label:'Torso',     color:'#4ade80', parent:'hips',  aliasOf:'torso', required:true  },
-  { id:'hips',      label:'Hips',      color:'#60a5fa', parent:null,    aliasOf:'hips',  required:true  },
+  { id:'neck',      label:'Neck',      color:'#f0e060', parent:'torso', aliasOf:'neck', required:false  },
+  { id:'torso',     label:'Torso',     color:'#4ade80', parent:'hips',  aliasOf:'torso', required:false  },
+  { id:'hips',      label:'Hips',      color:'#60a5fa', parent:null,    aliasOf:'hips',  required:false  },
   { id:'shoulderL', label:'Shoulder L', color:'#34d399', parent:'torso', aliasOf:'armL',  required:false },
   { id:'shoulderR', label:'Shoulder R', color:'#f97316', parent:'torso', aliasOf:'armR',  required:false },
-  { id:'armL',      label:'Arm L',     color:'#f59e0b', parent:'torso', aliasOf:'armL',   required:true  },
-  { id:'armR',      label:'Arm R',     color:'#fb923c', parent:'torso', aliasOf:'armR',   required:true  },
+  { id:'armL',      label:'Arm L',     color:'#f59e0b', parent:'torso', aliasOf:'armL',   required:false  },
+  { id:'armR',      label:'Arm R',     color:'#fb923c', parent:'torso', aliasOf:'armR',   required:false  },
   { id:'elbowL',    label:'Elbow L',   color:'#fbbf24', parent:'armL',  aliasOf:'armL',   required:false },
   { id:'elbowR',    label:'Elbow R',    color:'#fdba74', parent:'armR',  aliasOf:'armR',   required:false },
   { id:'handL',     label:'Hand L',    color:'#fde68a', parent:'armL',  aliasOf:'armL',   required:false },
   { id:'handR',     label:'Hand R',    color:'#fed7aa', parent:'armR',  aliasOf:'armR',   required:false },
-  { id:'legL',      label:'Leg L',     color:'#f87171', parent:'hips',  aliasOf:'legL',   required:true  },
-  { id:'legR',      label:'Leg R',     color:'#c084fc', parent:'hips',  aliasOf:'legR',   required:true  },
+  { id:'legL',      label:'Leg L',     color:'#f87171', parent:'hips',  aliasOf:'legL',   required:false  },
+  { id:'legR',      label:'Leg R',     color:'#c084fc', parent:'hips',  aliasOf:'legR',   required:false  },
   { id:'kneeL',     label:'Knee L',    color:'#fb7185', parent:'legL',  aliasOf:'legL',   required:false },
   { id:'kneeR',     label:'Knee R',    color:'#e879f9', parent:'legR',  aliasOf:'legR',   required:false },
   { id:'footL',     label:'Foot L',    color:'#fca5a5', parent:'legL',  aliasOf:'legL',   required:false },
@@ -210,11 +210,8 @@ export const BODY_PART_LIBRARY = [
 export const JOINT_DEFS = BODY_PART_LIBRARY.filter(p => CORE_PART_IDS.includes(p.id));
 
 export function getPartDefs(ids = CORE_PART_IDS) {
-  const wanted = new Set(ids);
-  const out = BODY_PART_LIBRARY.filter(p => wanted.has(p.id));
-  for (const id of CORE_PART_IDS) {
-    if (!out.some(p => p.id === id)) out.push(BODY_PART_LIBRARY.find(p => p.id === id));
-  }
+  const wanted = Array.isArray(ids) ? ids : CORE_PART_IDS;
+  const out = BODY_PART_LIBRARY.filter(p => wanted.includes(p.id));
   return out;
 }
 
@@ -250,6 +247,80 @@ export function autoPlaceJoints(bb, charCanvas = null) {
     legL:  toWorld(origin, axis, perp,  H * 0.30, -W * 0.11),
     legR:  toWorld(origin, axis, perp,  H * 0.30,  W * 0.11),
   };
+}
+
+
+const CUSTOM_OFFSETS = {
+  hair:      { x:  0,    y: -0.18 },
+  head:      { x:  0,    y: -0.22 },
+  neck:      { x:  0,    y: -0.10 },
+  chest:     { x:  0,    y: -0.06 },
+  torso:     { x:  0,    y:  0.00 },
+  hips:      { x:  0,    y:  0.08 },
+  pelvis:    { x:  0,    y:  0.08 },
+  shoulderl: { x: -0.10, y: -0.05 },
+  shoulderr: { x:  0.10, y: -0.05 },
+  arml:      { x: -0.16, y:  0.00 },
+  armr:      { x:  0.16, y:  0.00 },
+  elbowl:    { x: -0.18, y:  0.06 },
+  elbowr:    { x:  0.18, y:  0.06 },
+  handl:     { x: -0.20, y:  0.12 },
+  handr:     { x:  0.20, y:  0.12 },
+  legl:      { x: -0.08, y:  0.22 },
+  legr:      { x:  0.08, y:  0.22 },
+  kneel:     { x: -0.08, y:  0.34 },
+  kneer:     { x:  0.08, y:  0.34 },
+  footl:     { x: -0.10, y:  0.42 },
+  footr:     { x:  0.10, y:  0.42 },
+  shield:    { x: -0.24, y:  0.02 },
+  weapon:    { x:  0.24, y:  0.02 },
+  cape:      { x:  0,    y:  0.12 },
+  tail:      { x:  0.12, y:  0.18 },
+  accessory: { x:  0,    y: -0.26 },
+};
+
+function _normId(id = '') { return String(id).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+function _offsetForPart(def, bb) {
+  const key = _normId(def.id || def.label || '');
+  const entry = CUSTOM_OFFSETS[key] || CUSTOM_OFFSETS[_normId(def.aliasOf || '')] || CUSTOM_OFFSETS[_normId(def.parent || '')];
+  if (!entry) return { x: 0, y: 0 };
+  const scale = Math.max(1, Math.min(bb?.w || 1, bb?.h || 1));
+  return { x: entry.x * scale, y: entry.y * scale };
+}
+
+export function ensureJointsForPartDefs(joints = {}, partDefs = JOINT_DEFS, bb = null, charCanvas = null) {
+  const out = JSON.parse(JSON.stringify(joints || {}));
+  const base = bb ? autoPlaceJoints(bb, charCanvas) : {};
+  const byId = Object.fromEntries(partDefs.map(d => [d.id, d]));
+
+  const resolve = (id, depth = 0) => {
+    if (!id || depth > 6) return null;
+    if (out[id]) return out[id];
+    if (base[id]) return base[id];
+    const def = byId[id];
+    if (!def) return null;
+    return resolve(def.aliasOf, depth + 1) || resolve(def.parent, depth + 1);
+  };
+
+  const fallback = () => {
+    if (base.torso) return base.torso;
+    if (base.hips) return base.hips;
+    if (bb) return { x: bb.x + bb.w * 0.5, y: bb.y + bb.h * 0.5 };
+    return { x: 0, y: 0 };
+  };
+
+  for (const def of partDefs) {
+    if (out[def.id] && Number.isFinite(out[def.id].x) && Number.isFinite(out[def.id].y)) continue;
+    const seed = resolve(def.parent) || resolve(def.aliasOf) || resolve(def.id) || fallback();
+    const off  = _offsetForPart(def, bb);
+    out[def.id] = {
+      x: Math.max(0, Math.min((bb?.x ?? 0) + (bb?.w ?? 1024) - 1, seed.x + off.x)),
+      y: Math.max(0, Math.min((bb?.y ?? 0) + (bb?.h ?? 1024) - 1, seed.y + off.y)),
+    };
+  }
+
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -444,6 +515,7 @@ function regionScore(px, py, id, profile, joints, frame, bb) {
 // Build skeleton-aware assignment map.
 //   pixelJoint[y*W+x] = joint id string (for fg pixels)
 // ─────────────────────────────────────────────────────────────────────────────
+
 export function buildVoronoi(charCanvas, joints, partDefs = JOINT_DEFS) {
   const W   = charCanvas.width, H = charCanvas.height;
   const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
@@ -454,11 +526,13 @@ export function buildVoronoi(charCanvas, joints, partDefs = JOINT_DEFS) {
   const frame = deriveBodyFrame(charCanvas, joints, bb);
   const { profiles } = buildRegionProfiles(joints, frame, bb, partDefs);
   const ids = partDefs.map(d => d.id);
+  const scores = Object.fromEntries(ids.map(id => [id, new Float32Array(W * H).fill(Infinity)]));
 
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const i = (y * W + x) * 4;
-      if (d[i + 3] <= ALPHA) continue;
+      const i = y * W + x;
+      const p = i * 4;
+      if (d[p + 3] <= ALPHA) continue;
 
       let best = null;
       let bestScore = Infinity;
@@ -467,36 +541,58 @@ export function buildVoronoi(charCanvas, joints, partDefs = JOINT_DEFS) {
         const profile = profiles[id];
         if (!profile) continue;
         const score = regionScore(x, y, id, profile, joints, frame, bb);
+        scores[id][i] = score;
         if (score < bestScore) {
           bestScore = score;
           best = id;
         }
       }
 
-      map[y * W + x] = best;
+      map[i] = best;
     }
   }
 
-  return { map, W, H, srcData: img, frame, bb };
+  return { map, scores, W, H, srcData: img, frame, bb };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Extract one joint's pixels into its own canvas + compute anchor
-// anchor = the joint position in the part-canvas's local pixel space
+// Extract one part's pixels into its own canvas + compute anchor.
+// Pixels near boundaries can belong to multiple parts so occluded pixels do not
+// get hard-cut away.
 // ─────────────────────────────────────────────────────────────────────────────
 export function extractParts(voronoi, joints, partDefs = JOINT_DEFS) {
-  const { map, W, H, srcData } = voronoi;
+  const { map, scores, W, H, srcData, bb } = voronoi;
   const d = srcData.data;
   const parts = {};
 
+  const overlapSlack = Math.max(2, Math.round(Math.min(bb.w, bb.h) * 0.035));
+  const overlapSoft  = Math.max(2, Math.round(Math.min(bb.w, bb.h) * 0.02));
+
   for (const def of partDefs) {
     const id = def.id;
-    // Find bounding box of this region
-    let rx0=W, rx1=-1, ry0=H, ry1=-1, cnt=0;
-    for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
-      if (map[y*W+x] !== id) continue;
-      if(x<rx0)rx0=x; if(x>rx1)rx1=x; if(y<ry0)ry0=y; if(y>ry1)ry1=y; cnt++;
+    const sc = scores[id];
+    if (!sc) { parts[id] = null; continue; }
+
+    let minScore = Infinity;
+    for (let i = 0; i < sc.length; i++) {
+      const s = sc[i];
+      if (Number.isFinite(s) && s < minScore) minScore = s;
     }
+    if (!Number.isFinite(minScore)) { parts[id] = null; continue; }
+
+    let rx0=W, rx1=-1, ry0=H, ry1=-1, cnt=0;
+    for (let i = 0; i < sc.length; i++) {
+      const s = sc[i];
+      if (!(map[i] === id || (Number.isFinite(s) && s <= minScore + overlapSlack))) continue;
+      const x = i % W;
+      const y = (i / W) | 0;
+      if (x < rx0) rx0 = x;
+      if (x > rx1) rx1 = x;
+      if (y < ry0) ry0 = y;
+      if (y > ry1) ry1 = y;
+      cnt++;
+    }
+
     if (cnt < 4 || rx0 > rx1) { parts[id] = null; continue; }
 
     const pw = rx1-rx0+1, ph = ry1-ry0+1;
@@ -507,13 +603,24 @@ export function extractParts(voronoi, joints, partDefs = JOINT_DEFS) {
     const pd   = pImg.data;
 
     for (let y=ry0; y<=ry1; y++) for (let x=rx0; x<=rx1; x++) {
-      if (map[y*W+x] !== id) continue;
-      const si = (y*W+x)*4, di = ((y-ry0)*pw+(x-rx0))*4;
-      pd[di]=d[si]; pd[di+1]=d[si+1]; pd[di+2]=d[si+2]; pd[di+3]=d[si+3];
+      const i = y * W + x;
+      const s = sc[i];
+      if (!(map[i] === id || (Number.isFinite(s) && s <= minScore + overlapSlack))) continue;
+
+      const si = i * 4;
+      const di = ((y-ry0)*pw + (x-rx0))*4;
+      let alpha = d[si + 3];
+      if (Number.isFinite(s) && s > minScore) {
+        const t = clamp(1 - (s - minScore) / (overlapSlack + overlapSoft), 0, 1);
+        alpha = Math.round(alpha * (0.35 + 0.65 * t));
+      }
+      pd[di] = d[si];
+      pd[di+1] = d[si+1];
+      pd[di+2] = d[si+2];
+      pd[di+3] = alpha;
     }
     pCtx.putImageData(pImg, 0, 0);
 
-    // Anchor = the chosen joint position in local canvas coords
     const sourceId = joints[id] ? id : (def.aliasOf || id);
     const srcJoint = joints[sourceId] || joints[def.parent] || null;
     if (!srcJoint) { parts[id] = null; continue; }
@@ -540,5 +647,5 @@ export function buildPuppet(charCanvas, joints, partDefs = JOINT_DEFS) {
   const voronoi = buildVoronoi(charCanvas, joints, partDefs);
   const parts   = extractParts(voronoi, joints, partDefs);
   const groundY = bb.y + bb.h - 1;
-  return { parts, joints, bb, groundY, voronoi };
+  return { parts, joints, bb, groundY, voronoi, partDefs };
 }
