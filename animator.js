@@ -232,20 +232,9 @@ export function getPoseTransforms(pose, t, H) {
   }
 }
 
-
-function resolvePartTransform(pid, T, partDefs) {
-  if (T[pid]) return T[pid];
-  const def = partDefs?.find(d => d.id === pid);
-  const alias = def?.aliasOf;
-  const parent = def?.parent;
-  if (alias && T[alias]) return T[alias];
-  if (parent && T[parent]) return T[parent];
-  return { rot: 0, dx: 0, dy: 0 };
-}
-
 // ── Main render ───────────────────────────────────────────────────────────────
 export function renderFrame(ctx, puppet, pose, t, dir) {
-  const { parts, joints, bb, groundY, partDefs = [] } = puppet;
+  const { parts, joints, bb, groundY } = puppet;
   const DW = ctx.canvas.width, DH = ctx.canvas.height;
   ctx.clearRect(0, 0, DW, DH);
 
@@ -268,11 +257,11 @@ export function renderFrame(ctx, puppet, pose, t, dir) {
   if (dir === 'left') { ctx.translate(DW,0); ctx.scale(-1,1); }
   ctx.globalAlpha = gAlpha;
 
-  const order = [...new Set([...(T.order || []), ...Object.keys(parts || {})])];
+  const order = T.order || Object.keys(parts);
   for (const pid of order) {
     const part = parts[pid];
-    if (!part || !part.canvas) continue;
-    const xf   = resolvePartTransform(pid, T, partDefs);
+    const xf   = T[pid];
+    if (!part || !part.canvas || !xf) continue;
 
     // World position of this part's joint/anchor in dest canvas
     const wx = originX + part.srcX * scale + part.anchorX * scale + (xf.dx||0);

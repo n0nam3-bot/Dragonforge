@@ -1,94 +1,143 @@
-// app.js — SpriteSmith Studio v6
+// app.js — SpriteSmith Studio v7
 
-import { removeBackground }                        from './bgremove.js';
-import { JOINT_DEFS, BODY_PART_LIBRARY, getPartDefs, autoPlaceJoints, computeBB,
-         buildPuppet }                             from './bodyDetect.js';
-import { SkelEditor }                              from './skelEditor.js';
-import { POSES, renderFrame }                      from './animator.js';
+import { removeBackground } from './bgremove.js';
+import { JOINT_DEFS, BODY_PART_LIBRARY, getPartDefs, autoPlaceJoints, computeBB, buildPuppet } from './bodyDetect.js';
+import { SkelEditor } from './skelEditor.js';
+import { POSES, renderFrame } from './animator.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let S = {
-  cleanCanvas:  null,
-  bb:           null,
-  defaultJoints:null,
-  joints:       null,
-  puppet:       null,
-  editor:       null,
-  pose:         'idle',
-  direction:    'right',
-  speed:        1.0,
-  frameCount:   8,
-  frameSize:    128,
-  layout:       'horizontal',
-  sheetCanvas:  null,
-  activeParts:  JOINT_DEFS.map(d => d.id),
-  partConfig:   {},
+  cleanCanvas:   null,
+  bb:            null,
+  defaultJoints: null,
+  joints:        null,
+  puppet:        null,
+  editor:        null,
+  pose:          'idle',
+  direction:     'right',
+  speed:         1.0,
+  frameCount:    8,
+  frameSize:     128,
+  layout:        'horizontal',
+  sheetCanvas:   null,
+  activeParts:   JOINT_DEFS.map(d => d.id),
+  partConfig:    {},
+  partMasks:     {},
+  selectedPartId:null,
+  brushSize:     20,
+  paintMode:     'paint',
 };
 let animPhase = 0, lastTime = null, rafId = null;
 
+const KEY = 'spritesmithStudio_v7';
+
 // ── DOM ───────────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const uploadZone    = $('uploadZone');
-const uploadTrigger = $('uploadTrigger');
-const uploadPreview = $('uploadPreview');
-const uploadThumb   = $('uploadThumb');
-const fileInput     = $('fileInput');
-const clearBtn      = $('clearBtn');
-const bgBar         = $('bgBar');
-const progFill      = $('progFill');
-const progLabel     = $('progLabel');
-const skelNote      = $('skelNote');
-const skelControls  = $('skelControls');
-const showRegions   = $('showRegions');
-const showSkeleton  = $('showSkeleton');
-const regionLegend  = $('regionLegend');
-const partSelect    = $('partSelect');
-const addPartBtn    = $('addPartBtn');
-const partList      = $('partList');
-const resetJointsBtn= $('resetJointsBtn');
-const applyBtn      = $('applyBtn');
-const poseGrid      = $('poseGrid');
-const dirGroup      = $('dirGroup');
-const speedSlider   = $('speedSlider');
-const speedVal      = $('speedVal');
-const framesSlider  = $('framesSlider');
-const framesVal     = $('framesVal');
-const sizeSelect    = $('sizeSelect');
-const layoutSelect  = $('layoutSelect');
-const bakeBtn       = $('bakeBtn');
-const exportPNGBtn  = $('exportPNG');
-const exportJSONBtn = $('exportJSON');
-const skelCanvas    = $('skelCanvas');
-const skelPlhdr     = $('skelPlaceholder');
-const previewCanvas = $('previewCanvas');
-const previewPlhdr  = $('previewPlaceholder');
-const sheetCanvas   = $('sheetCanvas');
-const sheetPlhdr    = $('sheetPlaceholder');
-const poseBadge     = $('poseBadge');
-const sheetBadge    = $('sheetBadge');
-const saveBtn       = $('saveBtn');
-const loadBtn       = $('loadBtn');
-const saveStatus    = $('saveStatus');
-const toastEl       = $('toast');
+const uploadZone     = $('uploadZone');
+const uploadTrigger  = $('uploadTrigger');
+const uploadPreview  = $('uploadPreview');
+const uploadThumb    = $('uploadThumb');
+const fileInput      = $('fileInput');
+const clearBtn       = $('clearBtn');
+const bgBar          = $('bgBar');
+const progFill       = $('progFill');
+const progLabel      = $('progLabel');
+const skelNote       = $('skelNote');
+const skelControls   = $('skelControls');
+const showRegions    = $('showRegions');
+const showSkeleton   = $('showSkeleton');
+const regionLegend   = $('regionLegend');
+const partSelect     = $('partSelect');
+const addPartBtn     = $('addPartBtn');
+const partList       = $('partList');
+const paintToolbar   = $('paintToolbar');
+const paintModeSelect= $('paintModeSelect');
+const brushSizeInput = $('brushSize');
+const brushSizeVal   = $('brushSizeVal');
+const clearMaskBtn   = $('clearMaskBtn');
+const resetJointsBtn = $('resetJointsBtn');
+const applyBtn       = $('applyBtn');
+const poseGrid       = $('poseGrid');
+const dirGroup       = $('dirGroup');
+const speedSlider    = $('speedSlider');
+const speedVal       = $('speedVal');
+const framesSlider   = $('framesSlider');
+const framesVal      = $('framesVal');
+const sizeSelect     = $('sizeSelect');
+const layoutSelect   = $('layoutSelect');
+const bakeBtn        = $('bakeBtn');
+const exportPNGBtn   = $('exportPNG');
+const exportJSONBtn  = $('exportJSON');
+const skelCanvas     = $('skelCanvas');
+const skelPlhdr      = $('skelPlaceholder');
+const previewCanvas  = $('previewCanvas');
+const previewPlhdr   = $('previewPlaceholder');
+const sheetCanvas    = $('sheetCanvas');
+const sheetPlhdr     = $('sheetPlaceholder');
+const poseBadge      = $('poseBadge');
+const sheetBadge     = $('sheetBadge');
+const saveBtn        = $('saveBtn');
+const loadBtn        = $('loadBtn');
+const saveStatus     = $('saveStatus');
+const toastEl        = $('toast');
 
 const previewCtx = previewCanvas.getContext('2d');
 const sheetCtx   = sheetCanvas.getContext('2d');
 
 function getConfiguredPartDefs() {
-  return getPartDefs(S.activeParts).map(def => ({
-    ...def,
-    ...(S.partConfig[def.id] || {}),
-  }));
+  return getPartDefs(S.activeParts, S.partConfig);
 }
 
-function updateEditorPartDefs() {
+function createBlankMaskCanvas() {
+  const c = document.createElement('canvas');
+  if (!S.cleanCanvas) return c;
+  c.width = S.cleanCanvas.width;
+  c.height = S.cleanCanvas.height;
+  return c;
+}
+
+function ensureMaskFor(id) {
+  const needW = S.cleanCanvas?.width || 0;
+  const needH = S.cleanCanvas?.height || 0;
+  const c = S.partMasks[id];
+  if (!c || c.width !== needW || c.height !== needH) {
+    const next = createBlankMaskCanvas();
+    if (needW && needH) {
+      next.width = needW;
+      next.height = needH;
+    }
+    S.partMasks[id] = next;
+  }
+  return S.partMasks[id];
+}
+
+function clearMask(id) {
+  const m = S.partMasks[id];
+  if (!m) return;
+  const ctx = m.getContext('2d');
+  ctx.clearRect(0, 0, m.width, m.height);
+  if (S.editor) S.editor.setMasks(S.partMasks);
+}
+
+function syncEditorState() {
   if (!S.editor) return;
-  const defs = getConfiguredPartDefs();
-  S.editor.setPartDefs ? S.editor.setPartDefs(defs) : (() => {
-    S.editor.partDefs = defs;
-    S.editor._buildOverlay();
-    S.editor.draw();
-  })();
+  S.editor.partDefs = getConfiguredPartDefs();
+  S.editor.setMasks(S.partMasks);
+  S.editor.setPaintOptions({
+    enabled: paintToolbar && !paintToolbar.classList.contains('hidden'),
+    partId: S.selectedPartId,
+    erase: S.paintMode === 'erase',
+    brushSize: S.brushSize,
+  });
+}
+
+function selectPart(id) {
+  if (!id) return;
+  S.selectedPartId = id;
+  ensureMaskFor(id);
+  renderBodyPartControls();
+  syncPaintToolbar();
+  syncEditorState();
 }
 
 // ── Region legend + body part chooser ────────────────────────────────────────
@@ -101,98 +150,108 @@ function renderBodyPartControls() {
     partSelect.appendChild(opt);
   }
 
-  const fillSelect = (sel, current, includeNone = false) => {
-    sel.innerHTML = '';
-    if (includeNone) {
-      const none = document.createElement('option');
-      none.value = '';
-      none.textContent = '— none —';
-      sel.appendChild(none);
-    }
-    for (const def of BODY_PART_LIBRARY) {
-      const opt = document.createElement('option');
-      opt.value = def.id;
-      opt.textContent = def.label;
-      sel.appendChild(opt);
-    }
-    sel.value = current || '';
-  };
+  const defs = getConfiguredPartDefs();
+  regionLegend.innerHTML = '';
+  partList.innerHTML = '';
 
-  const refresh = () => {
-    const defs = getConfiguredPartDefs();
-    regionLegend.innerHTML = '';
-    partList.innerHTML = '';
+  defs.forEach(def => {
+    const chip = document.createElement('div');
+    chip.className = 'legend-chip';
+    chip.innerHTML = `<span class="legend-dot" style="background:${def.color}"></span>${def.label}`;
+    regionLegend.appendChild(chip);
 
-    defs.forEach(def => {
-      const chip = document.createElement('div');
-      chip.className = 'legend-chip';
-      chip.innerHTML = `<span class="legend-dot" style="background:${def.color}"></span>${def.label}`;
-      regionLegend.appendChild(chip);
+    const item = document.createElement('div');
+    item.className = 'part-item' + (S.selectedPartId === def.id ? ' selected' : '');
+    item.dataset.id = def.id;
 
-      const item = document.createElement('div');
-      item.className = 'part-item';
+    const parentOpts = ['<option value="">None</option>'].concat(
+      BODY_PART_LIBRARY.map(p => `<option value="${p.id}" ${p.id === def.parent ? 'selected' : ''}>${p.label}</option>`)
+    ).join('');
+    const sourceVal = def.aliasOf || def.id;
+    const sourceOpts = BODY_PART_LIBRARY.map(p => `<option value="${p.id}" ${p.id === sourceVal ? 'selected' : ''}>${p.label}</option>`).join('');
 
-      const parentCurrent = S.partConfig[def.id]?.parent ?? def.parent ?? '';
-      const aliasCurrent  = S.partConfig[def.id]?.aliasOf ?? def.aliasOf ?? '';
+    item.innerHTML = `
+      <div class="part-top">
+        <button class="part-title-btn" type="button" title="Select part for painting">
+          <span class="part-dot" style="background:${def.color}"></span>
+          <span class="part-name">${def.label}</span>
+        </button>
+        <button class="part-x" title="Remove">✕</button>
+      </div>
+      <div class="part-grid">
+        <select class="sel part-parent" aria-label="Parent">${parentOpts}</select>
+        <select class="sel part-source" aria-label="Source">${sourceOpts}</select>
+      </div>
+      <div class="part-actions">
+        <button class="btn btn-ghost part-paint" type="button">Paint</button>
+        <button class="btn btn-ghost part-erase" type="button">Erase</button>
+        <button class="btn btn-ghost part-clear" type="button">Clear</button>
+      </div>
+    `;
 
-      item.innerHTML = `
-        <span class="part-dot" style="background:${def.color}"></span>
-        <div class="part-meta">
-          <div class="part-name">${def.label}</div>
-          <div class="part-mini-row">
-            <label class="part-field"><span>Parent</span><select class="sel part-sel part-parent"></select></label>
-            <label class="part-field"><span>Source</span><select class="sel part-sel part-source"></select></label>
-          </div>
-        </div>
-        <button class="part-x" title="Remove">✕</button>`;
+    const selectBtn = item.querySelector('.part-title-btn');
+    const removeBtn = item.querySelector('.part-x');
+    const parentSel = item.querySelector('.part-parent');
+    const sourceSel = item.querySelector('.part-source');
+    const paintBtn  = item.querySelector('.part-paint');
+    const eraseBtn  = item.querySelector('.part-erase');
+    const clearBtn2 = item.querySelector('.part-clear');
 
-      const parentSel = item.querySelector('.part-parent');
-      const sourceSel = item.querySelector('.part-source');
-      fillSelect(parentSel, parentCurrent, true);
-      fillSelect(sourceSel, aliasCurrent, true);
-      parentSel.addEventListener('change', () => {
-        S.partConfig[def.id] = { ...(S.partConfig[def.id] || {}), parent: parentSel.value || null };
-        updateEditorPartDefs();
-      });
-      sourceSel.addEventListener('change', () => {
-        S.partConfig[def.id] = { ...(S.partConfig[def.id] || {}), aliasOf: sourceSel.value || null };
-        updateEditorPartDefs();
-      });
-
-      const removeBtn = item.querySelector('button');
-      removeBtn.addEventListener('click', () => {
-        S.activeParts = S.activeParts.filter(id => id !== def.id);
-        delete S.partConfig[def.id];
-        refresh();
-        updateEditorPartDefs();
-      });
-      partList.appendChild(item);
+    selectBtn.addEventListener('click', () => selectPart(def.id));
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('select,button')) return;
+      selectPart(def.id);
     });
-  };
 
-  addPartBtn.onclick = () => {
-    const id = partSelect.value;
-    if (!id) return;
-    if (!S.activeParts.includes(id)) S.activeParts.push(id);
-    if (!S.partConfig[id]) {
-      const lib = BODY_PART_LIBRARY.find(d => d.id === id);
-      S.partConfig[id] = { parent: lib?.parent ?? null, aliasOf: lib?.aliasOf ?? null };
-    }
-    refresh();
-    updateEditorPartDefs();
-  };
+    removeBtn.addEventListener('click', () => {
+      S.activeParts = S.activeParts.filter(id => id !== def.id);
+      delete S.partConfig[def.id];
+      delete S.partMasks[def.id];
+      if (S.selectedPartId === def.id) S.selectedPartId = S.activeParts[0] || null;
+      renderBodyPartControls();
+      syncPaintToolbar();
+      syncEditorState();
+      if (S.editor) S.editor.draw();
+    });
 
-  refresh();
-  return refresh;
+    parentSel.addEventListener('change', () => {
+      S.partConfig[def.id] = { ...(S.partConfig[def.id] || {}), parent: parentSel.value || null };
+      syncEditorState();
+    });
+
+    sourceSel.addEventListener('change', () => {
+      S.partConfig[def.id] = { ...(S.partConfig[def.id] || {}), aliasOf: sourceSel.value || def.id };
+      syncEditorState();
+    });
+
+    paintBtn.addEventListener('click', () => { selectPart(def.id); paintModeSelect.value = 'paint'; syncPaintToolbar(); });
+    eraseBtn.addEventListener('click', () => { selectPart(def.id); paintModeSelect.value = 'erase'; syncPaintToolbar(); });
+    clearBtn2.addEventListener('click', () => { selectPart(def.id); clearMask(def.id); });
+
+    partList.appendChild(item);
+  });
+
+  if (!S.selectedPartId && defs.length) S.selectedPartId = defs[0].id;
+  if (S.selectedPartId && !defs.some(d => d.id === S.selectedPartId)) S.selectedPartId = defs[0]?.id || null;
 }
-const refreshBodyParts = renderBodyPartControls();
+
+function syncPaintToolbar() {
+  const hasPart = !!(S.selectedPartId && S.cleanCanvas);
+  paintToolbar.classList.toggle('hidden', !hasPart);
+  if (hasPart) {
+    const brush = Number.isFinite(S.brushSize) ? S.brushSize : 20;
+    brushSizeInput.value = String(brush);
+    brushSizeVal.textContent = String(brush);
+    paintModeSelect.value = S.paintMode;
+  }
+}
 
 // ── Pose grid ─────────────────────────────────────────────────────────────────
 POSES.forEach(p => {
   const btn = document.createElement('button');
-  btn.className  = 'pose-btn' + (p.id === S.pose ? ' active' : '');
+  btn.className = 'pose-btn' + (p.id === S.pose ? ' active' : '');
   btn.dataset.id = p.id;
-  btn.innerHTML  = `<span class="pose-ico">${p.ico}</span><span class="pose-lbl">${p.label}</span>`;
+  btn.innerHTML = `<span class="pose-ico">${p.ico}</span><span class="pose-lbl">${p.label}</span>`;
   btn.addEventListener('click', () => {
     S.pose = p.id; animPhase = 0;
     poseGrid.querySelectorAll('.pose-btn').forEach(b => b.classList.toggle('active', b.dataset.id === p.id));
@@ -217,6 +276,20 @@ framesSlider.addEventListener('input', () => {
 });
 sizeSelect.addEventListener('change',   () => { S.frameSize = parseInt(sizeSelect.value); });
 layoutSelect.addEventListener('change', () => { S.layout = layoutSelect.value; });
+paintModeSelect.addEventListener('change', () => {
+  S.paintMode = paintModeSelect.value;
+  syncPaintToolbar();
+  syncEditorState();
+});
+brushSizeInput.addEventListener('input', () => {
+  S.brushSize = parseInt(brushSizeInput.value);
+  brushSizeVal.textContent = String(S.brushSize);
+  syncEditorState();
+});
+clearMaskBtn.addEventListener('click', () => {
+  if (!S.selectedPartId) return;
+  clearMask(S.selectedPartId);
+});
 
 // ── Skeleton editor toggles ───────────────────────────────────────────────────
 showRegions.addEventListener('change',  () => S.editor?.setShowRegions(showRegions.checked));
@@ -225,8 +298,10 @@ resetJointsBtn.addEventListener('click', () => {
   if (S.editor && S.defaultJoints) S.editor.resetJoints(S.defaultJoints);
   S.activeParts = JOINT_DEFS.map(d => d.id);
   S.partConfig = {};
-  refreshBodyParts();
-  updateEditorPartDefs();
+  S.partMasks = {};
+  S.selectedPartId = S.activeParts[0] || null;
+  renderBodyPartControls();
+  syncPaintToolbar();
 });
 applyBtn.addEventListener('click', applyJoints);
 
@@ -244,8 +319,10 @@ clearBtn.addEventListener('click', resetAll);
 
 function resetAll() {
   S.cleanCanvas = S.bb = S.defaultJoints = S.joints = S.puppet = null;
-  S.activeParts = JOINT_DEFS.map(d => d.id);
   S.partConfig = {};
+  S.partMasks = {};
+  S.selectedPartId = null;
+  S.activeParts = JOINT_DEFS.map(d => d.id);
   if (S.editor) { S.editor.destroy(); S.editor = null; }
   stopAnimation();
   uploadTrigger.classList.remove('hidden'); uploadPreview.classList.add('hidden');
@@ -256,6 +333,7 @@ function resetAll() {
   bakeBtn.disabled = exportPNGBtn.disabled = exportJSONBtn.disabled = applyBtn.disabled = true;
   previewCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
   sheetCtx.clearRect(0,0,sheetCanvas.width,sheetCanvas.height);
+  paintToolbar.classList.add('hidden');
 }
 
 async function handleFile(file) {
@@ -287,15 +365,23 @@ async function handleFile(file) {
   S.joints        = JSON.parse(JSON.stringify(S.defaultJoints));
   S.activeParts   = JOINT_DEFS.map(d => d.id);
   S.partConfig    = {};
+  S.partMasks     = {};
+  S.selectedPartId= S.activeParts[0] || null;
+  S.brushSize     = 20;
+  S.activeParts.forEach(id => ensureMaskFor(id));
+  S.paintMode     = 'paint';
+  brushSizeInput.value = '20';
+  brushSizeVal.textContent = '20';
+  paintModeSelect.value = 'paint';
 
   setProgress(1,'Ready!'); await tick();
   bgBar.classList.add('hidden');
 
   initSkelEditor();
-  skelNote.textContent = 'Drag joints to fit your character, then click Apply.';
+  skelNote.textContent = 'Drag joints to fit your character, or select a part to paint its mask.';
   skelControls.classList.remove('hidden');
   applyBtn.disabled = false;
-  showToast('Character loaded — adjust skeleton then click Apply ✓','ok');
+  showToast('Character loaded — adjust skeleton and masks, then click Apply ✓','ok');
 }
 
 // ── Skeleton editor ───────────────────────────────────────────────────────────
@@ -309,17 +395,25 @@ function initSkelEditor() {
     S.cleanCanvas,
     S.joints,
     (updatedJoints) => { S.joints = updatedJoints; },
-    getConfiguredPartDefs()
+    getConfiguredPartDefs(),
+    S.partMasks,
+    (masks) => { S.partMasks = masks; }
   );
   S.editor.setShowRegions(showRegions.checked);
   S.editor.setShowSkeleton(showSkeleton.checked);
-  refreshBodyParts();
-  updateEditorPartDefs();
+  S.editor.setPaintOptions({
+    enabled: true,
+    partId: S.selectedPartId,
+    erase: S.paintMode === 'erase',
+    brushSize: S.brushSize,
+  });
+  renderBodyPartControls();
+  syncPaintToolbar();
 }
 
 function fitSkelCanvas() {
   const wrap = skelCanvas.parentElement;
-  const w    = wrap.clientWidth  || 500;
+  const w    = wrap.clientWidth || 500;
   const h    = wrap.clientHeight || 500;
   skelCanvas.width  = Math.max(200, w);
   skelCanvas.height = Math.max(200, h);
@@ -333,7 +427,7 @@ function applyJoints() {
 
   setTimeout(() => {
     try {
-      const puppet = buildPuppet(S.cleanCanvas, S.joints, getConfiguredPartDefs());
+      const puppet = buildPuppet(S.cleanCanvas, S.joints, getConfiguredPartDefs(), S.partMasks);
       if (!puppet) { showToast('Puppet build failed.','err'); return; }
       S.puppet = puppet;
       previewPlhdr.classList.add('hidden');
@@ -351,24 +445,23 @@ function applyJoints() {
 
 // ── Animation loop ────────────────────────────────────────────────────────────
 function startAnimation() {
-  stopAnimation(); lastTime=null; animPhase=0;
+  stopAnimation(); lastTime = null; animPhase = 0;
   rafId = requestAnimationFrame(loop);
 }
-function stopAnimation() { if(rafId){cancelAnimationFrame(rafId);rafId=null;} }
+function stopAnimation() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
 
 function loop(now) {
   rafId = requestAnimationFrame(loop);
   if (!S.puppet) return;
-  const dt = lastTime ? (now-lastTime)/1000 : 0;
+  const dt = lastTime ? (now - lastTime) / 1000 : 0;
   lastTime = now;
   const oneShot = ['die','crouch'];
-  if (oneShot.includes(S.pose)) animPhase = Math.min(animPhase + dt*S.speed*0.55, 0.999);
-  else                          animPhase = (animPhase + dt*S.speed*0.72) % 1;
+  if (oneShot.includes(S.pose)) animPhase = Math.min(animPhase + dt * S.speed * 0.55, 0.999);
+  else                          animPhase = (animPhase + dt * S.speed * 0.72) % 1;
 
-  // Resize preview canvas to wrapper
   const wrap = previewCanvas.parentElement;
-  const sz   = Math.min(wrap.clientWidth||320, wrap.clientHeight||320, 480);
-  if (previewCanvas.width!==sz||previewCanvas.height!==sz) previewCanvas.width=previewCanvas.height=sz;
+  const sz   = Math.min(wrap.clientWidth || 320, wrap.clientHeight || 320, 480);
+  if (previewCanvas.width !== sz || previewCanvas.height !== sz) previewCanvas.width = previewCanvas.height = sz;
 
   renderFrame(previewCtx, S.puppet, S.pose, animPhase, S.direction);
   poseBadge.textContent = `${S.pose.toUpperCase()} · ${S.direction.toUpperCase()}`;
@@ -433,7 +526,7 @@ exportJSONBtn.addEventListener('click', () => {
     sourceSize:{w:fs,h:fs},duration:100,
   }));
   const json=JSON.stringify({frames,meta:{
-    app:'SpriteSmith Studio',version:'6.0',
+    app:'SpriteSmith Studio',version:'7.0',
     image:`${fname}.png`,format:'RGBA8888',
     size:{w:S.sheetCanvas.width,h:S.sheetCanvas.height},
     pose:S.pose,direction:S.direction,frameCount:count,frameSize:fs,
@@ -448,15 +541,15 @@ exportJSONBtn.addEventListener('click', () => {
 });
 
 // ── Save / Load ───────────────────────────────────────────────────────────────
-const KEY = 'spritesmithStudio_v6';
 saveBtn.addEventListener('click', () => {
   if (!S.cleanCanvas) { showToast('Upload a character first.','warn'); return; }
   try {
-    const payload={
+    const payload = {
       charDataURL: S.cleanCanvas.toDataURL('image/png'),
       joints:      S.joints,
       activeParts: S.activeParts,
-      partConfig:  S.partConfig,
+      partConfig:   S.partConfig,
+      partMasks:    Object.fromEntries(Object.entries(S.partMasks).map(([id, c]) => [id, c.toDataURL('image/png')])),
       pose:        S.pose, direction:S.direction, speed:S.speed,
       frameCount:  S.frameCount, frameSize:S.frameSize, layout:S.layout,
       savedAt:     new Date().toISOString(),
@@ -477,14 +570,29 @@ loadBtn.addEventListener('click', async () => {
     S.frameCount=p.frameCount||8; S.frameSize=p.frameSize||128; S.layout=p.layout||'horizontal';
     S.joints=p.joints;
     S.activeParts=Array.isArray(p.activeParts) && p.activeParts.length ? p.activeParts : JOINT_DEFS.map(d=>d.id);
-    S.partConfig= p.partConfig && typeof p.partConfig === 'object' ? p.partConfig : {};
+    S.partConfig=p.partConfig || {};
+    S.partMasks={};
+    if (p.partMasks) {
+      for (const [id, dataURL] of Object.entries(p.partMasks)) {
+        const img = new Image();
+        await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=dataURL; });
+        const c=document.createElement('canvas');
+        c.width=img.naturalWidth; c.height=img.naturalHeight;
+        c.getContext('2d').drawImage(img,0,0);
+        S.partMasks[id]=c;
+      }
+    }
+    S.selectedPartId = S.activeParts[0] || null;
+    S.activeParts.forEach(id => ensureMaskFor(id));
 
-    // sync controls
     speedSlider.value=S.speed; speedVal.textContent=S.speed.toFixed(2)+'×';
     framesSlider.value=S.frameCount; framesVal.textContent=S.frameCount;
     sizeSelect.value=S.frameSize; layoutSelect.value=S.layout;
     poseGrid.querySelectorAll('.pose-btn').forEach(b=>b.classList.toggle('active',b.dataset.id===S.pose));
     dirGroup.querySelectorAll('.tog').forEach(b=>b.classList.toggle('active',b.dataset.val===S.direction));
+    brushSizeInput.value = String(S.brushSize || 20);
+    brushSizeVal.textContent = String(S.brushSize || 20);
+    paintModeSelect.value = S.paintMode || 'paint';
 
     showToast('Loading…','ok');
     const img=new Image();
@@ -500,14 +608,13 @@ loadBtn.addEventListener('click', async () => {
     S.defaultJoints=autoPlaceJoints(S.bb, S.cleanCanvas);
 
     initSkelEditor();
-    // Override with saved joints
     if (S.editor && S.joints) S.editor.resetJoints(S.joints);
 
     skelNote.textContent='Saved skeleton loaded. Click Apply to animate.';
     skelControls.classList.remove('hidden');
     applyBtn.disabled=false;
-    refreshBodyParts();
-    updateEditorPartDefs();
+    renderBodyPartControls();
+    syncPaintToolbar();
     showToast(`Loaded (saved ${timeAgo(p.savedAt)}) ✓`,'ok');
   } catch(e){ console.error(e); showToast('Load failed.','err'); }
 });
@@ -545,3 +652,8 @@ function timeAgo(iso){
   const h=Math.floor(m/60); return h<24?`${h}h ago`:`${Math.floor(h/24)}d ago`;
 }
 function tick(){return new Promise(r=>setTimeout(r,0));}
+
+// Initial render for controls
+renderBodyPartControls();
+syncPaintToolbar();
+applyBtn.disabled = true;

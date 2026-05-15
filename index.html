@@ -81,7 +81,7 @@
         <!-- Region legend -->
         <div id="regionLegend" class="region-legend"></div>
 
-        <p class="panel-note">Drag the <strong>joints</strong> on the left panel to fit your character. Regions update live.</p>
+        <p class="panel-note">Drag the <strong>joints</strong> on the left panel to fit your character, or paint a mask for a selected part. Regions update live.</p>
 
         <div class="btn-row">
           <button id="resetJointsBtn" class="btn btn-ghost btn-half">↺ Reset</button>
@@ -99,7 +99,25 @@
         <button id="addPartBtn" class="btn btn-primary part-add-btn">Add</button>
       </div>
       <div id="partList" class="part-list"></div>
-      <p class="panel-note">The extra labels are used by the region builder and saved with the project.</p>
+
+      <div id="paintToolbar" class="paint-toolbar hidden">
+        <div class="paint-row">
+          <label class="paint-label">MODE</label>
+          <select id="paintModeSelect" class="sel paint-sel">
+            <option value="paint">Paint</option>
+            <option value="erase">Erase</option>
+          </select>
+        </div>
+        <div class="paint-row">
+          <label class="paint-label">BRUSH <span id="brushSizeVal" class="ctl-accent">20</span></label>
+          <input id="brushSize" type="range" class="slider" min="2" max="80" step="1" value="20">
+        </div>
+        <div class="btn-row">
+          <button id="clearMaskBtn" class="btn btn-ghost btn-half" type="button">Clear Mask</button>
+        </div>
+      </div>
+
+      <p class="panel-note">Select a part to link it, then paint or erase its mask directly on the canvas. Masks override the auto region builder.</p>
     </section>
 
     <!-- 04 POSE -->
