@@ -22,7 +22,7 @@
     </svg>
     <div class="logo-text">
       <span class="logo-name">SpriteSmith</span>
-      <span class="logo-tag">STUDIO v5.0 · PUPPET ENGINE</span>
+      <span class="logo-tag">STUDIO v6 · PUPPET ENGINE</span>
     </div>
   </div>
   <div class="header-actions">
@@ -33,6 +33,8 @@
 </header>
 
 <div id="layout">
+
+  <!-- SIDEBAR -->
   <aside id="sidebar">
 
     <!-- 01 UPLOAD -->
@@ -43,7 +45,7 @@
         <div class="upload-inner" id="uploadTrigger">
           <div class="upload-ico">⬆</div>
           <p class="upload-msg">Drop image here or <u>browse</u></p>
-          <p class="upload-sub">PNG · JPG · WebP</p>
+          <p class="upload-sub">PNG · JPG · WebP — green/solid BG recommended</p>
         </div>
         <div class="upload-prev hidden" id="uploadPreview">
           <img id="uploadThumb" alt="Character">
@@ -56,29 +58,35 @@
       </div>
     </section>
 
-    <!-- 02 SKELETON -->
-    <section class="panel" id="skelSection">
-      <div class="panel-hdr"><span class="panel-num">02</span><span class="panel-ttl">SKELETON TUNING</span></div>
-      <p class="panel-note" id="skelNote">Upload a character to detect body parts.</p>
+    <!-- 02 SKELETON EDITOR -->
+    <section class="panel" id="skelPanel">
+      <div class="panel-hdr"><span class="panel-num">02</span><span class="panel-ttl">SKELETON EDITOR</span></div>
+      <p class="panel-note" id="skelNote">Upload a character to begin skeleton setup.</p>
+
       <div id="skelControls" class="hidden">
-        <div class="ctl-row">
-          <span class="ctl-lbl">NECK <span id="neckVal" class="ctl-accent">—</span></span>
-          <input type="range" id="neckSlider" class="slider" min="-20" max="20" step="1" value="0">
+        <!-- View toggles -->
+        <div class="toggle-row">
+          <label class="toggle-label">
+            <input type="checkbox" id="showRegions" checked>
+            <span class="toggle-track"></span>
+            <span class="toggle-text">Show Regions</span>
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="showSkeleton" checked>
+            <span class="toggle-track"></span>
+            <span class="toggle-text">Show Skeleton</span>
+          </label>
         </div>
-        <div class="ctl-row">
-          <span class="ctl-lbl">SHOULDER <span id="shoulderVal" class="ctl-accent">—</span></span>
-          <input type="range" id="shoulderSlider" class="slider" min="-20" max="20" step="1" value="0">
+
+        <!-- Region legend -->
+        <div id="regionLegend" class="region-legend"></div>
+
+        <p class="panel-note">Drag the <strong>joints</strong> on the left panel to fit your character. Regions update live.</p>
+
+        <div class="btn-row">
+          <button id="resetJointsBtn" class="btn btn-ghost btn-half">↺ Reset</button>
+          <button id="applyBtn"       class="btn btn-primary btn-half" disabled>✓ Apply</button>
         </div>
-        <div class="ctl-row">
-          <span class="ctl-lbl">WAIST <span id="waistVal" class="ctl-accent">—</span></span>
-          <input type="range" id="waistSlider" class="slider" min="-20" max="20" step="1" value="0">
-        </div>
-        <div class="ctl-row">
-          <span class="ctl-lbl">HIPS <span id="hipsVal" class="ctl-accent">—</span></span>
-          <input type="range" id="hipsSlider" class="slider" min="-20" max="20" step="1" value="0">
-        </div>
-        <button id="recutBtn" class="btn btn-ghost btn-w100">✂ Re-cut Parts</button>
-        <div id="partsPreview" class="parts-preview"></div>
       </div>
     </section>
 
@@ -137,33 +145,57 @@
 
   </aside>
 
+  <!-- WORKSPACE: skeleton editor LEFT, previews RIGHT -->
   <main id="workspace">
-    <div class="ws-col">
+
+    <!-- LEFT: Skeleton Editor -->
+    <div id="skelEditorPane" class="ws-pane">
       <div class="ws-lbl">
-        <span>LIVE PREVIEW</span>
-        <span id="poseBadge" class="ws-badge">—</span>
+        <span>SKELETON EDITOR</span>
+        <span id="skelBadge" class="ws-badge">drag joints to fit your character</span>
       </div>
-      <div class="cw" id="previewWrap">
-        <canvas id="previewCanvas" width="400" height="400"></canvas>
-        <div class="cw-placeholder" id="previewPlaceholder">
-          <div class="ph-ico">🎮</div>
-          <p>Upload a character<br>to start animating</p>
+      <div class="cw cw-skel" id="skelWrap">
+        <canvas id="skelCanvas" width="500" height="500"></canvas>
+        <div class="cw-placeholder" id="skelPlaceholder">
+          <div class="ph-ico">🦴</div>
+          <p>Upload a character to<br>open the skeleton editor</p>
         </div>
       </div>
     </div>
-    <div class="ws-col">
-      <div class="ws-lbl">
-        <span>SPRITE SHEET PREVIEW</span>
-        <span id="sheetBadge" class="ws-badge">—</span>
-      </div>
-      <div class="cw cw-sheet" id="sheetWrap">
-        <canvas id="sheetCanvas" width="512" height="128"></canvas>
-        <div class="cw-placeholder" id="sheetPlaceholder">
-          <div class="ph-ico">🗂</div>
-          <p>Press <strong>Bake</strong> to generate<br>your sprite sheet</p>
+
+    <!-- RIGHT: Animation Preview + Sheet Preview -->
+    <div id="previewPane" class="ws-pane ws-pane-right">
+
+      <div class="ws-col">
+        <div class="ws-lbl">
+          <span>ANIMATION PREVIEW</span>
+          <span id="poseBadge" class="ws-badge">—</span>
+        </div>
+        <div class="cw" id="previewWrap">
+          <canvas id="previewCanvas" width="320" height="320"></canvas>
+          <div class="cw-placeholder" id="previewPlaceholder">
+            <div class="ph-ico">🎮</div>
+            <p>Apply skeleton to<br>start animating</p>
+          </div>
         </div>
       </div>
+
+      <div class="ws-col">
+        <div class="ws-lbl">
+          <span>SPRITE SHEET</span>
+          <span id="sheetBadge" class="ws-badge">—</span>
+        </div>
+        <div class="cw cw-sheet" id="sheetWrap">
+          <canvas id="sheetCanvas" width="512" height="128"></canvas>
+          <div class="cw-placeholder" id="sheetPlaceholder">
+            <div class="ph-ico">🗂</div>
+            <p>Press <strong>Bake</strong> to generate<br>your sprite sheet</p>
+          </div>
+        </div>
+      </div>
+
     </div>
+
   </main>
 </div>
 
