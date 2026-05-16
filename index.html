@@ -2,257 +2,108 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Character Inverter - Working Demo</title>
+    <title>Skeleton Demo</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            background: #1a1a2e; 
-            color: white; 
-            font-family: Arial, sans-serif; 
-            padding: 20px; 
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { text-align: center; margin-bottom: 20px; }
-        canvas { 
-            background: #000; 
-            border: 3px solid #444; 
-            margin: 10px auto; 
-            display: block; 
-        }
-        .controls { 
-            background: #2a2a3e; 
-            padding: 20px; 
-            border-radius: 10px; 
-            margin-top: 20px;
-        }
-        button, select { 
-            padding: 15px; 
-            margin: 10px 5px; 
-            font-size: 16px; 
-            cursor: pointer; 
-            border: none; 
-            border-radius: 5px; 
-        }
-        button { background: #4CAF50; color: white; }
-        button:disabled { background: #555; }
-        select { background: #3a3a4e; color: white; border: 1px solid #555; }
-        #status { 
-            text-align: center; 
-            padding: 10px; 
-            margin-top: 10px; 
-            background: #3a3a4e; 
-            border-radius: 5px;
-        }
-        .error { color: #ff6b6b; }
-        .success { color: #6bff6b; }
+        body { margin: 0; background: #222; color: white; font-family: sans-serif; padding: 20px; }
+        #canvas { background: #111; border: 1px solid #444; display: block; max-width: 100%; margin: 0 auto; }
+        #controls { text-align: center; padding: 15px; background: #333; border-radius: 8px; margin-top: 15px; }
+        input[type="file"] { display: none; }
+        .btn { padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .status { margin-top: 10px; font-size: 14px; }
     </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🎮 Character Inverter</h1>
-        
-        <canvas id="canvas"></canvas>
-        
-        <div id="status">Upload a character image to start!</div>
-        
-        <div class="controls">
-            <input type="file" id="upload" accept="image/*" style="margin: 10px 0;">
-            <select id="actionSelect">
-                <option value="idle">Idle Pose</option>
-                <option value="walk">Walk Cycle</option>
-                <option value="attack">Attack Pose</option>
-                <option value="reverse">Mirror (Left↔Right)</option>
-            </select>
-            <button id="generateBtn" onclick="processAction()">▶ Generate/GIF</button>
-            <button onclick="reset()">🔄 Reset</button>
-            <button id="downloadBtn" onclick="downloadGif()" style="display:none;">⬇ Download GIF</button>
-        </div>
-    </div>
-
-    <!-- MediaPipe Pose -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-    <!-- GIF Encoder -->
-    <script src="https://cdn.jsdelivr.net/npm/gif.js"></script>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="controls">
+        <input type="file" id="upload" accept="image/*">
+        <label for="upload" class="btn">Upload Image</label>
+        <div id="status" class="status">Waiting for image...</div>
+    </div>
+
     <script>
-        // Setup
         const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
         const upload = document.getElementById('upload');
         const status = document.getElementById('status');
-        const actionSelect = document.getElementById('actionSelect');
-        const generateBtn = document.getElementById('generateBtn');
-        const downloadBtn = document.getElementById('downloadBtn');
-        
-        let originalImage = null;
         let results = null;
-        let gifEncoder = null;
-        let currentGifBlob = null;
-        let frames = [];
-        
-        // Initialize MediaPipe Pose
-        const pose = new Pose({locateFile: (file) => 
-            `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
-        
+
+        // Setup Pose Model
+        const pose = new Pose({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
         pose.setOptions({
             modelComplexity: 1,
             smoothLandmarks: true,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.3
         });
-        
-        pose.onResults(onResults);
-        
-        // Handle file upload
-        upload.addEventListener('change', (e) => {
+
+        pose.onResults((results) => {
+            this.onResults(results);
+        });
+
+        // Handle image upload
+        upload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
+
             const reader = new FileReader();
-            reader.onload = (event) => {
-                originalImage = new Image();
-                originalImage.onload = () => {
-                    // Set canvas to original image size
-                    canvas.width = originalImage.width;
-                    canvas.height = originalImage.height;
-                    status.innerHTML = `<span class="success">✓ Image loaded: ${originalImage.width}x${originalImage.height}</span>`;
-                    
-                    // Process first frame
-                    processFrame(originalImage);
+            reader.onload = async (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    status.textContent = 'Skeleton detected!';
+                    status.style.color = '#6bff6b';
+
+                    // Start pose detection
+                    pose.send({ image: img });
                 };
-                originalImage.src = event.target.result;
+                img.src = event.target.result;
             };
             reader.readAsDataURL(file);
         });
-        
-        // MediaPipe results handler
+
+        // Process each frame
         function onResults(results) {
-            if (!originalImage) return;
-            
-            // Store results for later use
-            results = results;
-            
-            // Draw the frame
-            drawCanvas();
-        }
-        
-        // Draw canvas with pose
-        function drawCanvas() {
+            const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            if (!results.poseLandmarks) {
-                ctx.fillStyle = '#3a3a4e';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.font = '20px Arial';
-                ctx.fillStyle = '#aaa';
-                ctx.textAlign = 'center';
-                ctx.fillText('Waiting for pose detection...', canvas.width/2, canvas.height/2);
-                return;
+
+            if (results.poseLandmarks) {
+                // Draw skeleton
+                drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, 0, DrawingUtils.RED, 2);
+                drawLandmarks(ctx, results.poseLandmarks, 5);
             }
-            
-            // Draw skeleton on a transparent canvas
-            ctx.globalAlpha = 0.3;
-            drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, 0, DrawingUtils.DEFAULT_STROKE_WIDTH, DrawingUtils.RED);
-            
-            // Draw individual landmarks
-            for (const landmark of results.poseLandmarks) {
+        }
+
+        // Connects skeleton points
+        function drawConnectors(ctx, landmarks, connect, color, lineWidth) {
+            for (let i = 0; i < connect.length; i++) {
+                const line = connect[i];
+                const start = landmarks[line[0]];
+                const end = landmarks[line[1]];
                 ctx.beginPath();
-                ctx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 5, 0, 2 * Math.PI);
+                ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+                ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = lineWidth;
+                ctx.stroke();
+            }
+        }
+
+        // Draw joints
+        function drawLandmarks(ctx, landmarks, color) {
+            for (let i = 0; i < landmarks.length; i++) {
+                const point = landmarks[i];
+                ctx.beginPath();
+                ctx.arc(point.x * canvas.width, point.y * canvas.height, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = color;
                 ctx.fill();
             }
-            
-            ctx.globalAlpha = 1.0;
-            
-            // Save this frame
-            if (frames.length < 20) {
-                const frame = canvas.toDataURL('image/png');
-                frames.push(frame);
-            }
         }
-        
-        // Process action
-        async function processAction() {
-            if (!results) {
-                status.innerHTML = '<span class="error">✗ Please select and upload an image first!</span>';
-                return;
-            }
-            
-            const action = actionSelect.value;
-            generateBtn.disabled = true;
-            
-            try {
-                status.innerHTML = `<span class="success">▶ Processing: ${action}...</span>`;
-                
-                // Generate animation frames
-                for (let i = 0; i < 10; i++) {
-                    // In a real app, this would modify the skeleton for each frame
-                    // For demo, we just draw the same frame
-                    drawCanvas();
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                
-                // Create GIF
-                await createGif();
-                
-            } catch (error) {
-                status.innerHTML = `<span class="error">✗ Error: ${error.message}</span>`;
-                console.error(error);
-            } finally {
-                generateBtn.disabled = false;
-            }
-        }
-        
-        // Create GIF from frames
-        async function createGif() {
-            gifEncoder = new GIF({
-                workers: 2,
-                quality: 10,
-                workerScript: 'https://cdn.jsdelivr.net/npm/gif.worker.js'
-            });
-            
-            // Add frames
-            for (const frame of frames) {
-                gifEncoder.addFrame(frame, {
-                    width: canvas.width,
-                    height: canvas.height,
-                    delay: 200
-                });
-            }
-            
-            gifEncoder.on('finished', function(blob) {
-                currentGifBlob = blob;
-                downloadBtn.style.display = 'inline-block';
-                status.innerHTML = `<span class="success">✓ GIF Generated! Size: ${(blob.size / 1024).toFixed(1)} KB</span>`;
-                downloadBtn.click();
-            });
-            
-            gifEncoder.render();
-        }
-        
-        // Download GIF
-        function downloadGif() {
-            if (!currentGifBlob) return;
-            const url = URL.createObjectURL(currentGifBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'character-animation.gif';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-        
-        // Reset
-        function reset() {
-            upload.value = '';
-            frames = [];
-            gifEncoder = null;
-            currentGifBlob = null;
-            downloadBtn.style.display = 'none';
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-        
-        // Initial draw
-        drawCanvas();
     </script>
 </body>
 </html>
