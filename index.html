@@ -57,6 +57,11 @@
           <label for="selectionSmooth">Outline smoothing <span id="selectionSmoothVal">0.30</span></label>
           <input id="selectionSmooth" type="range" min="0" max="1" step="0.05" value="0.30" />
         </div>
+        <div class="control">
+          <label for="zoomSlider">Zoom <span id="zoomVal">100%</span></label>
+          <input id="zoomSlider" type="range" min="0.35" max="4" step="0.01" value="1" />
+          <button id="fitViewBtn" class="ghost small full">Fit / Reset View</button>
+        </div>
       </section>
 
       <section class="panel">
@@ -143,7 +148,7 @@
             Upload an image to begin.
           </div>
         </div>
-        <div class="hint">Lasso: drag to draw an outline. Wand: click inside a region. Joints: drag the visible handle.</div>
+        <div class="hint">Lasso: drag to draw an outline. Wand: click inside a region. Zoom with the slider or mouse wheel. Alt-drag to pan.</div>
       </div>
 
       <div class="canvas-card">

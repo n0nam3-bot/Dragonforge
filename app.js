@@ -44,6 +44,10 @@ const state = {
   lassoPoints: [],
   lassoActive: false,
   fit: { scale: 1, ox: 0, oy: 0 },
+  viewZoom: 1,
+  viewPanX: 0,
+  viewPanY: 0,
+  panning: null,
   busy: false,
   savedAt: null,
 };
@@ -75,6 +79,9 @@ const els = {
   speedVal: document.getElementById('speedVal'),
   tiltSlider: document.getElementById('tiltSlider'),
   tiltVal: document.getElementById('tiltVal'),
+  zoomSlider: document.getElementById('zoomSlider'),
+  zoomVal: document.getElementById('zoomVal'),
+  fitViewBtn: document.getElementById('fitViewBtn'),
   editorCanvas: document.getElementById('editorCanvas'),
   previewCanvas: document.getElementById('previewCanvas'),
   editorPlaceholder: document.getElementById('editorPlaceholder'),
@@ -117,6 +124,7 @@ function populateTypeOptions() {
   els.partTypeEdit.value = 'torso';
 }
 
+
 function wireEvents() {
   // upload
   els.uploadZone.addEventListener('click', () => els.fileInput.click());
@@ -139,6 +147,7 @@ function wireEvents() {
     btn.addEventListener('click', () => {
       state.tool = btn.dataset.tool;
       els.toolButtons.forEach(b => b.classList.toggle('active', b === btn));
+      updateCanvasCursor();
     });
   }
   for (const btn of els.maskButtons) {
@@ -155,6 +164,12 @@ function wireEvents() {
     state.selectionSmooth = Number(els.selectionSmooth.value);
     els.selectionSmoothVal.textContent = state.selectionSmooth.toFixed(2);
   });
+  els.zoomSlider?.addEventListener('input', () => {
+    state.viewZoom = Number(els.zoomSlider.value);
+    els.zoomVal.textContent = `${Math.round(state.viewZoom * 100)}%`;
+    renderAll();
+  });
+  els.fitViewBtn?.addEventListener('click', resetEditorView);
 
   // parts
   els.addPartBtn.addEventListener('click', addSelectedPart);
@@ -230,14 +245,12 @@ function wireEvents() {
   els.exportSheetBtn.addEventListener('click', exportSheetPNG);
 
   // editor canvas interactions
-  const pointerDown = e => handlePointerDown(e);
-  const pointerMove = e => handlePointerMove(e);
-  const pointerUp = e => handlePointerUp(e);
-  els.editorCanvas.addEventListener('pointerdown', pointerDown);
-  window.addEventListener('pointermove', pointerMove);
-  window.addEventListener('pointerup', pointerUp);
+  els.editorCanvas.addEventListener('pointerdown', handlePointerDown);
+  window.addEventListener('pointermove', handlePointerMove);
+  window.addEventListener('pointerup', handlePointerUp);
+  els.editorCanvas.addEventListener('wheel', handleCanvasWheel, { passive: false });
+  els.editorCanvas.addEventListener('contextmenu', e => e.preventDefault());
 }
-
 // ------------------------------ Loading / projects ------------------------------
 
 async function loadImageFile(file) {
@@ -272,6 +285,7 @@ async function loadImageFile(file) {
     els.editorPlaceholder.classList.toggle('hidden', !state.cleanCanvas);
     els.previewPlaceholder.classList.add('hidden');
     state.previewSheet = null;
+    resetEditorView();
     renderParts();
     selectPart(null);
     resizeCanvases();
@@ -291,6 +305,7 @@ function clearProject() {
   state.parts = [];
   state.selectedPartId = null;
   state.previewSheet = null;
+  resetEditorView();
   els.canvasStatus.textContent = 'No image loaded';
   els.editorPlaceholder.classList.remove('hidden');
   els.previewPlaceholder.classList.remove('hidden');
@@ -364,6 +379,9 @@ function exportProjectData() {
       pose: state.pose,
       speed: state.speed,
       tiltDeg: state.tiltDeg,
+      viewZoom: state.viewZoom,
+      viewPanX: state.viewPanX,
+      viewPanY: state.viewPanY,
     },
     parts: state.parts.map(part => ({
       id: part.id,
@@ -398,6 +416,9 @@ async function importProjectData(data) {
   state.pose = settings.pose || 'walk';
   state.speed = settings.speed ?? 1;
   state.tiltDeg = settings.tiltDeg ?? 0;
+  state.viewZoom = settings.viewZoom ?? 1;
+  state.viewPanX = settings.viewPanX ?? 0;
+  state.viewPanY = settings.viewPanY ?? 0;
   els.wandTolerance.value = String(state.wandTolerance);
   els.wandToleranceVal.textContent = String(state.wandTolerance);
   els.selectionSmooth.value = String(state.selectionSmooth);
@@ -407,6 +428,8 @@ async function importProjectData(data) {
   els.speedVal.textContent = `${state.speed.toFixed(2)}×`;
   els.tiltSlider.value = String(state.tiltDeg);
   els.tiltVal.textContent = `${state.tiltDeg}°`;
+  if (els.zoomSlider) els.zoomSlider.value = String(state.viewZoom);
+  if (els.zoomVal) els.zoomVal.textContent = `${Math.round(state.viewZoom * 100)}%`;
   els.toolButtons.forEach(b => b.classList.toggle('active', b.dataset.tool === state.tool));
   els.maskButtons.forEach(b => b.classList.toggle('active', b.dataset.maskOp === state.maskOp));
 
@@ -555,6 +578,19 @@ function renderSelectedPartEditor() {
 
 function handlePointerDown(e) {
   if (!state.cleanCanvas) return;
+
+  if (e.button === 1 || e.altKey || e.metaKey) {
+    state.panning = {
+      startX: e.clientX,
+      startY: e.clientY,
+      panX: state.viewPanX,
+      panY: state.viewPanY,
+    };
+    els.editorCanvas.setPointerCapture(e.pointerId);
+    updateCanvasCursor();
+    return;
+  }
+
   const pos = sourcePointFromEvent(e);
   if (!pos) return;
 
@@ -592,6 +628,14 @@ function handlePointerDown(e) {
 
 function handlePointerMove(e) {
   if (!state.cleanCanvas) return;
+
+  if (state.panning) {
+    state.viewPanX = state.panning.panX + (e.clientX - state.panning.startX);
+    state.viewPanY = state.panning.panY + (e.clientY - state.panning.startY);
+    renderAll();
+    return;
+  }
+
   const pos = sourcePointFromEvent(e);
   if (!pos) return;
 
@@ -615,6 +659,12 @@ function handlePointerMove(e) {
 
 function handlePointerUp(e) {
   if (!state.cleanCanvas) return;
+  if (state.panning) {
+    state.panning = null;
+    updateCanvasCursor();
+    renderAll();
+    return;
+  }
   if (state.lassoActive && state.tool === 'lasso') {
     state.lassoActive = false;
     if (state.lassoPoints.length >= 3) {
@@ -631,7 +681,7 @@ function handlePointerUp(e) {
 }
 
 function hitTestJoint(sourcePoint) {
-  const r = 12 / state.fit.scale;
+  const r = 14 / getEditorTransform().scale;
   let best = null;
   let bestD = Infinity;
   for (const part of state.parts) {
@@ -665,6 +715,7 @@ function applyMaskToSelectedPart(maskCanvas) {
   renderAll();
 }
 
+
 function updatePartCutout(part) {
   const srcCanvas = state.cleanCanvas || state.sourceCanvas;
   if (!srcCanvas || !part.maskCanvas) {
@@ -672,12 +723,14 @@ function updatePartCutout(part) {
     part.anchor = null;
     return;
   }
-  const src = srcCanvas;
-  const W = src.width;
-  const H = src.height;
-  const sctx = src.getContext('2d', { willReadFrequently: true });
-  const mctx = part.maskCanvas.getContext('2d', { willReadFrequently: true });
+
+  const W = srcCanvas.width;
+  const H = srcCanvas.height;
+  const sctx = srcCanvas.getContext('2d', { willReadFrequently: true });
   const srcData = sctx.getImageData(0, 0, W, H).data;
+
+  const softMask = softenMaskCanvas(part.maskCanvas, 2 + Math.round(state.selectionSmooth * 4), 1 + Math.round(state.selectionSmooth * 2));
+  const mctx = softMask.getContext('2d', { willReadFrequently: true });
   const maskData = mctx.getImageData(0, 0, W, H).data;
 
   let x0 = W, y0 = H, x1 = -1, y1 = -1;
@@ -715,7 +768,7 @@ function updatePartCutout(part) {
       od[di] = srcData[si];
       od[di + 1] = srcData[si + 1];
       od[di + 2] = srcData[si + 2];
-      od[di + 3] = Math.min(255, srcData[si + 3]);
+      od[di + 3] = Math.round(srcData[si + 3] * (alpha / 255));
     }
   }
   cctx.putImageData(out, 0, 0);
@@ -725,7 +778,6 @@ function updatePartCutout(part) {
     y: clamp(part.joint.y - y0, 0, bh - 1),
   };
 }
-
 // ------------------------------ Drawing ------------------------------
 
 function renderAll() {
@@ -733,6 +785,7 @@ function renderAll() {
   drawEditor();
   drawPreview(previewCtx, performance.now(), false);
 }
+
 
 function drawEditor() {
   const canvas = els.editorCanvas;
@@ -747,28 +800,26 @@ function drawEditor() {
   }
   els.editorPlaceholder.classList.add('hidden');
 
-  state.fit = fitCanvasToImage(w, h, state.sourceW, state.sourceH);
-  const { scale, ox, oy } = state.fit;
+  const tr = getEditorTransform();
+  state.fit = tr.base;
+  const { scale, ox, oy } = tr;
 
-  // base image
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(state.cleanCanvas, ox, oy, state.sourceW * scale, state.sourceH * scale);
   ctx.restore();
 
-  // masks and labels
   const showMask = els.showMaskToggle.checked;
   if (showMask) {
     for (const part of state.parts) {
       if (!part.maskCanvas || !part.visible) continue;
       ctx.save();
-      ctx.globalAlpha = part.id === state.selectedPartId ? 0.55 : 0.32;
+      ctx.globalAlpha = part.id === state.selectedPartId ? 0.52 : 0.24;
       ctx.drawImage(part.maskCanvas, ox, oy, state.sourceW * scale, state.sourceH * scale);
       ctx.restore();
     }
   }
 
-  // lasso preview
   if (state.lassoActive && state.lassoPoints.length > 1) {
     ctx.save();
     ctx.strokeStyle = '#ffffff';
@@ -785,7 +836,6 @@ function drawEditor() {
     ctx.restore();
   }
 
-  // skeleton lines
   ctx.save();
   ctx.lineCap = 'round';
   for (const part of state.parts) {
@@ -805,7 +855,6 @@ function drawEditor() {
   }
   ctx.restore();
 
-  // joints
   for (const part of state.parts) {
     if (!part.joint) continue;
     const x = part.joint.x * scale + ox;
@@ -821,11 +870,11 @@ function drawEditor() {
     ctx.stroke();
     ctx.fillStyle = '#ffffff';
     ctx.font = '12px Inter, sans-serif';
-    ctx.fillText(part.name, x + 10, y - 10);
+    const label = part.name.length > 16 ? `${part.name.slice(0, 15)}…` : part.name;
+    ctx.fillText(label, x + 10, y - 10);
     ctx.restore();
   }
 }
-
 function drawPreview(ctx, now, exportMode) {
   const canvas = ctx.canvas;
   const W = canvas.width;
@@ -903,80 +952,153 @@ function drawPreview(ctx, now, exportMode) {
 
 // ------------------------------ Animation math ------------------------------
 
+
 function rootMotion(pose, t, tiltDeg) {
   const tilt = degToRad(tiltDeg);
-  const s = Math.sin(t * Math.PI * 2);
+  const phase = (t % 1 + 1) % 1;
+  const sway = Math.sin(phase * Math.PI * 2);
+  const bob = Math.sin(phase * Math.PI * 2) ** 2;
   switch (pose) {
     case 'idle':
-      return { dx: 0, dy: Math.abs(s) * -5, rot: tilt + s * 0.03 };
+      return { dx: Math.sin(phase * Math.PI * 2) * 1.4, dy: -bob * 6, rot: tilt + sway * 0.02 };
     case 'walk':
-      return { dx: 0, dy: Math.abs(s) * -10, rot: tilt + s * 0.06 };
+      return { dx: sway * 3.0, dy: -bob * 11, rot: tilt + sway * 0.04 };
     case 'run':
-      return { dx: 0, dy: Math.abs(s) * -14, rot: tilt + s * 0.1 };
+      return { dx: sway * 5.0, dy: -bob * 15, rot: tilt + sway * 0.08 };
     case 'jump': {
-      const p = t < 0.45 ? easeOut(t / 0.45) : 1 - easeIn((t - 0.45) / 0.55);
-      return { dx: 0, dy: -p * 90, rot: tilt - p * 0.06 };
+      const lift = t < 0.5 ? easeOut(t / 0.5) : 1 - easeIn((t - 0.5) / 0.5);
+      return { dx: 0, dy: -lift * 100, rot: tilt - lift * 0.05 };
     }
     default:
       return { dx: 0, dy: 0, rot: tilt };
   }
 }
 
+function sampleCycle(keys, phase) {
+  const p = ((phase % 1) + 1) % 1;
+  let a = keys[0], b = keys[keys.length - 1];
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (p >= keys[i].t && p <= keys[i + 1].t) {
+      a = keys[i];
+      b = keys[i + 1];
+      break;
+    }
+  }
+  const span = (b.t - a.t) || 1;
+  const t = clamp((p - a.t) / span, 0, 1);
+  const s = t * t * (3 - 2 * t);
+  const out = {};
+  for (const key of Object.keys(a)) {
+    if (key === 't') continue;
+    const av = a[key];
+    const bv = b[key] ?? av;
+    out[key] = av + (bv - av) * s;
+  }
+  return out;
+}
+
 function partMotion(part, pose, t) {
-  const side = sideSign(part.type, part.name);
-  const s = Math.sin(t * Math.PI * 2);
-  const s2 = Math.sin(t * Math.PI * 2 + Math.PI / 2);
+  const side = sideSign(part.type, part.name) || (part.name.toLowerCase().includes('l') ? -1 : part.name.toLowerCase().includes('r') ? 1 : 0);
   const type = part.type.toLowerCase();
+  const phase = (t % 1 + 1) % 1;
+  const leftPhase = phase;
+  const rightPhase = (phase + 0.5) % 1;
 
   if (pose === 'idle') {
-    if (type.includes('head') || type.includes('neck')) return degToRad(2) * s2;
-    if (type.includes('arm')) return degToRad(3) * side * s;
-    if (type.includes('thigh') || type.includes('shin')) return degToRad(2) * -side * s;
-    if (type.includes('torso') || type.includes('chest') || type.includes('pelvis')) return degToRad(1.5) * s;
+    const breath = Math.sin(phase * Math.PI * 2);
+    if (type.includes('head') || type.includes('neck')) return degToRad(2.5) * Math.sin(phase * Math.PI * 2 + Math.PI / 2);
+    if (type.includes('torso') || type.includes('chest')) return degToRad(1.2) * breath * 0.35;
+    if (type.includes('pelvis')) return degToRad(1.8) * breath * 0.45;
+    if (type.includes('upper arm')) return degToRad(2.5) * (-side || 1) * breath;
+    if (type.includes('lower arm')) return degToRad(1.8) * (-side || 1) * Math.sin(phase * Math.PI * 2 + 0.6);
+    if (type.includes('hand')) return degToRad(1.0) * (-side || 1) * breath;
+    if (type.includes('thigh')) return degToRad(1.4) * (side || 1) * breath;
+    if (type.includes('shin')) return degToRad(1.0) * (side || 1) * Math.sin(phase * Math.PI * 2 + 0.4);
+    if (type.includes('foot')) return degToRad(0.8) * (side || 1) * Math.sin(phase * Math.PI * 2 + 0.3);
+    if (type.includes('hair')) return degToRad(3.5) * breath;
     return 0;
   }
 
+  const walkLeg = sampleCycle([
+    { t: 0.00, thigh: -14, shin:  4, foot:  0 },
+    { t: 0.18, thigh: -20, shin:  2, foot: -2 },
+    { t: 0.35, thigh:  10, shin: 10, foot: -6 },
+    { t: 0.55, thigh:  34, shin: 42, foot: -18 },
+    { t: 0.78, thigh:  -2, shin: 24, foot:  2 },
+    { t: 1.00, thigh: -14, shin:  4, foot:  0 },
+  ], side < 0 ? leftPhase : rightPhase);
+
+  const walkArm = sampleCycle([
+    { t: 0.00, upper: 18, lower:  8, hand:  0 },
+    { t: 0.20, upper: 10, lower: 12, hand:  0 },
+    { t: 0.45, upper: -8, lower: 16, hand: -2 },
+    { t: 0.65, upper: -22, lower: 20, hand: -4 },
+    { t: 0.85, upper:  6, lower: 10, hand:  1 },
+    { t: 1.00, upper: 18, lower:  8, hand:  0 },
+  ], side < 0 ? leftPhase : rightPhase);
+
+  const runLeg = sampleCycle([
+    { t: 0.00, thigh: -20, shin:  0, foot:  0 },
+    { t: 0.15, thigh: -30, shin:  6, foot: -4 },
+    { t: 0.35, thigh:  15, shin: 16, foot: -10 },
+    { t: 0.55, thigh:  54, shin: 58, foot: -22 },
+    { t: 0.75, thigh:  -6, shin: 30, foot:  4 },
+    { t: 1.00, thigh: -20, shin:  0, foot:  0 },
+  ], side < 0 ? leftPhase : rightPhase);
+
+  const runArm = sampleCycle([
+    { t: 0.00, upper: 26, lower: 10, hand:  0 },
+    { t: 0.20, upper: 12, lower: 14, hand:  0 },
+    { t: 0.45, upper: -14, lower: 20, hand: -2 },
+    { t: 0.65, upper: -42, lower: 24, hand: -5 },
+    { t: 0.85, upper:  8, lower: 12, hand:  1 },
+    { t: 1.00, upper: 26, lower: 10, hand:  0 },
+  ], side < 0 ? leftPhase : rightPhase);
+
   if (pose === 'walk') {
-    if (type.includes('head') || type.includes('neck')) return degToRad(3) * s2;
-    if (type.includes('torso') || type.includes('chest')) return degToRad(4) * s * 0.25;
-    if (type.includes('pelvis')) return degToRad(5) * s * 0.35;
-    if (type.includes('upper arm')) return degToRad(28) * (-side) * s;
-    if (type.includes('lower arm')) return degToRad(18) * (-side) * Math.sin(t * Math.PI * 2 + 0.2);
-    if (type.includes('hand')) return degToRad(8) * (-side) * s;
-    if (type.includes('thigh')) return degToRad(30) * (side) * s;
-    if (type.includes('shin')) return degToRad(22) * (side) * Math.max(0, s) + degToRad(8) * Math.min(0, s);
-    if (type.includes('foot')) return degToRad(10) * (-side) * Math.max(0, s);
-    if (type.includes('hair')) return degToRad(6) * s;
+    if (type.includes('head') || type.includes('neck')) return degToRad(2) * Math.sin(phase * Math.PI * 2 + Math.PI / 2);
+    if (type.includes('torso') || type.includes('chest')) return degToRad(3.5) * Math.sin(phase * Math.PI * 2) * 0.25;
+    if (type.includes('pelvis')) return degToRad(4.5) * Math.sin(phase * Math.PI * 2) * 0.35;
+    if (type.includes('upper arm')) return degToRad(walkArm.upper) * (side < 0 ? 1 : -1);
+    if (type.includes('lower arm')) return degToRad(walkArm.lower) * (side < 0 ? 1 : -1);
+    if (type.includes('hand')) return degToRad(walkArm.hand) * (side < 0 ? 1 : -1);
+    if (type.includes('thigh')) return degToRad(walkLeg.thigh) * (side < 0 ? 1 : -1);
+    if (type.includes('shin')) return degToRad(walkLeg.shin) * (side < 0 ? 1 : -1);
+    if (type.includes('foot')) return degToRad(walkLeg.foot) * (side < 0 ? 1 : -1);
+    if (type.includes('hair')) return degToRad(5) * Math.sin(phase * Math.PI * 2);
+    return 0;
   }
 
   if (pose === 'run') {
-    if (type.includes('head') || type.includes('neck')) return degToRad(4) * s2;
-    if (type.includes('torso') || type.includes('chest')) return degToRad(6) * s * 0.3;
-    if (type.includes('pelvis')) return degToRad(8) * s * 0.5;
-    if (type.includes('upper arm')) return degToRad(40) * (-side) * s;
-    if (type.includes('lower arm')) return degToRad(25) * (-side) * Math.sin(t * Math.PI * 4 + 0.1);
-    if (type.includes('hand')) return degToRad(10) * (-side) * s;
-    if (type.includes('thigh')) return degToRad(48) * (side) * s;
-    if (type.includes('shin')) return degToRad(36) * (side) * Math.max(0, s) + degToRad(12) * Math.min(0, s);
-    if (type.includes('foot')) return degToRad(12) * (-side) * Math.max(0, s);
-    if (type.includes('hair')) return degToRad(10) * s;
+    if (type.includes('head') || type.includes('neck')) return degToRad(3) * Math.sin(phase * Math.PI * 2 + Math.PI / 2);
+    if (type.includes('torso') || type.includes('chest')) return degToRad(5) * Math.sin(phase * Math.PI * 2) * 0.30;
+    if (type.includes('pelvis')) return degToRad(7) * Math.sin(phase * Math.PI * 2) * 0.45;
+    if (type.includes('upper arm')) return degToRad(runArm.upper) * (side < 0 ? 1 : -1);
+    if (type.includes('lower arm')) return degToRad(runArm.lower) * (side < 0 ? 1 : -1);
+    if (type.includes('hand')) return degToRad(runArm.hand) * (side < 0 ? 1 : -1);
+    if (type.includes('thigh')) return degToRad(runLeg.thigh) * (side < 0 ? 1 : -1);
+    if (type.includes('shin')) return degToRad(runLeg.shin) * (side < 0 ? 1 : -1);
+    if (type.includes('foot')) return degToRad(runLeg.foot) * (side < 0 ? 1 : -1);
+    if (type.includes('hair')) return degToRad(9) * Math.sin(phase * Math.PI * 2);
+    return 0;
   }
 
   if (pose === 'jump') {
     const bob = t < 0.45 ? easeOut(t / 0.45) : 1 - easeIn((t - 0.45) / 0.55);
-    if (type.includes('head') || type.includes('neck')) return degToRad(-4) * bob;
-    if (type.includes('upper arm')) return degToRad(20) * (-side) * (1 - bob);
-    if (type.includes('lower arm')) return degToRad(12) * (-side) * (1 - bob);
-    if (type.includes('thigh')) return degToRad(18) * (side) * (1 - bob);
-    if (type.includes('shin')) return degToRad(-16) * (side) * (1 - bob);
-    if (type.includes('foot')) return degToRad(8) * (-side) * (1 - bob);
+    if (type.includes('head') || type.includes('neck')) return degToRad(-5) * bob;
+    if (type.includes('torso') || type.includes('chest')) return degToRad(-4) * bob;
+    if (type.includes('pelvis')) return degToRad(2) * bob;
+    if (type.includes('upper arm')) return degToRad(22) * (-side || -1) * (1 - bob);
+    if (type.includes('lower arm')) return degToRad(16) * (-side || -1) * (1 - bob);
+    if (type.includes('hand')) return degToRad(8) * (-side || -1) * (1 - bob);
+    if (type.includes('thigh')) return degToRad(22) * (side || 1) * (1 - bob);
+    if (type.includes('shin')) return degToRad(-18) * (side || 1) * (1 - bob);
+    if (type.includes('foot')) return degToRad(10) * (-side || -1) * (1 - bob);
     return 0;
   }
 
   return 0;
 }
-
-
 // ------------------------------ Selection helpers ------------------------------
 
 function polygonMaskCanvas(points, w, h, smoothFactor = 0.3) {
@@ -1067,6 +1189,25 @@ function combineMaskCanvases(base, add, op) {
   return out;
 }
 
+
+function softenMaskCanvas(maskCanvas, blurPx = 3, dilatePx = 1) {
+  const W = maskCanvas.width;
+  const H = maskCanvas.height;
+  const out = document.createElement('canvas');
+  out.width = W;
+  out.height = H;
+  const ctx = out.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
+  for (let dy = -dilatePx; dy <= dilatePx; dy++) {
+    for (let dx = -dilatePx; dx <= dilatePx; dx++) {
+      ctx.drawImage(maskCanvas, dx, dy);
+    }
+  }
+  ctx.restore();
+  return out;
+}
 // ------------------------------ Geometry / transforms ------------------------------
 
 function fitCanvasToImage(canvasW, canvasH, imgW, imgH) {
@@ -1075,6 +1216,63 @@ function fitCanvasToImage(canvasW, canvasH, imgW, imgH) {
   const ox = (canvasW - imgW * scale) / 2;
   const oy = (canvasH - imgH * scale) / 2;
   return { scale, ox, oy };
+}
+
+function getEditorTransform() {
+  const fit = fitCanvasToImage(els.editorCanvas.width, els.editorCanvas.height, state.sourceW, state.sourceH);
+  return {
+    scale: fit.scale * state.viewZoom,
+    ox: fit.ox + state.viewPanX,
+    oy: fit.oy + state.viewPanY,
+    base: fit,
+  };
+}
+
+function resetEditorView() {
+  state.viewZoom = 1;
+  state.viewPanX = 0;
+  state.viewPanY = 0;
+  if (els.zoomSlider) els.zoomSlider.value = '1';
+  if (els.zoomVal) els.zoomVal.textContent = '100%';
+  renderAll();
+}
+
+function setEditorZoom(nextZoom, anchorClientX = null, anchorClientY = null) {
+  const prev = state.viewZoom || 1;
+  const clamped = clamp(nextZoom, 0.35, 4);
+  const fit = fitCanvasToImage(els.editorCanvas.width, els.editorCanvas.height, state.sourceW, state.sourceH);
+  const rect = els.editorCanvas.getBoundingClientRect();
+  const ax = anchorClientX == null ? rect.left + rect.width / 2 : anchorClientX;
+  const ay = anchorClientY == null ? rect.top + rect.height / 2 : anchorClientY;
+  const canvasX = (ax - rect.left) * (els.editorCanvas.width / rect.width);
+  const canvasY = (ay - rect.top) * (els.editorCanvas.height / rect.height);
+  const srcX = (canvasX - (fit.ox + state.viewPanX)) / (fit.scale * prev);
+  const srcY = (canvasY - (fit.oy + state.viewPanY)) / (fit.scale * prev);
+  state.viewZoom = clamped;
+  state.viewPanX = canvasX - fit.ox - srcX * (fit.scale * clamped);
+  state.viewPanY = canvasY - fit.oy - srcY * (fit.scale * clamped);
+  if (els.zoomSlider) els.zoomSlider.value = String(clamped);
+  if (els.zoomVal) els.zoomVal.textContent = `${Math.round(clamped * 100)}%`;
+  renderAll();
+}
+
+function handleCanvasWheel(e) {
+  if (!state.cleanCanvas) return;
+  e.preventDefault();
+  const zoomDelta = e.deltaY < 0 ? 1.12 : 0.89;
+  setEditorZoom(state.viewZoom * zoomDelta, e.clientX, e.clientY);
+}
+
+function updateCanvasCursor() {
+  if (state.panning) {
+    els.editorCanvas.style.cursor = 'grabbing';
+    return;
+  }
+  if (state.tool === 'joint') {
+    els.editorCanvas.style.cursor = 'crosshair';
+    return;
+  }
+  els.editorCanvas.style.cursor = state.tool === 'lasso' ? 'crosshair' : 'copy';
 }
 
 function resizeCanvases() {
@@ -1095,8 +1293,9 @@ function sourcePointFromEvent(e) {
   const rect = els.editorCanvas.getBoundingClientRect();
   const x = (e.clientX - rect.left) * (els.editorCanvas.width / rect.width);
   const y = (e.clientY - rect.top) * (els.editorCanvas.height / rect.height);
-  const sx = (x - state.fit.ox) / state.fit.scale;
-  const sy = (y - state.fit.oy) / state.fit.scale;
+  const tr = getEditorTransform();
+  const sx = (x - tr.ox) / tr.scale;
+  const sy = (y - tr.oy) / tr.scale;
   if (sx < 0 || sy < 0 || sx > state.sourceW || sy > state.sourceH) return null;
   return { x: sx, y: sy };
 }
@@ -1293,6 +1492,8 @@ els.wandToleranceVal.textContent = String(state.wandTolerance);
 els.selectionSmoothVal.textContent = state.selectionSmooth.toFixed(2);
 els.speedVal.textContent = `${state.speed.toFixed(2)}×`;
 els.tiltVal.textContent = `${state.tiltDeg}°`;
+if (els.zoomVal) els.zoomVal.textContent = `${Math.round(state.viewZoom * 100)}%`;
+if (els.zoomSlider) els.zoomSlider.value = String(state.viewZoom);
 els.poseSelect.value = state.pose;
 
 // animation loop
