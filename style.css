@@ -1,76 +1,100 @@
 :root{
-  --bg:#0b0f14;
-  --panel:#101722;
-  --panel2:#0d131d;
+  --bg:#0a0f16;
+  --panel:#0f1722;
+  --panel2:#0c121b;
   --line:rgba(255,255,255,.08);
-  --text:#e8eef7;
-  --muted:#9eadbf;
+  --text:#e9f0f8;
+  --muted:#9fb0c2;
   --accent:#7cc4ff;
   --good:#67e8a0;
   --warn:#ffb86b;
 }
 *{box-sizing:border-box}
 html,body{
-  height:100%;
   margin:0;
+  height:100%;
   overflow:hidden;
   background:
-    radial-gradient(1200px 800px at 50% -10%, #172433 0%, var(--bg) 55%),
-    linear-gradient(180deg, #0b0f14, #0a0d12);
+    radial-gradient(1100px 700px at 50% -10%, #172635 0%, var(--bg) 60%),
+    linear-gradient(180deg, #090d13, #080b10);
   color:var(--text);
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
 }
 button,input,select{font:inherit}
-button,select,input[type="range"],.fileBtn,.pill,.nameInput{
+button,select,input[type="range"],.file-btn,.pill{
   border:1px solid rgba(255,255,255,.10);
-  background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+  background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
   color:var(--text);
   border-radius:12px;
   min-height:38px;
 }
-button{padding:9px 12px;cursor:pointer}
+button{
+  padding:9px 12px;
+  cursor:pointer;
+}
 button.primary{
-  border-color:rgba(124,196,255,.35);
-  background:linear-gradient(180deg, rgba(124,196,255,.22), rgba(124,196,255,.12));
+  border-color:rgba(124,196,255,.32);
+  background:linear-gradient(180deg, rgba(124,196,255,.18), rgba(124,196,255,.08));
 }
 button.good{
-  border-color:rgba(103,232,160,.35);
-  background:linear-gradient(180deg, rgba(103,232,160,.20), rgba(103,232,160,.08));
+  border-color:rgba(103,232,160,.32);
+  background:linear-gradient(180deg, rgba(103,232,160,.18), rgba(103,232,160,.08));
 }
 button.warn{
-  border-color:rgba(255,184,107,.32);
+  border-color:rgba(255,184,107,.30);
   background:linear-gradient(180deg, rgba(255,184,107,.18), rgba(255,184,107,.08));
 }
 button:disabled{opacity:.5;cursor:not-allowed}
 select{padding:8px 10px}
-input[type="range"]{width:140px}
+input[type="range"]{width:135px}
 input[type="checkbox"]{accent-color:var(--accent)}
-.nameInput{padding:0 12px; width:170px}
+
 .app{
   height:100%;
   display:flex;
   flex-direction:column;
 }
-.topbar{
+.toolbar{
   display:flex;
   flex-direction:column;
   gap:8px;
   padding:10px 12px;
   border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg, rgba(17,23,34,.98), rgba(12,17,26,.95));
-  backdrop-filter: blur(8px);
+  background:linear-gradient(180deg, rgba(16,23,34,.98), rgba(11,16,24,.95));
+  backdrop-filter: blur(10px);
 }
 .row{
   display:flex;
   flex-wrap:wrap;
-  align-items:center;
   gap:8px;
+  align-items:center;
 }
-.rowA{justify-content:flex-start}
-.rowB,.rowC{justify-content:flex-start}
-.brand{display:flex;flex-direction:column;gap:2px;margin-right:8px}
+.row-primary{justify-content:flex-start}
+.row-controls{justify-content:flex-start}
+.brand{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  margin-right:10px;
+}
 .brand strong{font-size:15px;letter-spacing:.2px}
 .brand span{font-size:12px;color:var(--muted)}
+.file-btn{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 12px;
+  cursor:pointer;
+  overflow:hidden;
+  white-space:nowrap;
+}
+.file-btn input{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  cursor:pointer;
+}
 .field{
   display:flex;
   flex-direction:column;
@@ -78,40 +102,23 @@ input[type="checkbox"]{accent-color:var(--accent)}
   font-size:12px;
   color:var(--muted);
 }
-.fileBtn{
-  position:relative;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  padding:0 12px;
-  cursor:pointer;
-  overflow:hidden;
-  white-space:nowrap;
-}
-.fileBtn input{
-  position:absolute;
-  inset:0;
-  opacity:0;
-  cursor:pointer;
-}
 .pill{
   display:inline-flex;
   align-items:center;
   gap:8px;
   padding:8px 12px;
-  color:var(--muted);
   font-size:12px;
+  color:var(--muted);
 }
 .workspace{
   flex:1;
   min-height:0;
   display:grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns:1fr 1fr;
   gap:10px;
   padding:10px;
 }
-.pane{
+.panel{
   min-width:0;
   min-height:0;
   display:flex;
@@ -122,7 +129,7 @@ input[type="checkbox"]{accent-color:var(--accent)}
   border-radius:18px;
   box-shadow:0 16px 40px rgba(0,0,0,.34);
 }
-.paneHead{
+.panel-head{
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
@@ -131,8 +138,8 @@ input[type="checkbox"]{accent-color:var(--accent)}
   border-bottom:1px solid var(--line);
   background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
 }
-.paneHead h2{margin:0;font-size:14px}
-.paneHead p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.panel-head h2{margin:0;font-size:14px}
+.panel-head p{margin:2px 0 0;color:var(--muted);font-size:12px;line-height:1.35}
 .badge{
   align-self:center;
   padding:7px 10px;
@@ -143,7 +150,7 @@ input[type="checkbox"]{accent-color:var(--accent)}
   background:rgba(255,255,255,.03);
   white-space:nowrap;
 }
-.canvasWrap{
+.canvas-shell{
   position:relative;
   flex:1;
   min-height:0;
@@ -152,7 +159,7 @@ input[type="checkbox"]{accent-color:var(--accent)}
     linear-gradient(-45deg, rgba(255,255,255,.03) 25%, transparent 25%) 0 14px/28px 28px,
     linear-gradient(45deg, transparent 75%, rgba(255,255,255,.03) 75%) 14px -14px/28px 28px,
     linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.03) 75%) 14px 0/28px 28px,
-    linear-gradient(180deg, rgba(14,20,30,.98), rgba(9,12,18,.98));
+    linear-gradient(180deg, rgba(13,19,28,.98), rgba(9,12,18,.98));
 }
 canvas{
   width:100%;
@@ -165,7 +172,7 @@ canvas{
   position:absolute;
   left:12px;
   bottom:12px;
-  max-width:min(72%, 560px);
+  max-width:min(70%, 560px);
   padding:8px 10px;
   border-radius:12px;
   border:1px solid rgba(255,255,255,.08);
@@ -176,8 +183,8 @@ canvas{
   line-height:1.35;
 }
 .hint strong{color:var(--text)}
+
 @media (max-width: 1200px){
+  html,body{overflow:auto}
   .workspace{grid-template-columns:1fr}
-  body{overflow:auto}
-  html{overflow:auto}
 }

@@ -1,23 +1,29 @@
-# SideScroller Rig Animator
+# SideScroller Mesh Rig Animator
 
-A browser-based 2D sprite animator for side-scroller characters.
+A browser-based side-scroller character animator that uses a **soft mesh over the whole silhouette** instead of slicing the sprite into boxes.
 
-## What this build does
-- Keeps the source image and animated preview side by side.
-- Uses manual body-part masks instead of box slicing.
-- Supports lasso and magic-wand masking on each part.
-- Uses a planted-foot walk cycle with draggable rig joints.
-- Supports zoom and pan in the source editor.
+## What it does
+- Import a character image directly in the browser.
+- Auto-remove the background when possible.
+- Refine the silhouette with **Lasso** or **Magic wand**.
+- Drag joints to fit the character.
+- Preview a planted-foot walk cycle with smooth mesh deformation.
+- Keep the source image and the preview side by side.
+- Zoom and pan the source canvas while editing.
 
-## How to use
-1. Open `index.html` in a browser or host the folder on GitHub Pages.
-2. Import a sprite.
-3. Click **Smart split** to create initial part masks.
-4. Pick a part and refine it with **Lasso** or **Magic wand**.
-5. Drag joints in **Move joints** mode.
-6. Tweak walk sliders and preview the result.
+## Controls
+- **Auto mask**: attempts a background removal pass.
+- **Auto rig**: places the joint rig around the current mask.
+- **Move joints**: drag joints to fit the pose.
+- **Lasso / Magic wand**: add or erase mask areas.
+- **Zoom**: source editor zoom.
+- **Facing**: flip the rig direction.
+- **Speed / Stride / Bounce / Lean / Arm swing**: walk-cycle tuning.
 
 ## Notes
-- Best results come from a transparent-background full-body sprite.
-- The smart split is a starting point; manual mask refinement is still expected.
-- The app is static and does not require any build step.
+- The app downscales very large imports for smoother browser performance.
+- A transparent PNG usually gives the cleanest results.
+- For busy backgrounds, use the wand or lasso to isolate the character before rigging.
+
+## Run
+Open `index.html` in a modern browser or publish the folder to GitHub Pages.
