@@ -15,3 +15,8 @@ This build uses a manual outline-rig workflow with zoom and pan for precise lass
 - Masks are editable per part.
 - The cutout uses softened edges to reduce hard seams.
 - The old `bodyDetect.js`, `skelEditor.js`, and `animator.js` files are kept for repository compatibility, but the main app runs from `app.js`.
+
+
+Notes:
+- Images load directly into the workspace first, so import is immediate.
+- Use lasso or wand to define each part, then drag joints to refine the rig.

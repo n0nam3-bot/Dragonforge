@@ -1,5 +1,3 @@
-import { removeBackground } from './bgremove.js';
-
 const PART_TYPES = [
   'torso','chest','pelvis','neck','head','hair','face',
   'upper arm L','lower arm L','hand L','upper arm R','lower arm R','hand R',
@@ -268,29 +266,21 @@ async function loadImageFile(file) {
     sourceCanvas.width = img.naturalWidth;
     sourceCanvas.height = img.naturalHeight;
     sourceCanvas.getContext('2d').drawImage(img, 0, 0);
+
     state.sourceCanvas = sourceCanvas;
-
-    els.canvasStatus.textContent = 'Removing background…';
-    els.editorPlaceholder.classList.remove('hidden');
-
-    try {
-      state.cleanCanvas = await removeBackground(img, p => {
-        els.canvasStatus.textContent = `Removing background… ${Math.round(p * 100)}%`;
-      });
-    } catch {
-      state.cleanCanvas = sourceCanvas;
-    }
-
-    state.sourceW = state.cleanCanvas.width;
-    state.sourceH = state.cleanCanvas.height;
+    state.cleanCanvas = sourceCanvas;
+    state.sourceW = sourceCanvas.width;
+    state.sourceH = sourceCanvas.height;
     state.parts = [];
     state.selectedPartId = null;
     state.savedAt = null;
     state.animStart = performance.now();
+    state.previewSheet = null;
+
     els.canvasStatus.textContent = `${state.sourceW}×${state.sourceH}`;
     els.editorPlaceholder.classList.toggle('hidden', !state.cleanCanvas);
-    els.previewPlaceholder.classList.add('hidden');
-    state.previewSheet = null;
+    els.previewPlaceholder.classList.remove('hidden');
+
     resetEditorView();
     renderParts();
     selectPart(null);
@@ -1163,8 +1153,6 @@ function rootMotion(pose, t, tiltDeg) {
       return { dx: 0, dy: 0, rot: tilt };
   }
 }
-
-function sampleCycle
 
 function sampleCycle(keys, phase) {
   const p = ((phase % 1) + 1) % 1;
