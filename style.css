@@ -21,7 +21,7 @@ html,body{
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
 }
 button,input,select{font:inherit}
-button,select,input[type="range"],.fileBtn,.pill{
+button,select,input[type="range"],.fileBtn,.pill,.nameInput{
   border:1px solid rgba(255,255,255,.10);
   background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
   color:var(--text);
@@ -45,33 +45,32 @@ button:disabled{opacity:.5;cursor:not-allowed}
 select{padding:8px 10px}
 input[type="range"]{width:140px}
 input[type="checkbox"]{accent-color:var(--accent)}
+.nameInput{padding:0 12px; width:170px}
 .app{
   height:100%;
   display:flex;
   flex-direction:column;
 }
 .topbar{
-  display:grid;
-  grid-template-columns: minmax(160px, 1.1fr) minmax(260px, 1.5fr) minmax(260px, 1.4fr) minmax(290px, 1.6fr);
-  gap:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
   padding:10px 12px;
-  align-items:center;
   border-bottom:1px solid var(--line);
   background:linear-gradient(180deg, rgba(17,23,34,.98), rgba(12,17,26,.95));
   backdrop-filter: blur(8px);
-  min-height:74px;
 }
-.brand{min-width:0;display:flex;flex-direction:column;gap:2px}
-.brand strong{font-size:15px;letter-spacing:.2px}
-.brand span{font-size:12px;color:var(--muted)}
-.group{
-  min-width:0;
+.row{
   display:flex;
   flex-wrap:wrap;
   align-items:center;
   gap:8px;
 }
-.group.right{justify-content:flex-end}
+.rowA{justify-content:flex-start}
+.rowB,.rowC{justify-content:flex-start}
+.brand{display:flex;flex-direction:column;gap:2px;margin-right:8px}
+.brand strong{font-size:15px;letter-spacing:.2px}
+.brand span{font-size:12px;color:var(--muted)}
 .field{
   display:flex;
   flex-direction:column;
@@ -178,8 +177,7 @@ canvas{
 }
 .hint strong{color:var(--text)}
 @media (max-width: 1200px){
-  .topbar{grid-template-columns:1fr 1fr}
   .workspace{grid-template-columns:1fr}
-  .app{overflow:auto}
   body{overflow:auto}
+  html{overflow:auto}
 }
