@@ -2,146 +2,49 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Pixel Animator Fix</title>
-    <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; padding: 20px; }
-        .container { max-width: 500px; margin: 0 auto; }
-        canvas { background: white; border: 2px solid #444; margin-top: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
-        .slider-group { margin: 15px 0; text-align: left; }
-        label { display: block; margin-bottom: 5px; color: #ccc; font-size: 0.9em; }
-        input[type=range] { width: 100%; }
-        .btn-group { margin-bottom: 20px; }
-        button { 
-            background: #28a745; color: white; border: none; padding: 10px 15px; 
-            cursor: pointer; border-radius: 4px; margin: 0 5px; font-weight: bold;
-        }
-        button:hover { background: #218838; }
-        #imageLoader { margin-top: 20px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpriteSync Animator Demo (GH Pages)</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="container">
-    <h2>Pixel Character Animator</h2>
-    
-    <div class="btn-group">
-        <button onclick="createAnimation()">Create Animation (30 Frames)</button>
-        <button onclick="resetRig()">Reset to Original</button>
-    </div>
+    <header>
+        <h1>🎨 SpriteSync Animator Demo</h1>
+        <p>Client-Side Prototype - No server required! Upload an image to start the process.</p>
+    </header>
 
-    <div style="text-align:center; font-size: 0.9em; color: #888;">
-        Walk Cycle Controls (Move "Back and Forth" slider to walk!)
-    </div>
-
-    <div class="slider-group">
-        <label>Back and Forth (Walk Cycle):</label>
-        <input type="range" id="walkCycle" min="0" max="29" value="0" oninput="animateWalk()">
-    </div>
-
-    <div class="slider-group">
-        <label>Body Sway (Leaning Left/Right):</label>
-        <input type="range" min="-10" max="10" value="0" oninput="animateWalk()">
-    </div>
-
-    <div class="slider-group">
-        <label>Head Angle:</label>
-        <input type="range" min="-45" max="45" value="0" oninput="animateWalk()">
-    </div>
-
-    <canvas id="mainCanvas" width="512" height="512"></canvas>
-    
-    <div id="imageLoader">
-        <p><i>Upload a Pixel Art Character (transparent background)</i></p>
-        <input type="file" id="imageLoader" accept="image/*">
-    </div>
-</div>
-
-<!-- Load GIF.js for export -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
-
-<script>
-    let upperBody = null; // Stores the top half image
-    let lowerBody = null; // Stores the bottom half image
-    let currentFrameIndex = 0;
-
-    // Load Image and Split it in Half
-    document.getElementById('imageLoader').addEventListener('change', function(e){
-        const file = e.target.files[0];
-        const reader = new FileReader();
+    <div class="container">
         
-        reader.onload = function(event) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.getElementById('mainCanvas');
-                const ctx = canvas.getContext('2d');
+        <!-- STEP 1: UPLOAD AND CONTROLS -->
+        <div class="control-panel">
+            <h2>Step 1: Upload & Select Pose</h2>
+            <input type="file" id="imageUpload" accept="image/*">
+
+            <div class="controls">
+                <label for="poseSelect">Pose Type:</label>
+                <select id="poseSelect">
+                    <option value="idle">Idle</option>
+                    <option value="walk">Walk Cycle (Demo)</option>
+                    <option value="attack">Attack (Demo)</option>
+                </select>
+
+                <label for="facingSelect">Facing Direction:</label>
+                <select id="facingSelect">
+                    <option value="right">Right (Facing Forward)</option>
+                    <option value="left">Left (Facing Backward)</option>
+                </select>
                 
-                // Setup Canvas Size
-                canvas.width = 512;
-                canvas.height = 512;
-                
-                // Draw full image once to capture data
-                ctx.drawImage(img, 0, 0);
-                
-                // Split Logic: Crop top half and bottom half
-                // Note: You need to crop your original image in Photoshop/GIMP first!
-                // Or write code to automatically cut it in half.
-                upperBody = ctx.getImageData(0, 0, 512, 256); 
-                lowerBody = ctx.getImageData(0, 256, 512, 256);
-                
-                // Hide the file input
-                document.getElementById('imageLoader').style.display = 'none';
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-
-    // The Animation Logic
-    function animateWalk() {
-        const canvas = document.getElementById('mainCanvas');
-        const ctx = canvas.getContext('2d');
-        const walkVal = parseInt(document.getElementById('walkCycle').value);
-
-        // Clear canvas
-        ctx.clearRect(0, 0, 512, 512);
-
-        // 1. Draw Upper Body
-        ctx.putImageData(upperBody, 0, 0);
-
-        // 2. Draw Lower Body with a little "Bobbing" movement
-        // We shift it slightly up and down to simulate walking height
-        const bounceY = (walkVal / 20); 
-        ctx.putImageData(lowerBody, 0, 256 - bounceY);
-    }
-
-    // Generate the GIF
-    function createAnimation() {
-        if(!upperBody) return alert("Please upload an image first!");
+                <button id="generateBtn">▶️ Generate Animation</button>
+            </div>
+        </div>
         
-        const frames = [];
-        const gif = new GIF({ workers: 4, quality: 10 });
-
-        // Loop through 30 frames
-        for(let i = 0; i < 30; i++) {
-            // Set slider to current frame
-            document.getElementById('walkCycle').value = i;
-            animateWalk(); // Update the visual
-            
-            // Capture the frame
-            frames[i] = canvas.toDataURL(); 
-        }
-
-        // Add frames to GIF
-        frames.forEach(f => gif.addFrame(f, {copy: true, delay: 40}));
-        gif.render();
-    }
-
-    // Reset sliders
-    function resetRig() {
-        document.getElementById('walkCycle').value = 0;
-        animateWalk();
-    }
-</script>
-
-</body>
+        <!-- STEP 2: THE EDITOR AREA -->
+        <div class="editor-area">
+            <h2>Step 2: Character Rig Editor</h2>
+            <div class="canvas-container">
+                <!-- Canvas for drawing/displaying the character -->
+                <canvas id="characterCanvas" width="600" height="400"></canvas>
+            </div>
+        </div>
+    </body>
 </html>
