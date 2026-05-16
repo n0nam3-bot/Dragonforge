@@ -2,263 +2,146 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Character Rig Generator</title>
-    <!-- Load GIF library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
-    <!-- Load Body Part Segmentation AI -->
-    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/index.min.js"></script>
-    <!-- Note: body-part-segmenter is huge, we will simulate simple segmentation logic for reliability on free pages, 
-         OR we use a simpler method below. Let's use a simpler "Cutout" logic for reliability on free hosting. -->
-
+    <title>Pixel Animator Fix</title>
     <style>
-        body { font-family: sans-serif; background: #222; color: white; padding: 20px; text-align: center; }
-        canvas { border: 2px solid #555; margin: 5px; background: white; max-width: 90%; }
-        .controls { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
-        button, input { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; background: #4CAF50; color: white; }
-        button:hover { background: #45a049; }
-        .slider-group { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
-        #loading { margin-top: 20px; font-size: 18px; font-weight: bold; }
-        /* The grid for frame viewing */
-        .frame-grid { display: flex; flex-direction: column; align-items: center; }
+        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; padding: 20px; }
+        .container { max-width: 500px; margin: 0 auto; }
+        canvas { background: white; border: 2px solid #444; margin-top: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        .slider-group { margin: 15px 0; text-align: left; }
+        label { display: block; margin-bottom: 5px; color: #ccc; font-size: 0.9em; }
+        input[type=range] { width: 100%; }
+        .btn-group { margin-bottom: 20px; }
+        button { 
+            background: #28a745; color: white; border: none; padding: 10px 15px; 
+            cursor: pointer; border-radius: 4px; margin: 0 5px; font-weight: bold;
+        }
+        button:hover { background: #218838; }
+        #imageLoader { margin-top: 20px; }
     </style>
 </head>
 <body>
 
-    <h1>Pixel Character Animator</h1>
+<div class="container">
+    <h2>Pixel Character Animator</h2>
     
-    <div id="upload-section">
-        <p>1. Upload your character image (remove the green background first, or the tool can try to fix it).</p>
+    <div class="btn-group">
+        <button onclick="createAnimation()">Create Animation (30 Frames)</button>
+        <button onclick="resetRig()">Reset to Original</button>
+    </div>
+
+    <div style="text-align:center; font-size: 0.9em; color: #888;">
+        Walk Cycle Controls (Move "Back and Forth" slider to walk!)
+    </div>
+
+    <div class="slider-group">
+        <label>Back and Forth (Walk Cycle):</label>
+        <input type="range" id="walkCycle" min="0" max="29" value="0" oninput="animateWalk()">
+    </div>
+
+    <div class="slider-group">
+        <label>Body Sway (Leaning Left/Right):</label>
+        <input type="range" min="-10" max="10" value="0" oninput="animateWalk()">
+    </div>
+
+    <div class="slider-group">
+        <label>Head Angle:</label>
+        <input type="range" min="-45" max="45" value="0" oninput="animateWalk()">
+    </div>
+
+    <canvas id="mainCanvas" width="512" height="512"></canvas>
+    
+    <div id="imageLoader">
+        <p><i>Upload a Pixel Art Character (transparent background)</i></p>
         <input type="file" id="imageLoader" accept="image/*">
     </div>
+</div>
 
-    <div id="editor" style="display:none;">
-        <h3>Tools</h3>
-        <div class="controls">
-            <button onclick="generateGIF()">▶ Create Animation (30 Frames)</button>
-            <button onclick="clearChanges()">↩ Reset to Original</button>
-            <button onclick="downloadPNG()">⬇ Save Current Frame</button>
-        </div>
+<!-- Load GIF.js for export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
 
-        <h3>Walk Cycle Controls (Drag to move limbs)</h3>
+<script>
+    let upperBody = null; // Stores the top half image
+    let lowerBody = null; // Stores the bottom half image
+    let currentFrameIndex = 0;
+
+    // Load Image and Split it in Half
+    document.getElementById('imageLoader').addEventListener('change', function(e){
+        const file = e.target.files[0];
+        const reader = new FileReader();
         
-        <div class="slider-group">
-            <label>Left Leg Angle:</label>
-            <input type="range" min="-90" max="90" value="0" oninput="applyRig(0, 'L_leg', this.value)">
-        </div>
-        <div class="slider-group">
-            <label>Right Leg Angle:</label>
-            <input type="range" min="-90" max="90" value="0" oninput="applyRig(1, 'R_leg', this.value)">
-        </div>
-        
-        <div class="slider-group">
-            <label>Left Arm Swing:</label>
-            <input type="range" min="-90" max="90" value="0" oninput="applyRig(2, 'L_arm', this.value)">
-        </div>
-        <div class="slider-group">
-            <label>Right Arm Swing:</label>
-            <input type="range" min="-90" max="90" value="0" oninput="applyRig(1, 'R_arm', this.value)">
-        </div>
-
-        <div class="slider-group">
-            <label>Back and Forth (Walk Forward):</label>
-            <input type="range" min="0" max="360" value="0" oninput="applyRig(3, 'walk_cycle', this.value)">
-        </div>
-
-        <canvas id="mainCanvas" width="512" height="512"></canvas>
-    </div>
-
-    <script>
-        let currentImage = null;
-        let frameCount = 0;
-        let segments = {
-            head: { x: 0, y: 0, scale: 1, rot: 0 },
-            body: { x: 0, y: 0, scale: 1, rot: 0 },
-            L_arm: { x: 0, y: 0, scale: 1, rot: 0 },
-            R_arm: { x: 0, y: 0, scale: 1, rot: 0 },
-            L_leg: { x: 0, y: 0, scale: 1, rot: 0 },
-            R_leg: { x: 0, y: 0, scale: 1, rot: 0 }
-        };
-
-        // Handle Image Upload
-        document.getElementById('imageLoader').addEventListener('change', function(e){
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const img = new Image();
-                img.onload = function() {
-                    // Draw to canvas
-                    const canvas = document.getElementById('mainCanvas');
-                    const ctx = canvas.getContext('2d');
-                    // Scale down if too big
-                    let w = img.width, h = img.height;
-                    if(w > 500) { w = 500; h = (h/w)*500; }
-                    canvas.width = 512;
-                    canvas.height = 500;
-                    ctx.drawImage(img, 0, 0, w, h);
-                    
-                    // Remove Background (Simple Green Screen Logic)
-                    removeGreenScreen(ctx, w, h);
-
-                    document.getElementById('upload-section').style.display = 'none';
-                    document.getElementById('editor').style.display = 'block';
-                    saveState(); // Save initial state
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(e.target.files[0]);
-        });
-
-        // 1. Remove Green Background
-        function removeGreenScreen(ctx, w, h) {
-            const imageData = ctx.getImageData(0, 0, w, h);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                const r = data[i], g = data[i+1], b = data[i+2];
-                // If pixel is very green (G > R and G > B)
-                if (g > r && g > b) {
-                    data[i] = 0;     data[i+1] = 0;     data[i+2] = 0;
-                    data[i+3] = 0;   // Alpha
-                }
-            }
-            ctx.putImageData(imageData, 0, 0);
-        }
-
-        // 2. Save current state
-        function saveState() {
-            // Capture current visual as a frame
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            ctx = tempCanvas.getContext('2d');
-            ctx.drawImage(canvas, 0, 0);
-            currentImage = tempCanvas;
-        }
-
-        // 3. Apply Rig Logic
-        function applyRig(type, part, value) {
-            // This is a simulation of morphing.
-            // In a real app, you would use body-part-segmenter to isolate masks.
-            // Here we simulate the walk cycle math:
-            
-            const walkInput = document.querySelector('[oninput="applyRig(3,\'walk_cycle\'...').value;
-            
-            // If it's a "walk" mode, offset limbs based on walk cycle index
-            let leftLeg = 0, rightLeg = 0, lArm = 0, rArm = 0;
-
-            if (walkInput < 180) {
-                // Walking forward animation logic
-                leftLeg = (walkInput / 360) * 90;
-                rightLeg = 90 - leftLeg;
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.getElementById('mainCanvas');
+                const ctx = canvas.getContext('2d');
                 
-                // Arms usually swing opposite to legs
-                lArm = -leftLeg + 20; 
-                rArm = -leftLeg - 20;
-            } else {
-                // Idle mode
-                leftLeg = 0; rightLeg = 0; lArm = 0; rArm = 0;
-            }
+                // Setup Canvas Size
+                canvas.width = 512;
+                canvas.height = 512;
+                
+                // Draw full image once to capture data
+                ctx.drawImage(img, 0, 0);
+                
+                // Split Logic: Crop top half and bottom half
+                // Note: You need to crop your original image in Photoshop/GIMP first!
+                // Or write code to automatically cut it in half.
+                upperBody = ctx.getImageData(0, 0, 512, 256); 
+                lowerBody = ctx.getImageData(0, 256, 512, 256);
+                
+                // Hide the file input
+                document.getElementById('imageLoader').style.display = 'none';
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
 
-            // Re-draw the image with these offsets
-            redrawFrame();
-        }
+    // The Animation Logic
+    function animateWalk() {
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const walkVal = parseInt(document.getElementById('walkCycle').value);
 
-        function redrawFrame() {
-            const canvas = document.getElementById('mainCanvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Note: A full implementation would use the masks from body-part-segmenter here
-            // For this demo, we just apply the offsets to the main drawing
-            
-            // Draw current frame
-            ctx.drawImage(currentImage, 0, 0);
+        // Clear canvas
+        ctx.clearRect(0, 0, 512, 512);
 
-            // Apply visual distortions for the "animation" effect (Simulated rigging)
-            // In a real app, you would draw the isolated mask + transform
-            
-            // Simulating "Legs Moving"
-            ctx.save();
-            ctx.translate(256, 256); // Center pivot
-            
-            // We are simulating the rigging here. 
-            // Real implementation requires the masks from the AI.
-            
-            ctx.restore();
+        // 1. Draw Upper Body
+        ctx.putImageData(upperBody, 0, 0);
 
-            // Save state after every slider change to keep it smooth
-            saveState();
-        }
+        // 2. Draw Lower Body with a little "Bobbing" movement
+        // We shift it slightly up and down to simulate walking height
+        const bounceY = (walkVal / 20); 
+        ctx.putImageData(lowerBody, 0, 256 - bounceY);
+    }
 
-        // 4. Export to GIF
-        function generateGIF() {
-            if(!currentImage) return alert("Load an image first!");
-            
-            // Create the frames
-            const frames = [];
-            const speed = 30; // frames per second
-            const numFrames = 30; // Short walk cycle
-            
-            // Generate frames based on sliders
-            // In a real app, we loop through the slider positions
-            
-            const gif = new GIF({
-                width: canvas.width,
-                height: canvas.height,
-                workers: 4,
-                quality: 10,
-                workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js',
-                workerSrc: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js',
-                transparent: true 
-            });
-
-            // We need to animate the sliders programmatically for the GIF
-            // For this demo, we just capture the current state if we don't have the masks
-            
-            // IMPORTANT: Without body-part-segmenter masks, we cannot animate the image 
-            // independently. This code assumes the 'currentImage' is already the isolated sprite.
-            
-            // Let's just capture the current frame 30 times
-            for(let i=0; i<numFrames; i++) {
-                // Ideally you would call applyRig with different values to cycle them
-                // For this demo, we just copy the current visual
-                frames[i] = canvas.toDataURL(); 
-            }
-
-            // If you want to animate, you'd write a loop:
-            /*
-            for(let i=0; i<60; i++) {
-               const val = (i % 360);
-               document.querySelector('[oninput="applyRig(3...').value = val;
-               applyRig(3, 'walk_cycle', val); 
-               frames[i] = canvas.toDataURL();
-            }
-            */
-            
-            gif.on('finished', function(blob) {
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'walking_character.gif';
-                a.click();
-            });
-
-            gif.addFrame(frames[0], {loop: 0, copy: true, delay: 100/30}); // Base frame
-            // In a real version, add frames[1] to frames[n]
-            
-            gif.render();
-        }
-
-        function clearChanges() {
-            location.reload();
-        }
+    // Generate the GIF
+    function createAnimation() {
+        if(!upperBody) return alert("Please upload an image first!");
         
-        function downloadPNG() {
-            const link = document.createElement('a');
-            link.download = 'character.png';
-            link.href = canvas.toDataURL();
-            link.click();
+        const frames = [];
+        const gif = new GIF({ workers: 4, quality: 10 });
+
+        // Loop through 30 frames
+        for(let i = 0; i < 30; i++) {
+            // Set slider to current frame
+            document.getElementById('walkCycle').value = i;
+            animateWalk(); // Update the visual
+            
+            // Capture the frame
+            frames[i] = canvas.toDataURL(); 
         }
-    </script>
+
+        // Add frames to GIF
+        frames.forEach(f => gif.addFrame(f, {copy: true, delay: 40}));
+        gif.render();
+    }
+
+    // Reset sliders
+    function resetRig() {
+        document.getElementById('walkCycle').value = 0;
+        animateWalk();
+    }
+</script>
+
 </body>
 </html>
