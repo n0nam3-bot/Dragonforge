@@ -1,239 +1,277 @@
-// skelEditor.js — Interactive skeleton editor with bone-segment Voronoi
-// Shows character + coloured region overlay + draggable joint handles.
-// Regions are computed from bone segments, not joint points, so weapons
-// and extended limbs always fall into the correct region.
+// skelEditor.js — image + mask editor + draggable joints + lasso/wand selection
 
-import { JOINT_DEFS, BONE_SEGS, buildVoronoi } from './bodyDetect.js';
+import { JOINT_DEFS, polygonMaskFromPoints, floodFillMask } from './bodyDetect.js';
 
-const HANDLE_R  = 8;   // drawn radius of joint handle
-const HIT_R     = 14;  // click/touch hit radius
+const HANDLE_R = 7;
+const HIT_R = 12;
 
 export class SkelEditor {
-  constructor(canvas, charCanvas, joints, onJointsChanged) {
-    this.canvas          = canvas;
-    this.charCanvas      = charCanvas;
-    this.joints          = deepCopy(joints);
+  constructor(canvas, sourceCanvas, joints, parts, onJointsChanged, onPartsChanged) {
+    this.canvas = canvas;
+    this.sourceCanvas = sourceCanvas;
+    this.joints = JSON.parse(JSON.stringify(joints));
+    this.parts = parts;
     this.onJointsChanged = onJointsChanged;
-    this.showRegions     = true;
-    this.showSkeleton    = true;
-    this.srcW            = charCanvas.width;
-    this.srcH            = charCanvas.height;
-    this._overlay        = null;
-    this._drag           = null;
-    this._hoverId        = null;
-    this._colorMap       = {};
-    for (const d of JOINT_DEFS) this._colorMap[d.id] = _hexToRgb(d.color);
+    this.onPartsChanged = onPartsChanged;
+    this.selectedPartId = parts.find(p => p.enabled !== false)?.id ?? null;
+    this.mode = 'joint';
+    this.showRegions = true;
+    this.showSkeleton = true;
+    this._dragJoint = null;
+    this._hoverJoint = null;
+    this._lasso = null;
+    this._wandSeed = null;
 
-    this._rebuildOverlay();
+    this._onDown = this._pointerDown.bind(this);
+    this._onMove = this._pointerMove.bind(this);
+    this._onUp = this._pointerUp.bind(this);
 
-    // Bind events
-    this._onDown  = this._pointerDown.bind(this);
-    this._onMove  = this._pointerMove.bind(this);
-    this._onUp    = this._pointerUp.bind(this);
-    canvas.addEventListener('mousedown',  this._onDown);
+    canvas.addEventListener('mousedown', this._onDown);
     canvas.addEventListener('touchstart', this._onDown, { passive: false });
-    window.addEventListener('mousemove',  this._onMove);
-    window.addEventListener('touchmove',  this._onMove, { passive: false });
-    window.addEventListener('mouseup',    this._onUp);
-    window.addEventListener('touchend',   this._onUp);
+    window.addEventListener('mousemove', this._onMove);
+    window.addEventListener('touchmove', this._onMove, { passive: false });
+    window.addEventListener('mouseup', this._onUp);
+    window.addEventListener('touchend', this._onUp);
 
     this.draw();
   }
 
   destroy() {
-    this.canvas.removeEventListener('mousedown',  this._onDown);
+    this.canvas.removeEventListener('mousedown', this._onDown);
     this.canvas.removeEventListener('touchstart', this._onDown);
-    window.removeEventListener('mousemove',  this._onMove);
-    window.removeEventListener('touchmove',  this._onMove);
-    window.removeEventListener('mouseup',    this._onUp);
-    window.removeEventListener('touchend',   this._onUp);
+    window.removeEventListener('mousemove', this._onMove);
+    window.removeEventListener('touchmove', this._onMove);
+    window.removeEventListener('mouseup', this._onUp);
+    window.removeEventListener('touchend', this._onUp);
   }
 
-  setShowRegions(v)  { this.showRegions  = v; this.draw(); }
+  setMode(mode) { this.mode = mode; this._lasso = null; this._wandSeed = null; this.draw(); }
+  setSelectedPart(id) { this.selectedPartId = id; this.draw(); }
+  setShowRegions(v) { this.showRegions = v; this.draw(); }
   setShowSkeleton(v) { this.showSkeleton = v; this.draw(); }
-  getJoints()        { return deepCopy(this.joints); }
+  setParts(parts) { this.parts = parts; this.draw(); }
+  getParts() { return this.parts; }
+  getJoints() { return JSON.parse(JSON.stringify(this.joints)); }
+  resetJoints(defaultJoints) { this.joints = JSON.parse(JSON.stringify(defaultJoints)); this.onJointsChanged(this.getJoints()); this.draw(); }
 
-  resetJoints(defaultJoints) {
-    this.joints = deepCopy(defaultJoints);
-    this._rebuildOverlay();
-    this.draw();
-    this.onJointsChanged(this.joints);
+  _fitTransform() {
+    const W = this.canvas.width, H = this.canvas.height;
+    const srcW = this.sourceCanvas.width, srcH = this.sourceCanvas.height;
+    const scale = Math.min(W / srcW, H / srcH) * 0.96;
+    const ox = (W - srcW * scale) * 0.5;
+    const oy = (H - srcH * scale) * 0.5;
+    return { scale, ox, oy };
   }
 
-  // ── Build the Voronoi colour overlay at source resolution ──────────────────
-  _rebuildOverlay() {
-    const W = this.srcW, H = this.srcH;
-    const voro = buildVoronoi(this.charCanvas, this.joints);
-    const { map } = voro;
-    const cd   = this.charCanvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,H).data;
-    const ol   = new ImageData(W, H);
-    const od   = ol.data;
+  _toSrc(evt) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = (evt.clientX - rect.left) * (this.canvas.width / rect.width);
+    const y = (evt.clientY - rect.top) * (this.canvas.height / rect.height);
+    const { scale, ox, oy } = this._fitTransform();
+    return { x: (x - ox) / scale, y: (y - oy) / scale };
+  }
 
-    for (let i=0;i<W*H;i++) {
-      if (cd[i*4+3] < 18) continue;
-      const id    = map[i];
-      const color = id ? this._colorMap[id] : {r:100,g:100,b:100};
-      od[i*4]   = color.r;
-      od[i*4+1] = color.g;
-      od[i*4+2] = color.b;
-      od[i*4+3] = 155;
+  _hitJoint(x, y) {
+    const keys = Object.keys(this.joints);
+    for (let i = keys.length - 1; i >= 0; i--) {
+      const id = keys[i];
+      const j = this.joints[id];
+      const dx = x - j.x, dy = y - j.y;
+      if (dx * dx + dy * dy <= HIT_R * HIT_R) return id;
     }
-
-    const oc = document.createElement('canvas');
-    oc.width = W; oc.height = H;
-    oc.getContext('2d').putImageData(ol, 0, 0);
-    this._overlay = oc;
+    return null;
   }
 
-  // ── Coordinate transforms ──────────────────────────────────────────────────
-  _fit() {
-    const dw = this.canvas.width, dh = this.canvas.height;
-    const scale = Math.min(dw/this.srcW, dh/this.srcH) * 0.96;
-    return { scale, ox:(dw-this.srcW*scale)/2, oy:(dh-this.srcH*scale)/2 };
-  }
-
-  _ptr(e) {
-    const r  = this.canvas.getBoundingClientRect();
-    const raw= e.touches ? e.touches[0] : e;
-    const sx = this.canvas.width  / r.width;
-    const sy = this.canvas.height / r.height;
-    return { x:(raw.clientX-r.left)*sx, y:(raw.clientY-r.top)*sy };
-  }
-
-  _hit(cx,cy) {
-    const { scale, ox, oy } = this._fit();
-    let bestId=null, bestD=Infinity;
-    for (const [id,j] of Object.entries(this.joints)) {
-      const dx=cx-(j.x*scale+ox), dy=cy-(j.y*scale+oy);
-      const d=Math.sqrt(dx*dx+dy*dy);
-      if (d<HIT_R && d<bestD) { bestD=d; bestId=id; }
-    }
-    return bestId;
-  }
-
-  // ── Pointer events ─────────────────────────────────────────────────────────
   _pointerDown(e) {
     e.preventDefault();
-    const p  = this._ptr(e);
-    const id = this._hit(p.x, p.y);
-    if (!id) return;
-    const { scale, ox, oy } = this._fit();
-    this._drag = { id,
-      offX: p.x-(this.joints[id].x*scale+ox),
-      offY: p.y-(this.joints[id].y*scale+oy) };
-    this.canvas.style.cursor = 'grabbing';
+    const p = this._toSrc(e.touches ? e.touches[0] : e);
+    if (this.mode === 'lasso') {
+      this._lasso = { points: [p], active: true };
+      this.draw();
+      return;
+    }
+    if (this.mode === 'wand') {
+      this._wandSeed = p;
+      this.draw();
+      return;
+    }
+    const id = this._hitJoint(p.x, p.y);
+    if (id) {
+      const j = this.joints[id];
+      this._dragJoint = { id, offX: j.x - p.x, offY: j.y - p.y };
+      this.draw();
+    }
   }
 
   _pointerMove(e) {
-    if (e.touches) e.preventDefault();
-    const p = this._ptr(e);
-    if (this._drag) {
-      const { scale, ox, oy } = this._fit();
-      const nx = (p.x - this._drag.offX - ox) / scale;
-      const ny = (p.y - this._drag.offY - oy) / scale;
-      this.joints[this._drag.id].x = Math.max(0,Math.min(this.srcW-1,nx));
-      this.joints[this._drag.id].y = Math.max(0,Math.min(this.srcH-1,ny));
-      this._rebuildOverlay();
+    const p = this._toSrc(e.touches ? e.touches[0] : e);
+    if (this._dragJoint) {
+      const j = this.joints[this._dragJoint.id];
+      j.x = p.x + this._dragJoint.offX;
+      j.y = p.y + this._dragJoint.offY;
+      this.onJointsChanged(this.getJoints());
       this.draw();
-      this.onJointsChanged(this.joints);
-    } else {
-      const id = this._hit(p.x, p.y);
-      if (id !== this._hoverId) {
-        this._hoverId = id;
-        this.canvas.style.cursor = id ? 'grab' : 'crosshair';
-        this.draw();
-      }
+      return;
+    }
+    if (this._lasso?.active) {
+      const pts = this._lasso.points;
+      const last = pts[pts.length - 1];
+      const dx = p.x - last.x, dy = p.y - last.y;
+      if (dx * dx + dy * dy > 6) pts.push(p);
+      this.draw();
+      return;
+    }
+    const id = this._hitJoint(p.x, p.y);
+    if (id !== this._hoverJoint) {
+      this._hoverJoint = id;
+      this.canvas.style.cursor = id ? 'grab' : (this.mode === 'lasso' ? 'crosshair' : 'default');
+      this.draw();
     }
   }
 
-  _pointerUp() {
-    this._drag = null;
-    this.canvas.style.cursor = this._hoverId ? 'grab' : 'crosshair';
+  _pointerUp(e) {
+    if (this._dragJoint) {
+      this._dragJoint = null;
+      this.draw();
+      return;
+    }
+    if (this._lass?.active) {
+      const pts = this._lass.points;
+      this._lass.active = false;
+      if (pts.length >= 3 && this.selectedPartId) {
+        const part = this.parts.find(p => p.id === this.selectedPartId);
+        if (part) {
+          part.maskCanvas = polygonMaskFromPoints(this.sourceCanvas, pts);
+          part.enabled = true;
+          if (!part.anchorPoint) part.anchorPoint = { x: part.maskCanvas.width * 0.5, y: part.maskCanvas.height * 0.5 };
+          this.onPartsChanged(this.parts);
+        }
+      }
+      this._lass = null;
+      this.draw();
+      return;
+    }
+    if (this._wandSeed && this.selectedPartId) {
+      const part = this.parts.find(p => p.id === this.selectedPartId);
+      if (part) {
+        part.maskCanvas = floodFillMask(this.sourceCanvas, Math.round(this._wandSeed.x), Math.round(this._wandSeed.y), 42);
+        part.enabled = true;
+        if (!part.anchorPoint) part.anchorPoint = { x: part.maskCanvas.width * 0.5, y: part.maskCanvas.height * 0.5 };
+        this.onPartsChanged(this.parts);
+      }
+      this._wandSeed = null;
+      this.draw();
+    }
   }
 
-  // ── Draw ───────────────────────────────────────────────────────────────────
   draw() {
-    const c   = this.canvas;
-    const ctx = c.getContext('2d');
-    const { scale, ox, oy } = this._fit();
-    const sw = this.srcW * scale, sh = this.srcH * scale;
+    const ctx = this.canvas.getContext('2d');
+    const W = this.canvas.width, H = this.canvas.height;
+    const { scale, ox, oy } = this._fitTransform();
+    ctx.clearRect(0, 0, W, H);
 
-    ctx.clearRect(0, 0, c.width, c.height);
-
-    // 1. Character (dimmed when regions visible)
+    // Background checker
     ctx.save();
-    ctx.globalAlpha = this.showRegions ? 0.50 : 1.0;
-    ctx.drawImage(this.charCanvas, ox, oy, sw, sh);
+    ctx.fillStyle = '#131722';
+    ctx.fillRect(0, 0, W, H);
     ctx.restore();
 
-    // 2. Voronoi region overlay
-    if (this.showRegions && this._overlay) {
+    // Source image
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.sourceCanvas, ox, oy, this.sourceCanvas.width * scale, this.sourceCanvas.height * scale);
+    ctx.restore();
+
+    // Mask overlays
+    if (this.showRegions) {
+      for (const part of this.parts) {
+        if (!part.maskCanvas) continue;
+        ctx.save();
+        ctx.globalAlpha = part.id === this.selectedPartId ? 0.42 : 0.22;
+        ctx.drawImage(part.maskCanvas, ox, oy, part.maskCanvas.width * scale, part.maskCanvas.height * scale);
+        ctx.restore();
+      }
+    }
+
+    // Lasso preview
+    if (this._lass?.points?.length) {
       ctx.save();
-      ctx.globalAlpha = 0.60;
-      ctx.drawImage(this._overlay, ox, oy, sw, sh);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      const pts = this._lass.points;
+      const p0 = pts[0];
+      ctx.moveTo(p0.x * scale + ox, p0.y * scale + oy);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * scale + ox, pts[i].y * scale + oy);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (this._wandSeed) {
+      ctx.save();
+      ctx.strokeStyle = '#fff';
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.beginPath();
+      ctx.arc(this._wandSeed.x * scale + ox, this._wandSeed.y * scale + oy, 10, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
       ctx.restore();
     }
 
     if (!this.showSkeleton) return;
 
-    // 3. Bone segments
-    for (const seg of BONE_SEGS) {
-      const a = this.joints[seg.from], b = this.joints[seg.to];
-      if (!a||!b) continue;
-      const ax=a.x*scale+ox, ay=a.y*scale+oy;
-      const bx=b.x*scale+ox, by=b.y*scale+oy;
-      // thick black outline
+    // Bones
+    for (const def of JOINT_DEFS) {
+      if (!def.parent) continue;
+      const a = this.joints[def.id];
+      const b = this.joints[def.parent];
+      if (!a || !b) continue;
       ctx.save();
-      ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=5; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
-      // white centre line
-      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(a.x * scale + ox, a.y * scale + oy); ctx.lineTo(b.x * scale + ox, b.y * scale + oy); ctx.stroke();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(a.x * scale + ox, a.y * scale + oy); ctx.lineTo(b.x * scale + ox, b.y * scale + oy); ctx.stroke();
       ctx.restore();
     }
 
-    // 4. Joint handles
+    // Joint handles
     for (const def of JOINT_DEFS) {
       const j = this.joints[def.id];
       if (!j) continue;
-      const jx=j.x*scale+ox, jy=j.y*scale+oy;
-      const isHov = def.id===this._hoverId;
-      const isDrg = this._drag?.id===def.id;
-      const r     = HANDLE_R + (isDrg?3:isHov?2:0);
-
+      const x = j.x * scale + ox;
+      const y = j.y * scale + oy;
+      const isHover = this._hoverJoint === def.id;
+      const isDrag = this._dragJoint?.id === def.id;
       ctx.save();
-      // drop shadow
-      ctx.shadowColor='rgba(0,0,0,0.6)'; ctx.shadowBlur=4;
-      // outer black ring
-      ctx.beginPath(); ctx.arc(jx,jy,r+2,0,Math.PI*2);
-      ctx.fillStyle='#111'; ctx.fill();
-      // coloured fill
-      ctx.shadowBlur=0;
-      ctx.beginPath(); ctx.arc(jx,jy,r,0,Math.PI*2);
-      ctx.fillStyle=def.color; ctx.fill();
-      // white dot centre
-      ctx.beginPath(); ctx.arc(jx,jy,r*0.35,0,Math.PI*2);
-      ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.fill();
-
-      // floating label
-      if (isHov || isDrg) {
-        ctx.font      = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#000';
-        ctx.fillText(def.label, jx+1, jy-r-5);
+      ctx.beginPath();
+      ctx.arc(x, y, HANDLE_R + (isHover || isDrag ? 2 : 0), 0, Math.PI * 2);
+      ctx.fillStyle = '#000'; ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y, HANDLE_R - 1, 0, Math.PI * 2);
+      ctx.fillStyle = def.color; ctx.fill();
+      if (isHover || isDrag) {
+        ctx.font = 'bold 11px sans-serif';
         ctx.fillStyle = '#fff';
-        ctx.fillText(def.label, jx,   jy-r-6);
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 4;
+        ctx.fillText(def.label, x, y - 11);
       }
       ctx.restore();
     }
-  }
-}
 
-function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }
-function _hexToRgb(hex) {
-  return {
-    r:parseInt(hex.slice(1,3),16),
-    g:parseInt(hex.slice(3,5),16),
-    b:parseInt(hex.slice(5,7),16),
-  };
+    // Selected part label
+    if (this.selectedPartId) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(12, 12, 240, 34);
+      ctx.fillStyle = '#fff';
+      ctx.font = '600 14px sans-serif';
+      ctx.fillText(`Editing: ${this.selectedPartId} · ${this.mode.toUpperCase()}`, 22, 34);
+      ctx.restore();
+    }
+  }
 }

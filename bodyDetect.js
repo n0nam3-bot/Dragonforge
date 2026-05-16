@@ -1,245 +1,328 @@
-// bodyDetect.js
-// Uses BONE-SEGMENT Voronoi: every foreground pixel is assigned to the
-// nearest *bone line segment* rather than the nearest joint point.
-// This correctly handles limbs, weapons, and hair that extend away from
-// the body — a sword tip is always nearest to the arm segment, not hips.
+// bodyDetect.js — geometry, mask extraction, and puppet building
 
-const ALPHA = 18;
+const ALPHA_THOLD = 18;
 
-// ── Joint catalogue ───────────────────────────────────────────────────────────
 export const JOINT_DEFS = [
-  { id:'hair',  label:'Hair',    color:'#a78bfa', parent: null    },
-  { id:'head',  label:'Head',    color:'#60d4f0', parent:'hair'   },
-  { id:'neck',  label:'Neck',    color:'#f0e060', parent:'head'   },
-  { id:'torso', label:'Torso',   color:'#4ade80', parent:'neck'   },
-  { id:'hips',  label:'Hips',    color:'#60a5fa', parent:'torso'  },
-  { id:'armL',  label:'Arm L',   color:'#f59e0b', parent:'torso'  },
-  { id:'armR',  label:'Arm R',   color:'#fb923c', parent:'torso'  },
-  { id:'legL',  label:'Leg L',   color:'#f87171', parent:'hips'   },
-  { id:'legR',  label:'Leg R',   color:'#c084fc', parent:'hips'   },
+  { id: 'head',     label: 'Head',     color: '#7dd3fc', parent: 'neck' },
+  { id: 'neck',     label: 'Neck',     color: '#fde68a', parent: 'chest' },
+  { id: 'chest',    label: 'Chest',    color: '#86efac', parent: 'pelvis' },
+  { id: 'pelvis',   label: 'Pelvis',   color: '#93c5fd', parent: null },
+  { id: 'shoulderL',label: 'Shoulder L',color: '#f59e0b', parent: 'chest' },
+  { id: 'elbowL',   label: 'Elbow L',  color: '#fb923c', parent: 'shoulderL' },
+  { id: 'handL',    label: 'Hand L',   color: '#fdba74', parent: 'elbowL' },
+  { id: 'shoulderR',label: 'Shoulder R',color: '#f59e0b', parent: 'chest' },
+  { id: 'elbowR',   label: 'Elbow R',  color: '#fb923c', parent: 'shoulderR' },
+  { id: 'handR',    label: 'Hand R',   color: '#fdba74', parent: 'elbowR' },
+  { id: 'hipL',     label: 'Hip L',    color: '#f87171', parent: 'pelvis' },
+  { id: 'kneeL',    label: 'Knee L',   color: '#fca5a5', parent: 'hipL' },
+  { id: 'footL',    label: 'Foot L',   color: '#fecaca', parent: 'kneeL' },
+  { id: 'hipR',     label: 'Hip R',    color: '#c084fc', parent: 'pelvis' },
+  { id: 'kneeR',    label: 'Knee R',   color: '#d8b4fe', parent: 'hipR' },
+  { id: 'footR',    label: 'Foot R',   color: '#e9d5ff', parent: 'kneeR' },
+  { id: 'hair',     label: 'Hair',     color: '#a78bfa', parent: 'head' },
 ];
 
-// ── Bone segments for Voronoi ─────────────────────────────────────────────────
-// Each entry says "pixels closest to the segment from→to belong to region".
-// Order matters for tiebreaking; more specific bones come first.
-export const BONE_SEGS = [
-  { region:'hair',  from:'hair',  to:'head'  },
-  { region:'head',  from:'head',  to:'neck'  },
-  { region:'armL',  from:'torso', to:'armL'  },
-  { region:'armR',  from:'torso', to:'armR'  },
-  { region:'legL',  from:'hips',  to:'legL'  },
-  { region:'legR',  from:'hips',  to:'legR'  },
-  { region:'torso', from:'neck',  to:'torso' },
-  { region:'hips',  from:'torso', to:'hips'  },
+export const PART_LIBRARY = [
+  { id: 'head',      label: 'Head',          anchorJoint: 'neck' },
+  { id: 'hair',      label: 'Hair',          anchorJoint: 'head' },
+  { id: 'neck',      label: 'Neck',          anchorJoint: 'neck' },
+  { id: 'chest',     label: 'Chest',         anchorJoint: 'chest' },
+  { id: 'torso',     label: 'Torso',         anchorJoint: 'pelvis' },
+  { id: 'pelvis',    label: 'Pelvis',        anchorJoint: 'pelvis' },
+  { id: 'upperArmL', label: 'Upper Arm L',   anchorJoint: 'shoulderL' },
+  { id: 'lowerArmL', label: 'Forearm L',     anchorJoint: 'elbowL' },
+  { id: 'handL',     label: 'Hand L',        anchorJoint: 'handL' },
+  { id: 'upperArmR', label: 'Upper Arm R',   anchorJoint: 'shoulderR' },
+  { id: 'lowerArmR', label: 'Forearm R',     anchorJoint: 'elbowR' },
+  { id: 'handR',     label: 'Hand R',        anchorJoint: 'handR' },
+  { id: 'thighL',    label: 'Thigh L',       anchorJoint: 'hipL' },
+  { id: 'shinL',     label: 'Shin L',        anchorJoint: 'kneeL' },
+  { id: 'footL',     label: 'Foot L',        anchorJoint: 'footL' },
+  { id: 'thighR',    label: 'Thigh R',       anchorJoint: 'hipR' },
+  { id: 'shinR',     label: 'Shin R',        anchorJoint: 'kneeR' },
+  { id: 'footR',     label: 'Foot R',        anchorJoint: 'footR' },
+  { id: 'weapon',    label: 'Weapon',        anchorJoint: 'handR' },
+  { id: 'shield',    label: 'Shield',        anchorJoint: 'handL' },
+  { id: 'cape',      label: 'Cape',          anchorJoint: 'chest' },
 ];
 
-// ── Squared distance from point (px,py) to segment (ax,ay)→(bx,by) ──────────
-function ptSegDist2(px, py, ax, ay, bx, by) {
-  const dx = bx - ax, dy = by - ay;
-  const len2 = dx*dx + dy*dy;
-  if (len2 < 0.01) {
-    const ex = px-ax, ey = py-ay;
-    return ex*ex + ey*ey;
-  }
-  const t  = Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / len2));
-  const nx = px - (ax + t*dx);
-  const ny = py - (ay + t*dy);
-  return nx*nx + ny*ny;
-}
-
-// ── Compute bounding box ──────────────────────────────────────────────────────
 export function computeBB(charCanvas) {
   const W = charCanvas.width, H = charCanvas.height;
   const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const d   = ctx.getImageData(0, 0, W, H).data;
-  let x0=W,x1=0,y0=H,y1=0;
-  for (let y=0;y<H;y++) for (let x=0;x<W;x++) {
-    if (d[(y*W+x)*4+3]>ALPHA){
-      if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
-    }
-  }
-  if (x0>x1) return null;
-  return {x:x0,y:y0,w:x1-x0+1,h:y1-y0+1};
-}
-
-// ── Auto-place joints for a side-scrolling (slightly turned) character ────────
-// Uses alpha-weighted column centroids to detect which side has more mass
-// (front arm side) vs less mass (back arm side).
-export function autoPlaceJoints(charCanvas, bb) {
-  const W = charCanvas.width, H = charCanvas.height;
-  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const d   = ctx.getImageData(0, 0, W, H).data;
-
-  const { x:bx, y:by, w:bw, h:bh } = bb;
-  const cx = bx + bw * 0.5;  // geometric centre X
-
-  // Row profiles: alpha-weighted centroid X per row
-  const cxRow = new Float32Array(H);
-  const wRow  = new Float32Array(H);
-  for (let y=by;y<by+bh;y++){
-    let sumX=0,sumA=0;
-    for (let x=bx;x<bx+bw;x++){
-      const a=d[(y*W+x)*4+3];
-      if(a>ALPHA){sumX+=x*a;sumA+=a;}
-    }
-    if(sumA>0){cxRow[y]=sumX/sumA;wRow[y]=sumA;}
-  }
-
-  // Smooth centroid
-  const smCx = new Float32Array(H);
-  const WIN=7;
-  for (let y=by;y<by+bh;y++){
-    let s=0,n=0;
-    for(let j=Math.max(by,y-WIN);j<=Math.min(by+bh-1,y+WIN);j++){if(wRow[j]>0){s+=cxRow[j];n++;}}
-    smCx[y]=n>0?s/n:cx;
-  }
-
-  // Helper: row fraction → absolute Y
-  const ry = f => Math.round(by + bh * f);
-  // Centroid X at a given row
-  const rcx = y => smCx[clamp(y,by,by+bh-1)] || cx;
-
-  // Detect which horizontal side has more mass in the arm zone (rows 25–55%)
-  const armZoneTop = ry(0.25), armZoneBot = ry(0.55);
-  let leftMass=0, rightMass=0;
-  for(let y=armZoneTop;y<=armZoneBot;y++){
-    for(let x=bx;x<bx+bw;x++){
-      const a=d[(y*W+x)*4+3];
-      if(a>ALPHA){if(x<rcx(y))leftMass+=a;else rightMass+=a;}
-    }
-  }
-  // "front" side (more mass = sword arm) is the dominant side
-  const frontIsRight = rightMass >= leftMass;
-
-  // Shoulder width estimate: trimmed width at shoulder row
-  const shoulderY = ry(0.30);
-  let tl=bx+bw,tr=bx,tcnt=0;
-  for(let x=bx;x<bx+bw;x++){
-    const a=d[(shoulderY*W+x)*4+3];
-    if(a>ALPHA){if(x<tl)tl=x;if(x>tr)tr=x;tcnt++;}
-  }
-  const sw = tr-tl+1;
-  const shCX = rcx(shoulderY);
-
-  // Hip width estimate
-  const hipY = ry(0.60);
-  let hl=bx+bw,hr=bx;
-  for(let x=bx;x<bx+bw;x++){
-    if(d[(hipY*W+x)*4+3]>ALPHA){if(x<hl)hl=x;if(x>hr)hr=x;}
-  }
-  const hw = hr-hl+1;
-  const hCX = rcx(hipY);
-
-  // Leg split Y: first significant density drop below hips
-  let legSplitY = ry(0.70);
-  for(let y=ry(0.62);y<ry(0.82);y++){
-    let cnt=0;
-    for(let x=bx;x<bx+bw;x++) if(d[(y*W+x)*4+3]>ALPHA) cnt++;
-    if(cnt < bw*0.35){legSplitY=y;break;}
-  }
-
-  // Front/back arm X offsets
-  const frontArmX = frontIsRight ? shCX + sw*0.36 : shCX - sw*0.36;
-  const backArmX  = frontIsRight ? shCX - sw*0.28 : shCX + sw*0.28;
-
-  // Front arm sits lower (holding weapon at ~45% height)
-  const frontArmY = ry(0.52);
-  const backArmY  = ry(0.42);
-
-  // Legs: front leg extends further in facing direction
-  const frontLegX = frontIsRight ? hCX + hw*0.18 : hCX - hw*0.18;
-  const backLegX  = frontIsRight ? hCX - hw*0.14 : hCX + hw*0.14;
-
-  return {
-    hair:  { x: rcx(ry(0.04)),  y: ry(0.03) },
-    head:  { x: rcx(ry(0.13)),  y: ry(0.13) },
-    neck:  { x: rcx(ry(0.24)),  y: ry(0.24) },
-    torso: { x: rcx(ry(0.38)),  y: ry(0.38) },
-    hips:  { x: hCX,            y: ry(0.57) },
-    armL:  { x: frontIsRight ? backArmX : frontArmX,
-             y: frontIsRight ? backArmY : frontArmY },
-    armR:  { x: frontIsRight ? frontArmX : backArmX,
-             y: frontIsRight ? frontArmY : backArmY },
-    legL:  { x: frontIsRight ? backLegX : frontLegX,  y: ry(0.80) },
-    legR:  { x: frontIsRight ? frontLegX : backLegX,  y: ry(0.80) },
-  };
-}
-
-// ── Build Voronoi map using bone-segment distance ─────────────────────────────
-export function buildVoronoi(charCanvas, joints) {
-  const W = charCanvas.width, H = charCanvas.height;
-  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const imgData = ctx.getImageData(0, 0, W, H);
-  const d   = imgData.data;
-  const map = new Array(W * H).fill(null);
-
-  for (let y=0;y<H;y++) {
-    for (let x=0;x<W;x++) {
-      if (d[(y*W+x)*4+3]<=ALPHA) continue;
-      let best=null, bestD=Infinity;
-      for (const seg of BONE_SEGS) {
-        const a = joints[seg.from], b = joints[seg.to];
-        if (!a||!b) continue;
-        const d2 = ptSegDist2(x, y, a.x, a.y, b.x, b.y);
-        if (d2 < bestD) { bestD=d2; best=seg.region; }
+  const d = ctx.getImageData(0, 0, W, H).data;
+  let x0 = W, x1 = -1, y0 = H, y1 = -1;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (d[(y * W + x) * 4 + 3] > ALPHA_THOLD) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
       }
-      map[y*W+x] = best;
     }
   }
-  return { map, W, H, srcData: imgData };
+  if (x1 < 0) return null;
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
-// ── Extract each region into its own canvas ───────────────────────────────────
-export function extractParts(voronoi, joints) {
-  const { map, W, H, srcData } = voronoi;
-  const d = srcData.data;
-  const parts = {};
-
-  for (const def of JOINT_DEFS) {
-    const id = def.id;
-    let rx0=W,rx1=0,ry0=H,ry1=0,cnt=0;
-    for (let y=0;y<H;y++) for (let x=0;x<W;x++) {
-      if (map[y*W+x]!==id) continue;
-      if(x<rx0)rx0=x;if(x>rx1)rx1=x;if(y<ry0)ry0=y;if(y>ry1)ry1=y;cnt++;
+export function computePrincipalAxis(charCanvas) {
+  const W = charCanvas.width, H = charCanvas.height;
+  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
+  const d = ctx.getImageData(0, 0, W, H).data;
+  let n = 0, sx = 0, sy = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const a = d[(y * W + x) * 4 + 3];
+      if (a > ALPHA_THOLD) {
+        n++;
+        sx += x;
+        sy += y;
+      }
     }
-    if (cnt<2||rx0>rx1) { parts[id]=null; continue; }
-
-    const pw=rx1-rx0+1, ph=ry1-ry0+1;
-    const pc=document.createElement('canvas');
-    pc.width=pw; pc.height=ph;
-    const pCtx=pc.getContext('2d');
-    const pImg=pCtx.createImageData(pw,ph);
-    const pd=pImg.data;
-
-    for (let y=ry0;y<=ry1;y++) for (let x=rx0;x<=rx1;x++) {
-      if (map[y*W+x]!==id) continue;
-      const si=(y*W+x)*4, di=((y-ry0)*pw+(x-rx0))*4;
-      pd[di]=d[si];pd[di+1]=d[si+1];pd[di+2]=d[si+2];pd[di+3]=d[si+3];
+  }
+  if (!n) return { cx: W / 2, cy: H / 2, angle: Math.PI / 2, ux: 0, uy: 1, vx: -1, vy: 0 };
+  const cx = sx / n, cy = sy / n;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const a = d[(y * W + x) * 4 + 3];
+      if (a > ALPHA_THOLD) {
+        const dx = x - cx, dy = y - cy;
+        sxx += dx * dx;
+        syy += dy * dy;
+        sxy += dx * dy;
+      }
     }
-    pCtx.putImageData(pImg,0,0);
+  }
+  const angle = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  const vx = -uy;
+  const vy = ux;
+  return { cx, cy, angle, ux, uy, vx, vy };
+}
 
-    // Anchor = joint position in local canvas coords
-    const j  = joints[id];
-    const ax = j ? j.x-rx0 : pw*0.5;
-    const ay = j ? j.y-ry0 : ph*0.5;
+export function autoPlaceJoints(bb, axisInfo = null) {
+  const cx = axisInfo?.cx ?? (bb.x + bb.w * 0.5);
+  const cy = axisInfo?.cy ?? (bb.y + bb.h * 0.52);
+  const ux = axisInfo?.ux ?? 0;
+  const uy = axisInfo?.uy ?? 1;
+  const vx = axisInfo?.vx ?? -1;
+  const vy = axisInfo?.vy ?? 0;
+  const H = Math.max(bb.h, bb.w);
+  const along = (t) => [cx + ux * H * t, cy + uy * H * t];
+  const across = (t) => [cx + vx * H * t, cy + vy * H * t];
 
-    parts[id] = {
-      canvas:  pc,
-      anchorX: Math.max(0,Math.min(pw-1,Math.round(ax))),
-      anchorY: Math.max(0,Math.min(ph-1,Math.round(ay))),
-      srcX: rx0, srcY: ry0, w: pw, h: ph,
+  const j = {};
+  const p = (id, x, y) => (j[id] = { x, y });
+
+  const [hx, hy] = along(-0.34);
+  const [nx, ny] = along(-0.20);
+  const [chx, chy] = along(-0.05);
+  const [px, py] = along(0.16);
+  const shoulderSpan = H * 0.11;
+  const hipSpan = H * 0.08;
+  const armOut = H * 0.18;
+  const legOut = H * 0.10;
+
+  p('hair', hx, hy - H * 0.03);
+  p('head', hx, hy);
+  p('neck', nx, ny);
+  p('chest', chx, chy);
+  p('pelvis', px, py);
+
+  const [slx, sly] = across(-shoulderSpan);
+  const [srx, sry] = across(shoulderSpan);
+  const [hlx, hly] = across(-hipSpan);
+  const [hrx, hry] = across(hipSpan);
+
+  p('shoulderL', slx, sly);
+  p('shoulderR', srx, sry);
+  p('elbowL', slx - vx * armOut + ux * H * 0.04, sly - vy * armOut + uy * H * 0.04);
+  p('elbowR', srx + vx * armOut + ux * H * 0.04, sry + vy * armOut + uy * H * 0.04);
+  p('handL', j.elbowL.x - vx * armOut * 0.9 + ux * H * 0.02, j.elbowL.y - vy * armOut * 0.9 + uy * H * 0.02);
+  p('handR', j.elbowR.x + vx * armOut * 0.9 + ux * H * 0.02, j.elbowR.y + vy * armOut * 0.9 + uy * H * 0.02);
+
+  p('hipL', hlx, hly);
+  p('hipR', hrx, hry);
+  p('kneeL', hlx - vx * legOut + ux * H * 0.14, hly - vy * legOut + uy * H * 0.14);
+  p('kneeR', hrx + vx * legOut + ux * H * 0.14, hry + vy * legOut + uy * H * 0.14);
+  p('footL', j.kneeL.x - vx * legOut * 0.65 + ux * H * 0.18, j.kneeL.y - vy * legOut * 0.65 + uy * H * 0.18);
+  p('footR', j.kneeR.x + vx * legOut * 0.65 + ux * H * 0.18, j.kneeR.y + vy * legOut * 0.65 + uy * H * 0.18);
+
+  return j;
+}
+
+export function createMaskCanvas(width, height) {
+  const c = document.createElement('canvas');
+  c.width = width; c.height = height;
+  return c;
+}
+
+export function polygonMaskFromPoints(srcCanvas, points) {
+  const mask = createMaskCanvas(srcCanvas.width, srcCanvas.height);
+  const ctx = mask.getContext('2d');
+  if (!points || points.length < 3) return mask;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(srcCanvas, 0, 0);
+  ctx.restore();
+  mask._bbox = boundsOfMask(mask);
+  return mask;
+}
+
+export function floodFillMask(srcCanvas, seedX, seedY, tolerance = 38, alphaThold = ALPHA_THOLD) {
+  const W = srcCanvas.width, H = srcCanvas.height;
+  const ctx = srcCanvas.getContext('2d', { willReadFrequently: true });
+  const src = ctx.getImageData(0, 0, W, H);
+  const d = src.data;
+  const mask = createMaskCanvas(W, H);
+  const mctx = mask.getContext('2d');
+  const out = mctx.createImageData(W, H);
+  const od = out.data;
+  const seedIdx = (Math.max(0, Math.min(H - 1, seedY)) * W + Math.max(0, Math.min(W - 1, seedX))) * 4;
+  const sr = d[seedIdx], sg = d[seedIdx + 1], sb = d[seedIdx + 2], sa = d[seedIdx + 3];
+  if (sa < alphaThold) return mask;
+
+  const visited = new Uint8Array(W * H);
+  const qx = new Int32Array(W * H);
+  const qy = new Int32Array(W * H);
+  let head = 0, tail = 0;
+  qx[tail] = seedX; qy[tail] = seedY; tail++;
+
+  const dist = (i) => {
+    const dr = d[i] - sr, dg = d[i + 1] - sg, db = d[i + 2] - sb, da = d[i + 3] - sa;
+    return Math.sqrt(dr * dr + dg * dg + db * db + da * da * 0.15);
+  };
+
+  while (head < tail) {
+    const x = qx[head], y = qy[head]; head++;
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const idx = y * W + x;
+    if (visited[idx]) continue;
+    visited[idx] = 1;
+    const i = idx * 4;
+    if (d[i + 3] < alphaThold) continue;
+    if (dist(i) > tolerance) continue;
+    od[i] = d[i]; od[i + 1] = d[i + 1]; od[i + 2] = d[i + 2]; od[i + 3] = d[i + 3];
+    if (x > 0) qx[tail] = x - 1, qy[tail++] = y;
+    if (x < W - 1) qx[tail] = x + 1, qy[tail++] = y;
+    if (y > 0) qx[tail] = x, qy[tail++] = y - 1;
+    if (y < H - 1) qx[tail] = x, qy[tail++] = y + 1;
+  }
+  mctx.putImageData(out, 0, 0);
+  mask._bbox = boundsOfMask(mask);
+  return mask;
+}
+
+export function trimOpaque(maskCanvas) {
+  const W = maskCanvas.width, H = maskCanvas.height;
+  const ctx = maskCanvas.getContext('2d', { willReadFrequently: true });
+  const d = ctx.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (d[(y * W + x) * 4 + 3] > 8) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+  if (x1 < 0) {
+    const empty = createMaskCanvas(1, 1);
+    return empty;
+  }
+  const out = createMaskCanvas(x1 - x0 + 1, y1 - y0 + 1);
+  const octx = out.getContext('2d');
+  octx.drawImage(maskCanvas, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
+  out._bbox = { x: x0, y: y0, w: out.width, h: out.height };
+  return out;
+}
+
+function boundsOfMask(maskCanvas) {
+  const W = maskCanvas.width, H = maskCanvas.height;
+  const ctx = maskCanvas.getContext('2d', { willReadFrequently: true });
+  const d = ctx.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (d[(y * W + x) * 4 + 3] > 8) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+export function buildPuppet(sourceCanvas, joints, parts) {
+  const bb = computeBB(sourceCanvas);
+  if (!bb) return null;
+  const axis = computePrincipalAxis(sourceCanvas);
+  const partObjects = {};
+  const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  const src = srcCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+  const sdata = src.data;
+
+  for (const part of parts) {
+    if (!part || !part.enabled || !part.maskCanvas) continue;
+    const mask = part.maskCanvas;
+    const b = mask._bbox || boundsOfMask(mask);
+    if (!b || b.w < 1 || b.h < 1) continue;
+    const mctx = mask.getContext('2d', { willReadFrequently: true });
+    const md = mctx.getImageData(0, 0, mask.width, mask.height).data;
+    const out = document.createElement('canvas');
+    out.width = b.w; out.height = b.h;
+    const octx = out.getContext('2d');
+    const img = octx.createImageData(b.w, b.h);
+    const od = img.data;
+    for (let y = 0; y < b.h; y++) {
+      for (let x = 0; x < b.w; x++) {
+        const mx = x + b.x, my = y + b.y;
+        const mi = (my * mask.width + mx) * 4;
+        const a = md[mi + 3];
+        if (!a) continue;
+        const si = mi;
+        const di = (y * b.w + x) * 4;
+        od[di] = sdata[si];
+        od[di + 1] = sdata[si + 1];
+        od[di + 2] = sdata[si + 2];
+        od[di + 3] = Math.min(255, Math.round((sdata[si + 3] * a) / 255));
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    const anchor = getAnchorForPart(part, joints, sourceCanvas);
+    partObjects[part.id] = {
+      id: part.id,
+      typeId: part.typeId || part.id,
+      label: part.label,
+      parent: part.parent || null,
+      anchorJoint: part.anchorJoint || null,
+      anchorSrc: anchor,
+      canvas: out,
+      srcX: b.x,
+      srcY: b.y,
+      anchorX: anchor.x - b.x,
+      anchorY: anchor.y - b.y,
+      w: out.width,
+      h: out.height,
+      depth: part.depth ?? 0,
     };
   }
-  return parts;
+
+  return { parts: partObjects, joints, bb, axis, groundY: bb.y + bb.h - 1 };
 }
 
-// ── Build final puppet ────────────────────────────────────────────────────────
-export function buildPuppet(charCanvas, joints) {
-  const bb = computeBB(charCanvas);
-  if (!bb) return null;
-  const voronoi = buildVoronoi(charCanvas, joints);
-  const parts   = extractParts(voronoi, joints);
-  return { parts, joints, bb, groundY: bb.y+bb.h-1, voronoi };
+function getAnchorForPart(part, joints, sourceCanvas) {
+  if (part.anchorJoint && joints[part.anchorJoint]) return { ...joints[part.anchorJoint] };
+  if (part.anchorSrc) return { ...part.anchorSrc };
+  return { x: sourceCanvas.width * 0.5, y: sourceCanvas.height * 0.5 };
 }
-
-const clamp = (v,lo,hi)=>v<lo?lo:v>hi?hi:v;

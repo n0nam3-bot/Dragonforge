@@ -4,40 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>SpriteSmith Studio</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="scanlines"></div>
-
 <header id="header">
   <div class="header-logo">
-    <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1" y="1" width="30" height="30" rx="3" stroke="currentColor" stroke-width="1.5"/>
-      <rect x="6"  y="6"  width="8" height="8" fill="currentColor" opacity="0.8"/>
-      <rect x="18" y="6"  width="8" height="8" fill="currentColor" opacity="0.4"/>
-      <rect x="6"  y="18" width="8" height="8" fill="currentColor" opacity="0.4"/>
-      <rect x="18" y="18" width="8" height="8" fill="currentColor" opacity="0.9"/>
-    </svg>
+    <div class="logo-mark">◼</div>
     <div class="logo-text">
-      <span class="logo-name">SpriteSmith</span>
-      <span class="logo-tag">STUDIO v6 · PUPPET ENGINE</span>
+      <div class="logo-name">SpriteSmith</div>
+      <div class="logo-tag">PUPPET RIG · LASSO SELECT</div>
     </div>
   </div>
   <div class="header-actions">
     <span id="saveStatus" class="save-status"></span>
-    <button id="saveBtn" class="btn btn-ghost">💾 Save</button>
-    <button id="loadBtn" class="btn btn-ghost">📂 Load</button>
+    <button id="saveBtn" class="btn btn-ghost">Save</button>
+    <button id="loadBtn" class="btn btn-ghost">Load</button>
   </div>
 </header>
 
 <div id="layout">
-
-  <!-- SIDEBAR -->
   <aside id="sidebar">
-
-    <!-- 01 UPLOAD -->
     <section class="panel">
       <div class="panel-hdr"><span class="panel-num">01</span><span class="panel-ttl">UPLOAD CHARACTER</span></div>
       <div class="upload-zone" id="uploadZone">
@@ -45,7 +31,7 @@
         <div class="upload-inner" id="uploadTrigger">
           <div class="upload-ico">⬆</div>
           <p class="upload-msg">Drop image here or <u>browse</u></p>
-          <p class="upload-sub">PNG · JPG · WebP — green/solid BG recommended</p>
+          <p class="upload-sub">PNG · JPG · WebP</p>
         </div>
         <div class="upload-prev hidden" id="uploadPreview">
           <img id="uploadThumb" alt="Character">
@@ -58,56 +44,48 @@
       </div>
     </section>
 
-    <!-- 02 SKELETON EDITOR -->
     <section class="panel" id="skelPanel">
-      <div class="panel-hdr"><span class="panel-num">02</span><span class="panel-ttl">SKELETON EDITOR</span></div>
-      <p class="panel-note" id="skelNote">Upload a character to begin skeleton setup.</p>
-
+      <div class="panel-hdr"><span class="panel-num">02</span><span class="panel-ttl">PARTS & RIG</span></div>
+      <p class="panel-note" id="skelNote">Upload a character to start.</p>
       <div id="skelControls" class="hidden">
-        <!-- View toggles -->
         <div class="toggle-row">
-          <label class="toggle-label">
-            <input type="checkbox" id="showRegions" checked>
-            <span class="toggle-track"></span>
-            <span class="toggle-text">Show Regions</span>
-          </label>
-          <label class="toggle-label">
-            <input type="checkbox" id="showSkeleton" checked>
-            <span class="toggle-track"></span>
-            <span class="toggle-text">Show Skeleton</span>
-          </label>
+          <label class="toggle-label"><input type="checkbox" id="showRegions" checked><span class="toggle-track"></span><span class="toggle-text">Show Masks</span></label>
+          <label class="toggle-label"><input type="checkbox" id="showSkeleton" checked><span class="toggle-track"></span><span class="toggle-text">Show Joints</span></label>
         </div>
-
-        <!-- Region legend -->
-        <div id="regionLegend" class="region-legend"></div>
-
-        <p class="panel-note">Drag the <strong>joints</strong> on the left panel to fit your character. Regions update live.</p>
-
+        <div class="mode-strip">
+          <button class="btn-mini active" data-editor-mode="joint">Joint</button>
+          <button class="btn-mini" data-editor-mode="lasso">Lasso</button>
+          <button class="btn-mini" data-editor-mode="wand">Wand</button>
+          <span class="mode-badge">Mode: <strong id="editModeLabel">JOINT</strong></span>
+        </div>
+        <div class="part-add-row">
+          <select id="partType" class="sel"></select>
+          <button id="addPartBtn" class="btn btn-primary btn-half">Add Part</button>
+        </div>
+        <div id="partList" class="part-list"></div>
         <div class="btn-row">
-          <button id="resetJointsBtn" class="btn btn-ghost btn-half">↺ Reset</button>
-          <button id="applyBtn"       class="btn btn-primary btn-half" disabled>✓ Apply</button>
+          <button id="resetJointsBtn" class="btn btn-ghost btn-half">Reset Joints</button>
+          <button id="applyBtn" class="btn btn-primary btn-half" disabled>Apply</button>
         </div>
       </div>
     </section>
 
-    <!-- 03 POSE -->
     <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">03</span><span class="panel-ttl">POSE &amp; ANIMATION</span></div>
+      <div class="panel-hdr"><span class="panel-num">03</span><span class="panel-ttl">POSE</span></div>
       <div id="poseGrid" class="pose-grid"></div>
       <div class="ctl-row">
         <span class="ctl-lbl">DIRECTION</span>
         <div class="tog-grp" id="dirGroup">
-          <button class="tog active" data-val="right">→ RIGHT</button>
-          <button class="tog"        data-val="left">← LEFT</button>
+          <button class="tog active" data-val="right">RIGHT</button>
+          <button class="tog" data-val="left">LEFT</button>
         </div>
       </div>
       <div class="ctl-row">
-        <span class="ctl-lbl">SPEED <span id="speedVal" class="ctl-accent">1.0×</span></span>
+        <span class="ctl-lbl">SPEED <span id="speedVal" class="ctl-accent">1.00×</span></span>
         <input type="range" id="speedSlider" class="slider" min="0.25" max="3" step="0.25" value="1">
       </div>
     </section>
 
-    <!-- 04 SPRITE SHEET -->
     <section class="panel">
       <div class="panel-hdr"><span class="panel-num">04</span><span class="panel-ttl">SPRITE SHEET</span></div>
       <div class="ctl-row">
@@ -131,60 +109,43 @@
           <option value="grid">Grid</option>
         </select>
       </div>
-      <button id="bakeBtn" class="btn btn-primary btn-w100" disabled>⚡ BAKE SPRITE SHEET</button>
+      <button id="bakeBtn" class="btn btn-primary btn-w100" disabled>Bake Sprite Sheet</button>
     </section>
 
-    <!-- 05 EXPORT -->
     <section class="panel">
       <div class="panel-hdr"><span class="panel-num">05</span><span class="panel-ttl">EXPORT</span></div>
       <div class="export-col">
-        <button id="exportPNG"  class="btn btn-amber btn-w100" disabled>↓ Export PNG</button>
-        <button id="exportJSON" class="btn btn-amber btn-w100" disabled>↓ Export JSON</button>
+        <button id="exportPNG" class="btn btn-amber btn-w100" disabled>Export PNG</button>
+        <button id="exportJSON" class="btn btn-amber btn-w100" disabled>Export JSON</button>
       </div>
     </section>
-
   </aside>
 
-  <!-- WORKSPACE: skeleton editor LEFT, previews RIGHT -->
   <main id="workspace">
-
-    <!-- LEFT: Skeleton Editor -->
     <div id="skelEditorPane" class="ws-pane">
-      <div class="ws-lbl">
-        <span>SKELETON EDITOR</span>
-        <span id="skelBadge" class="ws-badge">drag joints to fit your character</span>
-      </div>
+      <div class="ws-lbl"><span>RIG EDITOR</span><span class="ws-badge">drag joints or trace masks</span></div>
       <div class="cw cw-skel" id="skelWrap">
-        <canvas id="skelCanvas" width="500" height="500"></canvas>
+        <canvas id="skelCanvas" width="520" height="520"></canvas>
         <div class="cw-placeholder" id="skelPlaceholder">
           <div class="ph-ico">🦴</div>
-          <p>Upload a character to<br>open the skeleton editor</p>
+          <p>Upload a character to<br>open the rig editor</p>
         </div>
       </div>
     </div>
 
-    <!-- RIGHT: Animation Preview + Sheet Preview -->
     <div id="previewPane" class="ws-pane ws-pane-right">
-
       <div class="ws-col">
-        <div class="ws-lbl">
-          <span>ANIMATION PREVIEW</span>
-          <span id="poseBadge" class="ws-badge">—</span>
-        </div>
+        <div class="ws-lbl"><span>ANIMATION PREVIEW</span><span id="poseBadge" class="ws-badge">—</span></div>
         <div class="cw" id="previewWrap">
           <canvas id="previewCanvas" width="320" height="320"></canvas>
           <div class="cw-placeholder" id="previewPlaceholder">
             <div class="ph-ico">🎮</div>
-            <p>Apply skeleton to<br>start animating</p>
+            <p>Apply the rig to<br>start animating</p>
           </div>
         </div>
       </div>
-
       <div class="ws-col">
-        <div class="ws-lbl">
-          <span>SPRITE SHEET</span>
-          <span id="sheetBadge" class="ws-badge">—</span>
-        </div>
+        <div class="ws-lbl"><span>SPRITE SHEET</span><span id="sheetBadge" class="ws-badge">—</span></div>
         <div class="cw cw-sheet" id="sheetWrap">
           <canvas id="sheetCanvas" width="512" height="128"></canvas>
           <div class="cw-placeholder" id="sheetPlaceholder">
@@ -193,9 +154,7 @@
           </div>
         </div>
       </div>
-
     </div>
-
   </main>
 </div>
 
