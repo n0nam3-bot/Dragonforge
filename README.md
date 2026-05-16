@@ -1,22 +1,15 @@
 # SideScroller Puppet Animator
 
-A static, browser-only sprite walk-cycle tool for side-view characters.
+A browser-based 2D puppet animator for imported character images.
 
-## What it does
-- Import a transparent PNG or a sprite image.
-- Auto-rig a side-scroller skeleton.
-- Drag joints into place.
-- Zoom and pan the source image while editing.
-- Preview a soft-mesh walk cycle in a second pane.
-- Works as a plain static site on GitHub Pages or any file host.
-
-## How to use
-1. Open `index.html` in a browser.
-2. Import a character image.
+## Use
+1. Open `index.html` in a browser or host the folder on GitHub Pages.
+2. Import a full-body sprite.
 3. Click **Auto rig**.
-4. Drag the joints to match the sprite.
-5. Use the **Facing** selector when the character is turned the other way.
-6. Hit **Pause/Play** to stop or resume the preview.
+4. Drag joints until the body lines up with the sprite.
+5. Use the sliders to tune the walk cycle.
 
 ## Notes
-This version is fully self-contained. It does not rely on external libraries or build tools.
+- The app uses mesh skinning rather than box slicing.
+- Best results come from a full-body sprite with a transparent background.
+- If the source image has a flat background, keep **Auto trim** enabled.

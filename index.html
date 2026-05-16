@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>SideScroller Puppet Animator</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -10,57 +10,73 @@
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="title">SideScroller Puppet Animator</div>
-        <div class="subtitle">Import a sprite, place the rig, and preview a natural walk cycle in the browser.</div>
+        <strong>SideScroller Puppet Animator</strong>
+        <span>Mesh-skinned walk cycle for imported sprites</span>
       </div>
 
-      <div class="controls">
-        <label class="control file">
+      <div class="group">
+        <label class="fileBtn">
           <span>Import image</span>
           <input id="fileInput" type="file" accept="image/*" />
         </label>
-
-        <label class="control">
-          <span>Facing</span>
-          <select id="facingSelect">
-            <option value="1">Facing right</option>
-            <option value="-1">Facing left</option>
-          </select>
-        </label>
-
-        <button id="autoRigBtn" class="btn primary">Auto rig</button>
-        <button id="fitBtn" class="btn">Fit source</button>
-        <button id="resetBtn" class="btn warn">Reset rig</button>
+        <button id="autoRigBtn" class="primary">Auto rig</button>
+        <button id="fitBtn">Fit source</button>
+        <button id="resetPoseBtn" class="warn">Reset pose</button>
       </div>
 
-      <div class="controls right">
-        <label class="control">
-          <span>Speed</span>
-          <input id="speedRange" type="range" min="0.25" max="2.25" step="0.01" value="1" />
+      <div class="group">
+        <label class="field">Facing
+          <select id="facingSelect">
+            <option value="1">Right</option>
+            <option value="-1">Left</option>
+          </select>
         </label>
-        <label class="control">
-          <span>BG trim</span>
+        <label class="field">Speed
+          <input id="speedRange" type="range" min="0.25" max="2.0" step="0.01" value="1" />
+        </label>
+        <label class="field">Stride
+          <input id="strideRange" type="range" min="0.03" max="0.24" step="0.005" value="0.12" />
+        </label>
+        <label class="field">Lift
+          <input id="liftRange" type="range" min="0.02" max="0.13" step="0.005" value="0.07" />
+        </label>
+      </div>
+
+      <div class="group">
+        <label class="field">Bounce
+          <input id="bounceRange" type="range" min="0.00" max="0.06" step="0.002" value="0.018" />
+        </label>
+        <label class="field">Lean
+          <input id="leanRange" type="range" min="0.00" max="0.22" step="0.005" value="0.11" />
+        </label>
+        <label class="field">Arm swing
+          <input id="armRange" type="range" min="0.20" max="1.60" step="0.02" value="0.90" />
+        </label>
+      </div>
+
+      <div class="group right">
+        <label class="pill"><input id="meshToggle" type="checkbox" checked /> Show mesh</label>
+        <label class="pill"><input id="trimToggle" type="checkbox" checked /> Auto trim</label>
+        <label class="field">Trim
           <input id="trimRange" type="range" min="0" max="90" step="1" value="28" />
         </label>
-        <button id="playBtn" class="btn good">Pause</button>
-        <label class="pill"><input id="showRigChk" type="checkbox" checked /> Show rig</label>
-        <label class="pill"><input id="trimChk" type="checkbox" checked /> Auto trim</label>
+        <button id="playBtn" class="good">Pause</button>
       </div>
     </header>
 
-    <main class="main">
+    <main class="workspace">
       <section class="pane">
         <div class="paneHead">
           <div>
-            <div class="paneTitle">Source / rig editor</div>
-            <div class="paneHint">Drag joints. Wheel to zoom. Drag empty space to pan.</div>
+            <h2>Source / rig editor</h2>
+            <p>Drag joints • wheel to zoom • drag empty space to pan</p>
           </div>
-          <div class="paneMeta" id="sourceMeta">No image loaded.</div>
+          <div class="badge" id="sourceBadge">No image loaded</div>
         </div>
-        <div class="canvasWrap" id="sourceWrap">
+        <div class="canvasWrap">
           <canvas id="sourceCanvas"></canvas>
-          <div class="overlayBox">
-            <strong>Editing:</strong> the source view is the control room. Adjust the rig until the bones match the character.
+          <div class="hint">
+            <strong>Workflow:</strong> import a full-body sprite, click <em>Auto rig</em>, then drag joints until the skeleton matches the pose. The preview updates in real time.
           </div>
         </div>
       </section>
@@ -68,21 +84,20 @@
       <section class="pane">
         <div class="paneHead">
           <div>
-            <div class="paneTitle">Animated preview</div>
-            <div class="paneHint">Mesh-warped render with two-bone IK walk motion.</div>
+            <h2>Animated preview</h2>
+            <p>Mesh skinning + planted-foot walk cycle</p>
           </div>
-          <div class="paneMeta" id="previewMeta">Preview idle.</div>
+          <div class="badge" id="previewBadge">Idle</div>
         </div>
         <div class="canvasWrap">
           <canvas id="previewCanvas"></canvas>
-          <div class="overlayBox">
-            <strong>Preview:</strong> the whole sprite deforms with a soft mesh so the motion stays connected and natural.
+          <div class="hint">
+            <strong>Result:</strong> the entire sprite deforms as one skinned body instead of being hard-sliced into boxes or separate cutouts.
           </div>
         </div>
       </section>
     </main>
   </div>
-
   <script src="app.js"></script>
 </body>
 </html>
