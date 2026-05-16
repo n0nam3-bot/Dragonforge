@@ -1,164 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>SpriteSmith Studio</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpriteSmith Studio — Outline Rig</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<header id="header">
-  <div class="header-logo">
-    <div class="logo-mark">◼</div>
-    <div class="logo-text">
-      <div class="logo-name">SpriteSmith</div>
-      <div class="logo-tag">PUPPET RIG · LASSO SELECT</div>
+  <header class="topbar">
+    <div>
+      <div class="brand">SpriteSmith Studio</div>
+      <div class="subtitle">Manual outline rig • lasso + magic wand • side-view friendly</div>
     </div>
-  </div>
-  <div class="header-actions">
-    <span id="saveStatus" class="save-status"></span>
-    <button id="saveBtn" class="btn btn-ghost">Save</button>
-    <button id="loadBtn" class="btn btn-ghost">Load</button>
-  </div>
-</header>
+    <div class="topbar-actions">
+      <button id="saveBtn" class="ghost">Save</button>
+      <button id="loadBtn" class="ghost">Load</button>
+      <button id="exportProjectBtn" class="ghost">Export JSON</button>
+    </div>
+  </header>
 
-<div id="layout">
-  <aside id="sidebar">
-    <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">01</span><span class="panel-ttl">UPLOAD CHARACTER</span></div>
-      <div class="upload-zone" id="uploadZone">
-        <input type="file" id="fileInput" accept="image/*" hidden>
-        <div class="upload-inner" id="uploadTrigger">
-          <div class="upload-ico">⬆</div>
-          <p class="upload-msg">Drop image here or <u>browse</u></p>
-          <p class="upload-sub">PNG · JPG · WebP</p>
-        </div>
-        <div class="upload-prev hidden" id="uploadPreview">
-          <img id="uploadThumb" alt="Character">
-          <button id="clearBtn" class="clear-btn" title="Remove">✕</button>
-        </div>
-      </div>
-      <div id="bgBar" class="bg-bar hidden">
-        <div class="prog-track"><div id="progFill" class="prog-fill"></div></div>
-        <div id="progLabel" class="prog-label">Processing…</div>
-      </div>
-    </section>
+  <main class="app-shell">
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>Upload</h2>
+        <label class="upload-zone" id="uploadZone">
+          <input id="fileInput" type="file" accept="image/*" hidden>
+          <span class="upload-title">Drop image here or browse</span>
+          <span class="upload-note">PNG, JPG, WebP</span>
+        </label>
+        <button id="clearImageBtn" class="ghost full">Clear Image</button>
+      </section>
 
-    <section class="panel" id="skelPanel">
-      <div class="panel-hdr"><span class="panel-num">02</span><span class="panel-ttl">PARTS & RIG</span></div>
-      <p class="panel-note" id="skelNote">Upload a character to start.</p>
-      <div id="skelControls" class="hidden">
-        <div class="toggle-row">
-          <label class="toggle-label"><input type="checkbox" id="showRegions" checked><span class="toggle-track"></span><span class="toggle-text">Show Masks</span></label>
-          <label class="toggle-label"><input type="checkbox" id="showSkeleton" checked><span class="toggle-track"></span><span class="toggle-text">Show Joints</span></label>
+      <section class="panel">
+        <h2>Tools</h2>
+        <div class="tool-row">
+          <button class="tool active" data-tool="lasso">Lasso</button>
+          <button class="tool" data-tool="wand">Magic Wand</button>
+          <button class="tool" data-tool="joint">Joints</button>
         </div>
-        <div class="mode-strip">
-          <button class="btn-mini active" data-editor-mode="joint">Joint</button>
-          <button class="btn-mini" data-editor-mode="lasso">Lasso</button>
-          <button class="btn-mini" data-editor-mode="wand">Wand</button>
-          <span class="mode-badge">Mode: <strong id="editModeLabel">JOINT</strong></span>
+        <div class="control">
+          <label>Selection mode</label>
+          <div class="tool-row compact">
+            <button class="mini active" data-mask-op="replace">Replace</button>
+            <button class="mini" data-mask-op="add">Add</button>
+            <button class="mini" data-mask-op="subtract">Erase</button>
+          </div>
         </div>
-        <div class="part-add-row">
-          <select id="partType" class="sel"></select>
-          <button id="addPartBtn" class="btn btn-primary btn-half">Add Part</button>
+        <div class="control">
+          <label for="wandTolerance">Wand tolerance <span id="wandToleranceVal">28</span></label>
+          <input id="wandTolerance" type="range" min="4" max="90" value="28" />
+        </div>
+        <div class="control">
+          <label for="selectionSmooth">Outline smoothing <span id="selectionSmoothVal">0.30</span></label>
+          <input id="selectionSmooth" type="range" min="0" max="1" step="0.05" value="0.30" />
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Parts</h2>
+          <button id="addPartBtn" class="ghost small">+ Add</button>
+        </div>
+        <div class="control">
+          <label for="partTypeSelect">Add human part</label>
+          <select id="partTypeSelect"></select>
         </div>
         <div id="partList" class="part-list"></div>
-        <div class="btn-row">
-          <button id="resetJointsBtn" class="btn btn-ghost btn-half">Reset Joints</button>
-          <button id="applyBtn" class="btn btn-primary btn-half" disabled>Apply</button>
+      </section>
+
+      <section class="panel">
+        <h2>Selected part</h2>
+        <div id="selectedPartEmpty" class="empty-state">Select a part to edit its mask, parent, and joint.</div>
+        <div id="selectedPartEditor" class="hidden-stack">
+          <div class="control">
+            <label for="partNameInput">Name</label>
+            <input id="partNameInput" type="text" />
+          </div>
+          <div class="control">
+            <label for="partTypeEdit">Type</label>
+            <select id="partTypeEdit"></select>
+          </div>
+          <div class="control">
+            <label for="partParentSelect">Parent</label>
+            <select id="partParentSelect"></select>
+          </div>
+          <div class="control inline">
+            <label><input id="partVisibleToggle" type="checkbox" checked> Visible</label>
+            <label><input id="showMaskToggle" type="checkbox" checked> Show mask</label>
+          </div>
+          <div class="control inline">
+            <button id="resetJointBtn" class="ghost small">Reset joint</button>
+            <button id="clearMaskBtn" class="ghost small">Clear mask</button>
+          </div>
+          <p class="helper">Draw a lasso or use wand on the canvas with the selected part active. Drag the joint handle to reposition it.</p>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">03</span><span class="panel-ttl">POSE</span></div>
-      <div id="poseGrid" class="pose-grid"></div>
-      <div class="ctl-row">
-        <span class="ctl-lbl">DIRECTION</span>
-        <div class="tog-grp" id="dirGroup">
-          <button class="tog active" data-val="right">RIGHT</button>
-          <button class="tog" data-val="left">LEFT</button>
+      <section class="panel">
+        <h2>Animation</h2>
+        <div class="control">
+          <label for="poseSelect">Pose</label>
+          <select id="poseSelect">
+            <option value="idle">Idle</option>
+            <option value="walk" selected>Walk</option>
+            <option value="run">Run</option>
+            <option value="jump">Jump</option>
+          </select>
         </div>
-      </div>
-      <div class="ctl-row">
-        <span class="ctl-lbl">SPEED <span id="speedVal" class="ctl-accent">1.00×</span></span>
-        <input type="range" id="speedSlider" class="slider" min="0.25" max="3" step="0.25" value="1">
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">04</span><span class="panel-ttl">SPRITE SHEET</span></div>
-      <div class="ctl-row">
-        <span class="ctl-lbl">FRAMES <span id="framesVal" class="ctl-accent">8</span></span>
-        <input type="range" id="framesSlider" class="slider" min="4" max="24" step="2" value="8">
-      </div>
-      <div class="ctl-row">
-        <span class="ctl-lbl">FRAME SIZE</span>
-        <select id="sizeSelect" class="sel">
-          <option value="64">64 × 64</option>
-          <option value="96">96 × 96</option>
-          <option value="128" selected>128 × 128</option>
-          <option value="192">192 × 192</option>
-          <option value="256">256 × 256</option>
-        </select>
-      </div>
-      <div class="ctl-row">
-        <span class="ctl-lbl">LAYOUT</span>
-        <select id="layoutSelect" class="sel">
-          <option value="horizontal">Horizontal strip</option>
-          <option value="grid">Grid</option>
-        </select>
-      </div>
-      <button id="bakeBtn" class="btn btn-primary btn-w100" disabled>Bake Sprite Sheet</button>
-    </section>
-
-    <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">05</span><span class="panel-ttl">EXPORT</span></div>
-      <div class="export-col">
-        <button id="exportPNG" class="btn btn-amber btn-w100" disabled>Export PNG</button>
-        <button id="exportJSON" class="btn btn-amber btn-w100" disabled>Export JSON</button>
-      </div>
-    </section>
-  </aside>
-
-  <main id="workspace">
-    <div id="skelEditorPane" class="ws-pane">
-      <div class="ws-lbl"><span>RIG EDITOR</span><span class="ws-badge">drag joints or trace masks</span></div>
-      <div class="cw cw-skel" id="skelWrap">
-        <canvas id="skelCanvas" width="520" height="520"></canvas>
-        <div class="cw-placeholder" id="skelPlaceholder">
-          <div class="ph-ico">🦴</div>
-          <p>Upload a character to<br>open the rig editor</p>
+        <div class="control">
+          <label for="speedSlider">Speed <span id="speedVal">1.0×</span></label>
+          <input id="speedSlider" type="range" min="0.25" max="3" step="0.05" value="1" />
         </div>
-      </div>
-    </div>
+        <div class="control">
+          <label for="tiltSlider">Body tilt <span id="tiltVal">0°</span></label>
+          <input id="tiltSlider" type="range" min="-25" max="25" step="1" value="0" />
+        </div>
+      </section>
 
-    <div id="previewPane" class="ws-pane ws-pane-right">
-      <div class="ws-col">
-        <div class="ws-lbl"><span>ANIMATION PREVIEW</span><span id="poseBadge" class="ws-badge">—</span></div>
-        <div class="cw" id="previewWrap">
-          <canvas id="previewCanvas" width="320" height="320"></canvas>
-          <div class="cw-placeholder" id="previewPlaceholder">
-            <div class="ph-ico">🎮</div>
-            <p>Apply the rig to<br>start animating</p>
+      <section class="panel">
+        <h2>Export</h2>
+        <div class="tool-row compact">
+          <button id="exportPreviewBtn" class="ghost full">Export Preview PNG</button>
+        </div>
+        <div class="tool-row compact">
+          <button id="exportSheetBtn" class="ghost full">Export Sprite Sheet</button>
+        </div>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <div class="canvas-card">
+        <div class="canvas-header">
+          <span>Rig editor</span>
+          <span id="canvasStatus">No image loaded</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="editorCanvas"></canvas>
+          <div id="editorPlaceholder" class="placeholder">
+            Upload an image to begin.
           </div>
         </div>
+        <div class="hint">Lasso: drag to draw an outline. Wand: click inside a region. Joints: drag the visible handle.</div>
       </div>
-      <div class="ws-col">
-        <div class="ws-lbl"><span>SPRITE SHEET</span><span id="sheetBadge" class="ws-badge">—</span></div>
-        <div class="cw cw-sheet" id="sheetWrap">
-          <canvas id="sheetCanvas" width="512" height="128"></canvas>
-          <div class="cw-placeholder" id="sheetPlaceholder">
-            <div class="ph-ico">🗂</div>
-            <p>Press <strong>Bake</strong> to generate<br>your sprite sheet</p>
-          </div>
+
+      <div class="canvas-card">
+        <div class="canvas-header">
+          <span>Animated preview</span>
+          <span id="previewStatus">—</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="previewCanvas"></canvas>
+          <div id="previewPlaceholder" class="placeholder">Build parts to preview animation.</div>
         </div>
       </div>
-    </div>
+    </section>
   </main>
-</div>
 
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -1,18 +1,15 @@
-# SpriteSmith Studio
+# SpriteSmith Studio — Outline Rig Build
 
-A browser-based 2D puppet rig tool for side-scroller characters.
+This build replaces the old auto-slicing workflow with a manual outline-rig workflow.
 
-## What changed
-- Lasso outline selection for parts
-- Magic-wand selection helper
-- Drag-based joint editor
-- Side-view aware auto joint placement
-- Mask-based part extraction instead of box slicing
+## Main workflow
+1. Upload a character image.
+2. Pick a body part type from the dropdown and add parts as needed.
+3. Choose **Lasso** or **Magic Wand** and create a mask for the selected part.
+4. Drag joints and set parent links in the part editor.
+5. Preview animation using the pose controls.
 
-## Use
-1. Open `index.html` in a browser.
-2. Upload a character.
-3. Use **Lasso** or **Wand** to outline a part.
-4. Drag joints to fit the sprite.
-5. Press **Apply**, then choose an animation pose.
-6. Export PNG or JSON when ready.
+## Notes
+- Parts are optional; nothing is required.
+- Masks are editable per part.
+- The old `bodyDetect.js`, `skelEditor.js`, and `animator.js` files are kept for repository compatibility, but the new app runs from `app.js` and no longer depends on the old slicer.
