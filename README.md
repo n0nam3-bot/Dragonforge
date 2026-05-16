@@ -1,22 +1,26 @@
-# SpriteSmith Studio — Outline Rig Build
+# SpriteSmith Studio
 
-This build uses a manual outline-rig workflow with zoom and pan for precise lasso/wand selection.
+A browser-based 2D puppet rig tool for side-scroller sprites.
 
-## Main workflow
-1. Upload a character image.
-2. Pick a body part type from the dropdown and add parts as needed.
-3. Use **Lasso** or **Magic Wand** to create a mask for the selected part.
-4. Drag joints and set parent links in the part editor.
-5. Use the **Zoom** slider or mouse wheel, and **Alt-drag** to pan when selecting tight outlines.
-6. Preview animation using the pose controls.
+## What this build does
+- Side-by-side source and preview panes
+- Lasso masking
+- Magic-wand style flood selection
+- Optional body parts
+- Anchor and tip handles for each part
+- Mask replace / add / subtract modes
+- Feathered mask edges for softer motion
+- Walk / idle preview with simple IK-based limbs
+- Export project JSON and preview PNG
+
+## How to use
+1. Import a sprite image.
+2. Add a part from the dropdown.
+3. Choose the part in the list.
+4. Use lasso or wand on the source image to build the part mask.
+5. Drag the A and T handles to line up the pivot and tip.
+6. Adjust parent, visibility, and preview settings.
 
 ## Notes
-- Parts are optional; nothing is required.
-- Masks are editable per part.
-- The cutout uses softened edges to reduce hard seams.
-- The old `bodyDetect.js`, `skelEditor.js`, and `animator.js` files are kept for repository compatibility, but the main app runs from `app.js`.
-
-
-Notes:
-- Images load directly into the workspace first, so import is immediate.
-- Use lasso or wand to define each part, then drag joints to refine the rig.
+- No body part is required.
+- The preview uses a procedural walk pose, so exact results depend on the quality of the masks and joint placement.

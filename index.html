@@ -1,174 +1,148 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SpriteSmith Studio — Outline Rig</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SpriteSmith Studio</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <div class="brand">SpriteSmith Studio</div>
-      <div class="subtitle">Manual outline rig • lasso + magic wand • side-view friendly • loads images directly</div>
+    <div class="brand">
+      <div class="brand-mark">SS</div>
+      <div>
+        <div class="brand-title">SpriteSmith Studio</div>
+        <div class="brand-subtitle">manual outline rigging · lasso / wand masking · walk preview</div>
+      </div>
     </div>
-    <div class="topbar-actions">
-      <button id="saveBtn" class="ghost">Save</button>
-      <button id="loadBtn" class="ghost">Load</button>
-      <button id="exportProjectBtn" class="ghost">Export JSON</button>
+    <div class="top-actions">
+      <button id="importBtn" class="btn btn-primary">Import Image</button>
+      <button id="exportProjectBtn" class="btn">Export Project</button>
+      <button id="exportPreviewBtn" class="btn">Export Preview PNG</button>
+      <input id="fileInput" type="file" accept="image/*" hidden>
     </div>
   </header>
 
-  <main class="app-shell">
-    <aside class="sidebar">
-      <section class="panel">
-        <h2>Upload</h2>
-        <label class="upload-zone" id="uploadZone">
-          <input id="fileInput" type="file" accept="image/*" hidden>
-          <span class="upload-title">Drop image here or browse</span>
-          <span class="upload-note">PNG, JPG, WebP</span>
-        </label>
-        <button id="clearImageBtn" class="ghost full">Clear Image</button>
-      </section>
-
-      <section class="panel">
-        <h2>Tools</h2>
-        <div class="tool-row">
-          <button class="tool active" data-tool="lasso">Lasso</button>
-          <button class="tool" data-tool="wand">Magic Wand</button>
-          <button class="tool" data-tool="joint">Joints</button>
+  <main class="layout">
+    <section class="panel panel-source">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Source / Rigging</div>
+          <div id="sourceStatus" class="panel-subtitle">Load a sprite to begin</div>
         </div>
-        <div class="control">
-          <label>Selection mode</label>
-          <div class="tool-row compact">
-            <button class="mini active" data-mask-op="replace">Replace</button>
-            <button class="mini" data-mask-op="add">Add</button>
-            <button class="mini" data-mask-op="subtract">Erase</button>
-          </div>
+        <div class="panel-tools">
+          <button data-tool="pan" class="tool active">Pan</button>
+          <button data-tool="lasso" class="tool">Lasso</button>
+          <button data-tool="wand" class="tool">Wand</button>
+          <button id="fitSourceBtn" class="tool">Fit</button>
+          <label class="mini-field">Zoom <input id="sourceZoom" type="range" min="0.25" max="3" step="0.01" value="1"><span id="sourceZoomVal">100%</span></label>
+          <label class="mini-field">Tol <input id="wandTolerance" type="range" min="5" max="80" step="1" value="28"><span id="wandToleranceVal">28</span></label>
         </div>
-        <div class="control">
-          <label for="wandTolerance">Wand tolerance <span id="wandToleranceVal">28</span></label>
-          <input id="wandTolerance" type="range" min="4" max="90" value="28" />
-        </div>
-        <div class="control">
-          <label for="selectionSmooth">Outline smoothing <span id="selectionSmoothVal">0.30</span></label>
-          <input id="selectionSmooth" type="range" min="0" max="1" step="0.05" value="0.30" />
-        </div>
-        <div class="control">
-          <label for="zoomSlider">Zoom <span id="zoomVal">100%</span></label>
-          <input id="zoomSlider" type="range" min="0.35" max="4" step="0.01" value="1" />
-          <button id="fitViewBtn" class="ghost small full">Fit / Reset View</button>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">
-          <h2>Parts</h2>
-          <button id="addPartBtn" class="ghost small">+ Add</button>
-        </div>
-        <div class="control">
-          <label for="partTypeSelect">Add human part</label>
-          <select id="partTypeSelect"></select>
-        </div>
-        <div id="partList" class="part-list"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Selected part</h2>
-        <div id="selectedPartEmpty" class="empty-state">Select a part to edit its mask, parent, and joint.</div>
-        <div id="selectedPartEditor" class="hidden-stack">
-          <div class="control">
-            <label for="partNameInput">Name</label>
-            <input id="partNameInput" type="text" />
-          </div>
-          <div class="control">
-            <label for="partTypeEdit">Type</label>
-            <select id="partTypeEdit"></select>
-          </div>
-          <div class="control">
-            <label for="partParentSelect">Parent</label>
-            <select id="partParentSelect"></select>
-          </div>
-          <div class="control inline">
-            <label><input id="partVisibleToggle" type="checkbox" checked> Visible</label>
-            <label><input id="showMaskToggle" type="checkbox" checked> Show mask</label>
-          </div>
-          <div class="control inline">
-            <button id="resetJointBtn" class="ghost small">Reset joint</button>
-            <button id="clearMaskBtn" class="ghost small">Clear mask</button>
-          </div>
-          <p class="helper">Draw a lasso or use wand on the canvas with the selected part active. Drag the joint handle to reposition it.</p>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Animation</h2>
-        <div class="control">
-          <label for="poseSelect">Pose</label>
-          <select id="poseSelect">
-            <option value="idle">Idle</option>
-            <option value="walk" selected>Walk</option>
-            <option value="run">Run</option>
-            <option value="jump">Jump</option>
-          </select>
-        </div>
-        <div class="control">
-          <label for="speedSlider">Speed <span id="speedVal">1.0×</span></label>
-          <input id="speedSlider" type="range" min="0.25" max="3" step="0.05" value="1" />
-        </div>
-        <div class="control">
-          <label for="tiltSlider">Body tilt <span id="tiltVal">0°</span></label>
-          <input id="tiltSlider" type="range" min="-25" max="25" step="1" value="0" />
-        </div>
-        <div class="control">
-          <label for="facingSelect">Facing</label>
-          <select id="facingSelect">
-            <option value="auto" selected>Auto</option>
-            <option value="right">Right</option>
-            <option value="left">Left</option>
-          </select>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Export</h2>
-        <div class="tool-row compact">
-          <button id="exportPreviewBtn" class="ghost full">Export Preview PNG</button>
-        </div>
-        <div class="tool-row compact">
-          <button id="exportSheetBtn" class="ghost full">Export Sprite Sheet</button>
-        </div>
-      </section>
-    </aside>
-
-    <section class="workspace">
-      <div class="canvas-card">
-        <div class="canvas-header">
-          <span>Rig editor</span>
-          <span id="canvasStatus">No image loaded</span>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="editorCanvas"></canvas>
-          <div id="editorPlaceholder" class="placeholder">
-            Upload an image to begin.
-          </div>
-        </div>
-        <div class="hint">Lasso: drag to draw an outline. Wand: click inside a region. Zoom with the slider or mouse wheel. Alt-drag to pan.</div>
       </div>
-
-      <div class="canvas-card">
-        <div class="canvas-header">
-          <span>Animated preview</span>
-          <span id="previewStatus">—</span>
+      <div class="canvas-wrap">
+        <canvas id="sourceCanvas"></canvas>
+        <div id="sourceEmpty" class="empty-state">
+          <div class="empty-title">Drop or import a character image</div>
+          <div class="empty-copy">Use lasso or wand to assign outlines to parts. Drag the anchor and tip handles to line up joints.</div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="previewCanvas"></canvas>
-          <div id="previewPlaceholder" class="placeholder">Build parts to preview animation.</div>
+      </div>
+    </section>
+
+    <section class="panel panel-preview">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Animated Preview</div>
+          <div id="previewStatus" class="panel-subtitle">No rig yet</div>
+        </div>
+        <div class="panel-tools">
+          <label class="mini-field">Pose
+            <select id="poseSelect">
+              <option value="walk" selected>Walk</option>
+              <option value="idle">Idle</option>
+            </select>
+          </label>
+          <label class="mini-field">Facing
+            <select id="facingSelect">
+              <option value="right" selected>Right</option>
+              <option value="left">Left</option>
+            </select>
+          </label>
+          <label class="mini-field">Speed <input id="speedSlider" type="range" min="0.25" max="2.5" step="0.05" value="1"><span id="speedVal">1.00×</span></label>
+          <label class="mini-field">Tilt <input id="tiltSlider" type="range" min="-35" max="35" step="1" value="8"><span id="tiltVal">8°</span></label>
+        </div>
+      </div>
+      <div class="canvas-wrap preview-wrap">
+        <canvas id="previewCanvas"></canvas>
+        <div id="previewEmpty" class="empty-state">
+          <div class="empty-title">Preview appears here</div>
+          <div class="empty-copy">Create parts on the left and the puppet will animate on the right.</div>
         </div>
       </div>
     </section>
   </main>
 
-  <script src="app.js" defer></script>
+  <footer class="inspector">
+    <section class="inspector-col parts-col">
+      <div class="inspector-head">
+        <div>
+          <div class="inspector-title">Parts</div>
+          <div class="inspector-subtitle">Add as many as needed. None are required.</div>
+        </div>
+        <div class="inline-controls">
+          <select id="partTypeAdd"></select>
+          <button id="addPartBtn" class="btn btn-primary">Add Part</button>
+        </div>
+      </div>
+      <div id="partList" class="part-list"></div>
+    </section>
+
+    <section class="inspector-col editor-col">
+      <div class="inspector-head">
+        <div>
+          <div class="inspector-title">Selected Part</div>
+          <div id="selectedPartHint" class="inspector-subtitle">Choose a part to edit its mask and joints</div>
+        </div>
+        <div class="inline-controls">
+          <label class="mini-field compact">Mode
+            <select id="maskMode">
+              <option value="replace">Replace</option>
+              <option value="add">Add</option>
+              <option value="subtract">Subtract</option>
+            </select>
+          </label>
+          <label class="mini-field compact">Feather <input id="featherSlider" type="range" min="0" max="8" step="0.5" value="2"><span id="featherVal">2px</span></label>
+        </div>
+      </div>
+
+      <div class="editor-grid">
+        <div class="field-stack">
+          <label>Name<input id="partName" type="text"></label>
+          <label>Type<select id="partTypeEdit"></select></label>
+          <label>Parent<select id="partParent"></select></label>
+        </div>
+        <div class="field-stack">
+          <label><span class="row-label">Anchor</span><span class="coords"><input id="anchorX" type="number" step="1"><input id="anchorY" type="number" step="1"></span></label>
+          <label><span class="row-label">Tip</span><span class="coords"><input id="tipX" type="number" step="1"><input id="tipY" type="number" step="1"></span></label>
+          <div class="field-row">
+            <label class="check"><input id="partVisible" type="checkbox" checked> Visible</label>
+            <label class="check"><input id="showMask" type="checkbox" checked> Show mask</label>
+          </div>
+        </div>
+        <div class="field-stack actions">
+          <div class="tool-row">
+            <button id="clearMaskBtn" class="btn">Clear Mask</button>
+            <button id="deletePartBtn" class="btn btn-danger">Delete Part</button>
+          </div>
+          <div class="tool-row">
+            <button id="fitPreviewBtn" class="btn">Fit Preview</button>
+            <button id="exportJsonBtn" class="btn">Export JSON</button>
+          </div>
+          <div class="mask-tip">Tip: draw a selection with lasso or wand while a part is selected; it applies to that part immediately.</div>
+        </div>
+      </div>
+    </section>
+  </footer>
+
+  <script src="app.js"></script>
 </body>
 </html>

@@ -1,1689 +1,1250 @@
+'use strict';
+
 const PART_TYPES = [
-  'torso','chest','pelvis','neck','head','hair','face',
-  'upper arm L','lower arm L','hand L','upper arm R','lower arm R','hand R',
-  'thigh L','shin L','foot L','thigh R','shin R','foot R',
-  'shoulder pad L','shoulder pad R','cape','skirt','weapon','shield','accessory'
+  'torso', 'chest', 'pelvis', 'neck', 'head', 'hair', 'face',
+  'upper arm L', 'lower arm L', 'hand L',
+  'upper arm R', 'lower arm R', 'hand R',
+  'thigh L', 'shin L', 'foot L',
+  'thigh R', 'shin R', 'foot R',
+  'shoulder pad L', 'shoulder pad R', 'cape', 'skirt', 'weapon', 'shield', 'accessory'
 ];
 
 const DEFAULT_PARENT = {
-  head: 'neck', hair: 'head', face: 'head', neck: 'chest', chest: 'torso',
-  torso: 'pelvis', pelvis: null,
-  'upper arm L': 'chest', 'lower arm L': 'upper arm L', 'hand L': 'lower arm L',
-  'upper arm R': 'chest', 'lower arm R': 'upper arm R', 'hand R': 'lower arm R',
-  'thigh L': 'pelvis', 'shin L': 'thigh L', 'foot L': 'shin L',
-  'thigh R': 'pelvis', 'shin R': 'thigh R', 'foot R': 'shin R',
-  'shoulder pad L': 'chest', 'shoulder pad R': 'chest',
-  cape: 'chest', skirt: 'pelvis', weapon: 'hand R', shield: 'hand L', accessory: 'torso'
+  torso: null,
+  chest: 'torso',
+  pelvis: 'torso',
+  neck: 'chest',
+  head: 'neck',
+  hair: 'head',
+  face: 'head',
+  'upper arm L': 'chest',
+  'lower arm L': 'upper arm L',
+  'hand L': 'lower arm L',
+  'upper arm R': 'chest',
+  'lower arm R': 'upper arm R',
+  'hand R': 'lower arm R',
+  'thigh L': 'pelvis',
+  'shin L': 'thigh L',
+  'foot L': 'shin L',
+  'thigh R': 'pelvis',
+  'shin R': 'thigh R',
+  'foot R': 'shin R',
+  'shoulder pad L': 'chest',
+  'shoulder pad R': 'chest',
+  cape: 'chest',
+  skirt: 'pelvis',
+  weapon: 'hand R',
+  shield: 'hand L',
+  accessory: 'torso'
 };
 
-const PALETTE = [
+const TYPE_ORDER = [
+  'cape', 'skirt', 'pelvis', 'torso', 'chest', 'neck', 'head', 'face', 'hair',
+  'thigh L', 'shin L', 'foot L', 'thigh R', 'shin R', 'foot R',
+  'upper arm L', 'lower arm L', 'hand L',
+  'upper arm R', 'lower arm R', 'hand R',
+  'shoulder pad L', 'shoulder pad R', 'weapon', 'shield', 'accessory'
+];
+
+const TYPE_COLORS = [
   '#6ee7ff','#8b5cf6','#f59e0b','#34d399','#f43f5e','#a3e635','#f97316','#60a5fa',
   '#f472b6','#14b8a6','#e879f9','#c084fc','#fb7185','#22c55e','#facc15','#38bdf8'
 ];
 
 const state = {
-  sourceImage: null,
-  sourceCanvas: null,
-  cleanCanvas: null,
-  sourceW: 0,
-  sourceH: 0,
+  image: null,
   parts: [],
   selectedPartId: null,
-  tool: 'lasso',
-  maskOp: 'replace',
+  tool: 'pan',
+  maskMode: 'replace',
+  feather: 2,
+  sourceZoom: 1,
   wandTolerance: 28,
-  selectionSmooth: 0.3,
+  sourcePanX: 0,
+  sourcePanY: 0,
+  sourceFit: 1,
+  sourceFitX: 0,
+  sourceFitY: 0,
+  previewFit: 1,
+  previewFitX: 0,
+  previewFitY: 0,
   pose: 'walk',
+  facing: 'right',
   speed: 1,
-  tiltDeg: 0,
-  facing: 'auto',
-  animStart: performance.now(),
-  previewSheet: null,
-  draggingJoint: null,
-  lassoPoints: [],
-  lassoActive: false,
-  fit: { scale: 1, ox: 0, oy: 0 },
-  viewZoom: 1,
-  viewPanX: 0,
-  viewPanY: 0,
-  panning: null,
-  busy: false,
-  savedAt: null,
+  tilt: 8,
+  phase: 0,
+  showMask: true,
+  dragging: null,
+  lasso: [],
+  raf: 0,
+  needsPreviewRedraw: true,
 };
 
 const els = {
-  uploadZone: document.getElementById('uploadZone'),
+  importBtn: document.getElementById('importBtn'),
   fileInput: document.getElementById('fileInput'),
-  clearImageBtn: document.getElementById('clearImageBtn'),
-  toolButtons: [...document.querySelectorAll('[data-tool]')],
-  maskButtons: [...document.querySelectorAll('[data-mask-op]')],
+  exportProjectBtn: document.getElementById('exportProjectBtn'),
+  exportPreviewBtn: document.getElementById('exportPreviewBtn'),
+  sourceStatus: document.getElementById('sourceStatus'),
+  previewStatus: document.getElementById('previewStatus'),
+  sourceCanvas: document.getElementById('sourceCanvas'),
+  previewCanvas: document.getElementById('previewCanvas'),
+  sourceEmpty: document.getElementById('sourceEmpty'),
+  previewEmpty: document.getElementById('previewEmpty'),
+  sourceZoom: document.getElementById('sourceZoom'),
+  sourceZoomVal: document.getElementById('sourceZoomVal'),
   wandTolerance: document.getElementById('wandTolerance'),
   wandToleranceVal: document.getElementById('wandToleranceVal'),
-  selectionSmooth: document.getElementById('selectionSmooth'),
-  selectionSmoothVal: document.getElementById('selectionSmoothVal'),
-  addPartBtn: document.getElementById('addPartBtn'),
-  partTypeSelect: document.getElementById('partTypeSelect'),
-  partList: document.getElementById('partList'),
-  selectedPartEmpty: document.getElementById('selectedPartEmpty'),
-  selectedPartEditor: document.getElementById('selectedPartEditor'),
-  partNameInput: document.getElementById('partNameInput'),
-  partTypeEdit: document.getElementById('partTypeEdit'),
-  partParentSelect: document.getElementById('partParentSelect'),
-  partVisibleToggle: document.getElementById('partVisibleToggle'),
-  showMaskToggle: document.getElementById('showMaskToggle'),
-  resetJointBtn: document.getElementById('resetJointBtn'),
-  clearMaskBtn: document.getElementById('clearMaskBtn'),
+  fitSourceBtn: document.getElementById('fitSourceBtn'),
   poseSelect: document.getElementById('poseSelect'),
+  facingSelect: document.getElementById('facingSelect'),
   speedSlider: document.getElementById('speedSlider'),
   speedVal: document.getElementById('speedVal'),
   tiltSlider: document.getElementById('tiltSlider'),
   tiltVal: document.getElementById('tiltVal'),
-  facingSelect: document.getElementById('facingSelect'),
-  zoomSlider: document.getElementById('zoomSlider'),
-  zoomVal: document.getElementById('zoomVal'),
-  fitViewBtn: document.getElementById('fitViewBtn'),
-  editorCanvas: document.getElementById('editorCanvas'),
-  previewCanvas: document.getElementById('previewCanvas'),
-  editorPlaceholder: document.getElementById('editorPlaceholder'),
-  previewPlaceholder: document.getElementById('previewPlaceholder'),
-  canvasStatus: document.getElementById('canvasStatus'),
-  previewStatus: document.getElementById('previewStatus'),
-  saveBtn: document.getElementById('saveBtn'),
-  loadBtn: document.getElementById('loadBtn'),
-  exportProjectBtn: document.getElementById('exportProjectBtn'),
-  exportPreviewBtn: document.getElementById('exportPreviewBtn'),
-  exportSheetBtn: document.getElementById('exportSheetBtn'),
+  partTypeAdd: document.getElementById('partTypeAdd'),
+  addPartBtn: document.getElementById('addPartBtn'),
+  partList: document.getElementById('partList'),
+  selectedPartHint: document.getElementById('selectedPartHint'),
+  maskMode: document.getElementById('maskMode'),
+  featherSlider: document.getElementById('featherSlider'),
+  featherVal: document.getElementById('featherVal'),
+  partName: document.getElementById('partName'),
+  partTypeEdit: document.getElementById('partTypeEdit'),
+  partParent: document.getElementById('partParent'),
+  anchorX: document.getElementById('anchorX'),
+  anchorY: document.getElementById('anchorY'),
+  tipX: document.getElementById('tipX'),
+  tipY: document.getElementById('tipY'),
+  partVisible: document.getElementById('partVisible'),
+  showMask: document.getElementById('showMask'),
+  clearMaskBtn: document.getElementById('clearMaskBtn'),
+  deletePartBtn: document.getElementById('deletePartBtn'),
+  fitPreviewBtn: document.getElementById('fitPreviewBtn'),
+  exportJsonBtn: document.getElementById('exportJsonBtn'),
 };
 
-const editorCtx = els.editorCanvas.getContext('2d');
+const sourceCtx = els.sourceCanvas.getContext('2d');
 const previewCtx = els.previewCanvas.getContext('2d');
 
-populateTypeOptions();
-resizeCanvases();
-wireEvents();
-renderAll();
-
-window.addEventListener('resize', () => {
-  resizeCanvases();
-  renderAll();
-});
-
-// ------------------------------ UI helpers ------------------------------
-
-function populateTypeOptions() {
-  for (const sel of [els.partTypeSelect, els.partTypeEdit]) {
-    sel.innerHTML = '';
-    for (const type of PART_TYPES) {
-      const opt = document.createElement('option');
-      opt.value = type;
-      opt.textContent = type;
-      sel.appendChild(opt);
-    }
-  }
-  els.partTypeSelect.value = 'torso';
-  els.partTypeEdit.value = 'torso';
-}
-
-
-function wireEvents() {
-  // upload
-  els.uploadZone.addEventListener('click', () => els.fileInput.click());
-  els.fileInput.addEventListener('change', () => {
-    const file = els.fileInput.files?.[0];
-    if (file) loadImageFile(file);
-  });
-  els.uploadZone.addEventListener('dragover', e => { e.preventDefault(); els.uploadZone.classList.add('drag'); });
-  els.uploadZone.addEventListener('dragleave', () => els.uploadZone.classList.remove('drag'));
-  els.uploadZone.addEventListener('drop', e => {
-    e.preventDefault();
-    els.uploadZone.classList.remove('drag');
-    const file = e.dataTransfer.files?.[0];
-    if (file) loadImageFile(file);
-  });
-  els.clearImageBtn.addEventListener('click', clearProject);
-
-  // tools
-  for (const btn of els.toolButtons) {
-    btn.addEventListener('click', () => {
-      state.tool = btn.dataset.tool;
-      els.toolButtons.forEach(b => b.classList.toggle('active', b === btn));
-      updateCanvasCursor();
-    });
-  }
-  for (const btn of els.maskButtons) {
-    btn.addEventListener('click', () => {
-      state.maskOp = btn.dataset.maskOp;
-      els.maskButtons.forEach(b => b.classList.toggle('active', b === btn));
-    });
-  }
-  els.wandTolerance.addEventListener('input', () => {
-    state.wandTolerance = Number(els.wandTolerance.value);
-    els.wandToleranceVal.textContent = String(state.wandTolerance);
-  });
-  els.selectionSmooth.addEventListener('input', () => {
-    state.selectionSmooth = Number(els.selectionSmooth.value);
-    els.selectionSmoothVal.textContent = state.selectionSmooth.toFixed(2);
-  });
-  els.zoomSlider?.addEventListener('input', () => {
-    state.viewZoom = Number(els.zoomSlider.value);
-    els.zoomVal.textContent = `${Math.round(state.viewZoom * 100)}%`;
-    renderAll();
-  });
-  els.fitViewBtn?.addEventListener('click', resetEditorView);
-
-  // parts
-  els.addPartBtn.addEventListener('click', addSelectedPart);
-  els.partNameInput.addEventListener('input', () => {
-    const part = getSelectedPart();
-    if (!part) return;
-    part.name = els.partNameInput.value;
-    renderParts();
-  });
-  els.partTypeEdit.addEventListener('change', () => {
-    const part = getSelectedPart();
-    if (!part) return;
-    part.type = els.partTypeEdit.value;
-    if (!part.name || part.name.startsWith('Part')) part.name = humanizeType(part.type);
-    if (!part.parentId || !findPart(part.parentId)) part.parentId = DEFAULT_PARENT[part.type] ?? null;
-    if (!part.joint) part.joint = defaultJointForType(part.type);
-    renderSelectedPartEditor();
-    renderParts();
-    renderAll();
-  });
-  els.partParentSelect.addEventListener('change', () => {
-    const part = getSelectedPart();
-    if (!part) return;
-    const val = els.partParentSelect.value;
-    part.parentId = val || null;
-    renderParts();
-    renderAll();
-  });
-  els.partVisibleToggle.addEventListener('change', () => {
-    const part = getSelectedPart();
-    if (!part) return;
-    part.visible = els.partVisibleToggle.checked;
-    renderParts();
-    renderAll();
-  });
-  els.showMaskToggle.addEventListener('change', renderAll);
-  els.resetJointBtn.addEventListener('click', () => {
-    const part = getSelectedPart();
-    if (!part || !state.sourceCanvas) return;
-    part.joint = defaultJointForType(part.type);
-    updatePartCutout(part);
-    renderParts();
-    renderAll();
-  });
-  els.clearMaskBtn.addEventListener('click', () => {
-    const part = getSelectedPart();
-    if (!part) return;
-    part.maskCanvas = null;
-    part.canvas = null;
-    part.anchor = null;
-    renderParts();
-    renderAll();
-  });
-
-  // animation
-  els.poseSelect.addEventListener('change', () => { state.pose = els.poseSelect.value; renderAll(); });
-  els.speedSlider.addEventListener('input', () => {
-    state.speed = Number(els.speedSlider.value);
-    els.speedVal.textContent = `${state.speed.toFixed(2)}×`;
-    renderAll();
-  });
-  els.tiltSlider.addEventListener('input', () => {
-    state.tiltDeg = Number(els.tiltSlider.value);
-    els.tiltVal.textContent = `${state.tiltDeg}°`;
-    renderAll();
-  });
-  els.facingSelect?.addEventListener('change', () => {
-    state.facing = els.facingSelect.value;
-    renderAll();
-  });
-
-  // export/save
-  els.saveBtn.addEventListener('click', saveProject);
-  els.loadBtn.addEventListener('click', loadProject);
-  els.exportProjectBtn.addEventListener('click', exportProjectJSON);
-  els.exportPreviewBtn.addEventListener('click', exportPreviewPNG);
-  els.exportSheetBtn.addEventListener('click', exportSheetPNG);
-
-  // editor canvas interactions
-  els.editorCanvas.addEventListener('pointerdown', handlePointerDown);
-  window.addEventListener('pointermove', handlePointerMove);
-  window.addEventListener('pointerup', handlePointerUp);
-  els.editorCanvas.addEventListener('wheel', handleCanvasWheel, { passive: false });
-  els.editorCanvas.addEventListener('contextmenu', e => e.preventDefault());
-}
-// ------------------------------ Loading / projects ------------------------------
-
-async function loadImageFile(file) {
-  try {
-    const img = await fileToImage(file);
-    state.sourceImage = img;
-
-    const sourceCanvas = document.createElement('canvas');
-    sourceCanvas.width = img.naturalWidth;
-    sourceCanvas.height = img.naturalHeight;
-    sourceCanvas.getContext('2d').drawImage(img, 0, 0);
-
-    state.sourceCanvas = sourceCanvas;
-    state.cleanCanvas = sourceCanvas;
-    state.sourceW = sourceCanvas.width;
-    state.sourceH = sourceCanvas.height;
-    state.parts = [];
-    state.selectedPartId = null;
-    state.savedAt = null;
-    state.animStart = performance.now();
-    state.previewSheet = null;
-
-    els.canvasStatus.textContent = `${state.sourceW}×${state.sourceH}`;
-    els.editorPlaceholder.classList.toggle('hidden', !state.cleanCanvas);
-    els.previewPlaceholder.classList.remove('hidden');
-
-    resetEditorView();
-    renderParts();
-    selectPart(null);
-    resizeCanvases();
-    renderAll();
-  } catch (err) {
-    console.error(err);
-    alert('Could not load image.');
-  }
-}
-
-function clearProject() {
-  state.sourceImage = null;
-  state.sourceCanvas = null;
-  state.cleanCanvas = null;
-  state.sourceW = 0;
-  state.sourceH = 0;
-  state.parts = [];
-  state.selectedPartId = null;
-  state.previewSheet = null;
-  resetEditorView();
-  els.canvasStatus.textContent = 'No image loaded';
-  els.editorPlaceholder.classList.remove('hidden');
-  els.previewPlaceholder.classList.remove('hidden');
-  renderParts();
-  selectPart(null);
-  renderAll();
-}
-
-function saveProject() {
-  if (!state.cleanCanvas) return;
-  const payload = exportProjectData();
-  localStorage.setItem('spritesmith_outline_rig', JSON.stringify(payload));
-  state.savedAt = Date.now();
-  alert('Project saved locally.');
-}
-
-async function loadProject() {
-  const raw = localStorage.getItem('spritesmith_outline_rig');
-  if (!raw) {
-    alert('No saved project found.');
-    return;
-  }
-  const data = JSON.parse(raw);
-  await importProjectData(data);
-  alert('Project loaded.');
-}
-
-function exportProjectJSON() {
-  if (!state.cleanCanvas) return;
-  const data = exportProjectData();
-  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'spritesmith_project.json');
-}
-
-function exportPreviewPNG() {
-  if (!state.cleanCanvas) return;
-  const c = document.createElement('canvas');
-  c.width = els.previewCanvas.width;
-  c.height = els.previewCanvas.height;
-  const ctx = c.getContext('2d');
-  drawPreview(ctx, performance.now(), true);
-  downloadBlobCanvas(c, 'spritesmith_preview.png');
-}
-
-function exportSheetPNG() {
-  if (!state.cleanCanvas) return;
-  const frames = 12;
-  const size = 256;
-  const sheet = document.createElement('canvas');
-  sheet.width = frames * size;
-  sheet.height = size;
-  const sctx = sheet.getContext('2d');
-  for (let i = 0; i < frames; i++) {
-    const c = document.createElement('canvas');
-    c.width = size;
-    c.height = size;
-    drawPreview(c.getContext('2d'), state.animStart + (i / frames) * 1000, true);
-    sctx.drawImage(c, i * size, 0, size, size);
-  }
-  downloadBlobCanvas(sheet, 'spritesmith_sheet.png');
-}
-
-function exportProjectData() {
-  return {
-    version: 1,
-    image: state.cleanCanvas?.toDataURL('image/png') ?? null,
-    settings: {
-      tool: state.tool,
-      maskOp: state.maskOp,
-      wandTolerance: state.wandTolerance,
-      selectionSmooth: state.selectionSmooth,
-      pose: state.pose,
-      speed: state.speed,
-      tiltDeg: state.tiltDeg,
-      facing: state.facing,
-      viewZoom: state.viewZoom,
-      viewPanX: state.viewPanX,
-      viewPanY: state.viewPanY,
-    },
-    parts: state.parts.map(part => ({
-      id: part.id,
-      type: part.type,
-      name: part.name,
-      parentId: part.parentId,
-      visible: part.visible,
-      color: part.color,
-      joint: part.joint,
-      mask: part.maskCanvas?.toDataURL('image/png') ?? null,
-    })),
-  };
-}
-
-async function importProjectData(data) {
-  if (!data?.image) return;
-  const img = await dataUrlToImage(data.image);
-  state.sourceImage = img;
-  const c = document.createElement('canvas');
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
-  c.getContext('2d').drawImage(img, 0, 0);
-  state.cleanCanvas = c;
-  state.sourceCanvas = c;
-  state.sourceW = c.width;
-  state.sourceH = c.height;
-  const settings = data.settings || {};
-  state.tool = settings.tool || 'lasso';
-  state.maskOp = settings.maskOp || 'replace';
-  state.wandTolerance = settings.wandTolerance ?? 28;
-  state.selectionSmooth = settings.selectionSmooth ?? 0.3;
-  state.pose = settings.pose || 'walk';
-  state.speed = settings.speed ?? 1;
-  state.tiltDeg = settings.tiltDeg ?? 0;
-  state.facing = settings.facing || 'auto';
-  state.viewZoom = settings.viewZoom ?? 1;
-  state.viewPanX = settings.viewPanX ?? 0;
-  state.viewPanY = settings.viewPanY ?? 0;
-  els.wandTolerance.value = String(state.wandTolerance);
-  els.wandToleranceVal.textContent = String(state.wandTolerance);
-  els.selectionSmooth.value = String(state.selectionSmooth);
-  els.selectionSmoothVal.textContent = state.selectionSmooth.toFixed(2);
-  els.poseSelect.value = state.pose;
-  els.speedSlider.value = String(state.speed);
-  els.speedVal.textContent = `${state.speed.toFixed(2)}×`;
-  els.tiltSlider.value = String(state.tiltDeg);
-  els.tiltVal.textContent = `${state.tiltDeg}°`;
-  if (els.facingSelect) els.facingSelect.value = state.facing;
-  if (els.zoomSlider) els.zoomSlider.value = String(state.viewZoom);
-  if (els.zoomVal) els.zoomVal.textContent = `${Math.round(state.viewZoom * 100)}%`;
-  els.toolButtons.forEach(b => b.classList.toggle('active', b.dataset.tool === state.tool));
-  els.maskButtons.forEach(b => b.classList.toggle('active', b.dataset.maskOp === state.maskOp));
-
-  state.parts = [];
-  for (const p of data.parts || []) {
-    const part = {
-      id: p.id,
-      type: p.type,
-      name: p.name,
-      parentId: p.parentId,
-      visible: p.visible !== false,
-      color: p.color || colorForType(p.type),
-      joint: p.joint || defaultJointForType(p.type),
-      maskCanvas: null,
-      canvas: null,
-      anchor: null,
-    };
-    if (p.mask) {
-      const maskImg = await dataUrlToImage(p.mask);
-      part.maskCanvas = document.createElement('canvas');
-      part.maskCanvas.width = maskImg.naturalWidth;
-      part.maskCanvas.height = maskImg.naturalHeight;
-      part.maskCanvas.getContext('2d').drawImage(maskImg, 0, 0);
-      updatePartCutout(part);
-    }
-    state.parts.push(part);
-  }
-  state.selectedPartId = state.parts[0]?.id ?? null;
-  els.canvasStatus.textContent = `${state.sourceW}×${state.sourceH}`;
-  els.editorPlaceholder.classList.toggle('hidden', !state.cleanCanvas);
-  els.previewPlaceholder.classList.toggle('hidden', !state.cleanCanvas);
-  renderParts();
-  renderSelectedPartEditor();
-  renderAll();
-}
-
-// ------------------------------ Part management ------------------------------
-
-function addSelectedPart() {
-  if (!state.cleanCanvas) return;
-  const type = els.partTypeSelect.value;
-  const count = state.parts.filter(p => p.type === type).length + 1;
-  const part = {
-    id: uid(),
-    type,
-    name: `${humanizeType(type)} ${count}`,
-    parentId: DEFAULT_PARENT[type] ?? null,
-    visible: true,
-    color: colorForType(type),
-    joint: defaultJointForType(type),
-    maskCanvas: null,
-    canvas: null,
-    anchor: null,
-  };
-  state.parts.push(part);
-  selectPart(part.id);
-  renderParts();
-  renderSelectedPartEditor();
-  renderAll();
-}
-
-function selectPart(id) {
-  state.selectedPartId = id;
-  renderParts();
-  renderSelectedPartEditor();
-  renderAll();
-}
-
-function getSelectedPart() {
-  return state.parts.find(p => p.id === state.selectedPartId) || null;
-}
-
-function findPart(id) {
-  return state.parts.find(p => p.id === id) || null;
-}
-
-function renderParts() {
-  els.partList.innerHTML = '';
-  for (const part of state.parts) {
-    const row = document.createElement('div');
-    row.className = `part-item${part.id === state.selectedPartId ? ' active' : ''}`;
-    row.innerHTML = `
-      <div class="part-left">
-        <span class="part-dot" style="background:${part.color}"></span>
-        <div style="min-width:0">
-          <div class="part-name">${escapeHtml(part.name)}</div>
-          <div class="part-type">${escapeHtml(part.type)}${part.parentId ? ` → ${escapeHtml(findPart(part.parentId)?.name || part.parentId)}` : ''}</div>
-        </div>
-      </div>
-      <div class="part-actions">
-        <button class="icon-btn" data-select="${part.id}" title="Select">◉</button>
-        <button class="icon-btn" data-delete="${part.id}" title="Delete">✕</button>
-      </div>
-    `;
-    row.addEventListener('click', e => {
-      const target = e.target;
-      if (target?.dataset?.delete) return;
-      selectPart(part.id);
-    });
-    row.querySelector('[data-select]')?.addEventListener('click', e => {
-      e.stopPropagation();
-      selectPart(part.id);
-    });
-    row.querySelector('[data-delete]')?.addEventListener('click', e => {
-      e.stopPropagation();
-      deletePart(part.id);
-    });
-    els.partList.appendChild(row);
-  }
-}
-
-function deletePart(id) {
-  state.parts = state.parts.filter(p => p.id !== id);
-  for (const p of state.parts) {
-    if (p.parentId === id) p.parentId = null;
-  }
-  if (state.selectedPartId === id) state.selectedPartId = state.parts[0]?.id ?? null;
-  renderParts();
-  renderSelectedPartEditor();
-  renderAll();
-}
-
-function renderSelectedPartEditor() {
-  const part = getSelectedPart();
-  const has = !!part;
-  els.selectedPartEmpty.classList.toggle('hidden', has);
-  els.selectedPartEditor.classList.toggle('hidden', !has);
-  if (!part) return;
-  els.partNameInput.value = part.name;
-  els.partTypeEdit.value = part.type;
-  els.partVisibleToggle.checked = part.visible !== false;
-  els.showMaskToggle.checked = true;
-
-  els.partParentSelect.innerHTML = '<option value="">(none)</option>';
-  for (const p of state.parts) {
-    if (p.id === part.id) continue;
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.name;
-    els.partParentSelect.appendChild(opt);
-  }
-  els.partParentSelect.value = part.parentId || '';
-}
-
-// ------------------------------ Canvas interaction ------------------------------
-
-function handlePointerDown(e) {
-  if (!state.cleanCanvas) return;
-
-  if (e.button === 1 || e.altKey || e.metaKey) {
-    state.panning = {
-      startX: e.clientX,
-      startY: e.clientY,
-      panX: state.viewPanX,
-      panY: state.viewPanY,
-    };
-    els.editorCanvas.setPointerCapture(e.pointerId);
-    updateCanvasCursor();
-    return;
-  }
-
-  const pos = sourcePointFromEvent(e);
-  if (!pos) return;
-
-  const hit = hitTestJoint(pos);
-  const selected = getSelectedPart();
-
-  if (state.tool === 'wand') {
-    if (!selected) return;
-    applyWandSelection(pos.x, pos.y);
-    return;
-  }
-
-  if (state.tool === 'lasso') {
-    state.lassoActive = true;
-    state.lassoPoints = [pos];
-    els.editorCanvas.setPointerCapture(e.pointerId);
-    return;
-  }
-
-  if (state.tool === 'joint') {
-    if (hit) {
-      state.draggingJoint = hit;
-      els.editorCanvas.setPointerCapture(e.pointerId);
-      return;
-    }
-    if (selected) {
-      selected.joint = clampPoint(pos);
-      updatePartCutout(selected);
-      renderParts();
-      renderSelectedPartEditor();
-      renderAll();
-    }
-  }
-}
-
-function handlePointerMove(e) {
-  if (!state.cleanCanvas) return;
-
-  if (state.panning) {
-    state.viewPanX = state.panning.panX + (e.clientX - state.panning.startX);
-    state.viewPanY = state.panning.panY + (e.clientY - state.panning.startY);
-    renderAll();
-    return;
-  }
-
-  const pos = sourcePointFromEvent(e);
-  if (!pos) return;
-
-  if (state.lassoActive && state.tool === 'lasso') {
-    const last = state.lassoPoints[state.lassoPoints.length - 1];
-    const d = dist(last, pos);
-    if (d > 3) state.lassoPoints.push(pos);
-    renderAll();
-    return;
-  }
-
-  if (state.draggingJoint) {
-    const part = state.draggingJoint.part;
-    part.joint = clampPoint(pos);
-    updatePartCutout(part);
-    renderParts();
-    renderSelectedPartEditor();
-    renderAll();
-  }
-}
-
-function handlePointerUp(e) {
-  if (!state.cleanCanvas) return;
-  if (state.panning) {
-    state.panning = null;
-    updateCanvasCursor();
-    renderAll();
-    return;
-  }
-  if (state.lassoActive && state.tool === 'lasso') {
-    state.lassoActive = false;
-    if (state.lassoPoints.length >= 3) {
-      const mask = polygonMaskCanvas(state.lassoPoints, state.sourceW, state.sourceH, state.selectionSmooth);
-      applyMaskToSelectedPart(mask);
-    }
-    state.lassoPoints = [];
-    renderAll();
-  }
-  if (state.draggingJoint) {
-    state.draggingJoint = null;
-    renderAll();
-  }
-}
-
-function hitTestJoint(sourcePoint) {
-  const r = 14 / getEditorTransform().scale;
-  let best = null;
-  let bestD = Infinity;
-  for (const part of state.parts) {
-    if (!part.joint) continue;
-    const d = dist(part.joint, sourcePoint);
-    if (d < r && d < bestD) {
-      best = { part };
-      bestD = d;
-    }
-  }
-  return best;
-}
-
-function applyWandSelection(sx, sy) {
-  const selected = getSelectedPart();
-  if (!selected) return;
-  const mask = wandMaskCanvas(state.cleanCanvas || state.sourceCanvas, sx, sy, state.wandTolerance);
-  applyMaskToSelectedPart(mask);
-}
-
-function applyMaskToSelectedPart(maskCanvas) {
-  const part = getSelectedPart();
-  if (!part) return;
-  if (state.maskOp === 'replace' || !part.maskCanvas) {
-    part.maskCanvas = maskCanvas;
-  } else {
-    part.maskCanvas = combineMaskCanvases(part.maskCanvas, maskCanvas, state.maskOp);
-  }
-  updatePartCutout(part);
-  renderParts();
-  renderAll();
-}
-
-
-function updatePartCutout(part) {
-  const srcCanvas = state.cleanCanvas || state.sourceCanvas;
-  if (!srcCanvas || !part.maskCanvas) {
-    part.canvas = null;
-    part.anchor = null;
-    return;
-  }
-
-  const W = srcCanvas.width;
-  const H = srcCanvas.height;
-  const sctx = srcCanvas.getContext('2d', { willReadFrequently: true });
-  const srcData = sctx.getImageData(0, 0, W, H).data;
-
-  const softMask = softenMaskCanvas(part.maskCanvas, 3 + Math.round(state.selectionSmooth * 5), 2 + Math.round(state.selectionSmooth * 2));
-  const mctx = softMask.getContext('2d', { willReadFrequently: true });
-  const maskData = mctx.getImageData(0, 0, W, H).data;
-
-  let x0 = W, y0 = H, x1 = -1, y1 = -1;
-  for (let i = 0; i < W * H; i++) {
-    if (maskData[i * 4 + 3] > 0) {
-      const x = i % W;
-      const y = (i / W) | 0;
-      if (x < x0) x0 = x;
-      if (y < y0) y0 = y;
-      if (x > x1) x1 = x;
-      if (y > y1) y1 = y;
-    }
-  }
-  if (x1 < x0 || y1 < y0) {
-    part.canvas = null;
-    part.anchor = null;
-    return;
-  }
-
-  const bw = x1 - x0 + 1;
-  const bh = y1 - y0 + 1;
-  const cut = document.createElement('canvas');
-  cut.width = bw;
-  cut.height = bh;
-  const cctx = cut.getContext('2d');
-  const out = cctx.createImageData(bw, bh);
-  const od = out.data;
-
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const si = (y * W + x) * 4;
-      const di = ((y - y0) * bw + (x - x0)) * 4;
-      const alpha = maskData[si + 3];
-      if (!alpha) continue;
-      od[di] = srcData[si];
-      od[di + 1] = srcData[si + 1];
-      od[di + 2] = srcData[si + 2];
-      od[di + 3] = Math.round(srcData[si + 3] * (alpha / 255));
-    }
-  }
-  cctx.putImageData(out, 0, 0);
-  part.canvas = cut;
-  part.anchor = {
-    x: clamp(part.joint.x - x0, 0, bw - 1),
-    y: clamp(part.joint.y - y0, 0, bh - 1),
-  };
-}
-// ------------------------------ Drawing ------------------------------
-
-function renderAll() {
-  resizeCanvases();
-  drawEditor();
-  drawPreview(previewCtx, performance.now(), false);
-}
-
-
-function drawEditor() {
-  const canvas = els.editorCanvas;
-  const ctx = editorCtx;
-  const w = canvas.width;
-  const h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-
-  if (!state.cleanCanvas) {
-    els.editorPlaceholder.classList.remove('hidden');
-    return;
-  }
-  els.editorPlaceholder.classList.add('hidden');
-
-  const tr = getEditorTransform();
-  state.fit = tr.base;
-  const { scale, ox, oy } = tr;
-
-  ctx.save();
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(state.cleanCanvas, ox, oy, state.sourceW * scale, state.sourceH * scale);
-  ctx.restore();
-
-  const showMask = els.showMaskToggle.checked;
-  if (showMask) {
-    for (const part of state.parts) {
-      if (!part.maskCanvas || !part.visible) continue;
-      ctx.save();
-      ctx.globalAlpha = part.id === state.selectedPartId ? 0.52 : 0.24;
-      ctx.drawImage(part.maskCanvas, ox, oy, state.sourceW * scale, state.sourceH * scale);
-      ctx.restore();
-    }
-  }
-
-  if (state.lassoActive && state.lassoPoints.length > 1) {
-    ctx.save();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    const first = state.lassoPoints[0];
-    ctx.moveTo(first.x * scale + ox, first.y * scale + oy);
-    for (let i = 1; i < state.lassoPoints.length; i++) {
-      const p = state.lassoPoints[i];
-      ctx.lineTo(p.x * scale + ox, p.y * scale + oy);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  ctx.save();
-  ctx.lineCap = 'round';
-  for (const part of state.parts) {
-    if (!part.parentId) continue;
-    const parent = findPart(part.parentId);
-    if (!parent || !parent.joint || !part.joint) continue;
-    const ax = parent.joint.x * scale + ox;
-    const ay = parent.joint.y * scale + oy;
-    const bx = part.joint.x * scale + ox;
-    const by = part.joint.y * scale + oy;
-    ctx.strokeStyle = 'rgba(0,0,0,.55)';
-    ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
-    ctx.strokeStyle = '#dbe7ff';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
-  }
-  ctx.restore();
-
-  for (const part of state.parts) {
-    if (!part.joint) continue;
-    const x = part.joint.x * scale + ox;
-    const y = part.joint.y * scale + oy;
-    const active = part.id === state.selectedPartId;
-    ctx.save();
-    ctx.fillStyle = active ? part.color : '#0b0f15';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = active ? 3 : 2;
-    ctx.beginPath();
-    ctx.arc(x, y, active ? 8 : 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '12px Inter, sans-serif';
-    const label = part.name.length > 16 ? `${part.name.slice(0, 15)}…` : part.name;
-    ctx.fillText(label, x + 10, y - 10);
-    ctx.restore();
-  }
-}
-
-function drawPreview(ctx, now, exportMode) {
-  const canvas = ctx.canvas;
-  const W = canvas.width;
-  const H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-
-  if (!state.cleanCanvas || !state.parts.length) {
-    if (!exportMode) els.previewPlaceholder.classList.remove('hidden');
-    return;
-  }
-  if (!exportMode) els.previewPlaceholder.classList.add('hidden');
-
-  const bbox = sourceBBox(state.cleanCanvas);
-  const scale = Math.min((W * 0.60) / Math.max(bbox.w, 1), (H * 0.76) / Math.max(bbox.h, 1), 4);
-  const offsetX = (W - state.sourceW * scale) * 0.5;
-  const offsetY = H * 0.14;
-
-  const pose = computeRigTransforms(now);
-  const drawOrder = topoOrder().slice().sort((a, b) => depthOf(a) - depthOf(b));
-
-  for (const part of drawOrder) {
-    const tr = pose.get(part.id);
-    if (!tr || !part.visible || !part.canvas || !part.anchor) continue;
-    const px = tr.pos.x * scale + offsetX;
-    const py = tr.pos.y * scale + offsetY;
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(tr.rot);
-    ctx.scale(scale, scale);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(part.canvas, -part.anchor.x, -part.anchor.y);
-    ctx.restore();
-  }
-
-  ctx.save();
-  ctx.globalAlpha = 0.22;
-  ctx.fillStyle = '#000';
-  const root = chooseRootPart();
-  const rootPose = pose.get(root?.id || '')?.pos || centerOfParts() || { x: state.sourceW * 0.5, y: state.sourceH * 0.78 };
-  ctx.beginPath();
-  ctx.ellipse(rootPose.x * scale + offsetX, H * 0.90, Math.max(60, bbox.w * scale * 0.18), 12, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  els.previewStatus.textContent = `${state.pose} • ${state.speed.toFixed(2)}×`;
-}
-
-function computeRigTransforms(now) {
-  const t = (((now - state.animStart) / 1000) * state.speed) % 1;
-  const rootAnim = rootMotion(state.pose, t, state.tiltDeg);
-
-  const source = getSourceJointMap();
-  const current = {};
-  const facing = getFacingSign();
-  const transforms = new Map();
-
-  const rootBase = {
-    x: state.sourceW * 0.50,
-    y: state.sourceH * 0.78,
-  };
-  current.pelvis = {
-    x: rootBase.x + rootAnim.dx,
-    y: rootBase.y + rootAnim.dy,
-  };
-
-  const spineWave = Math.sin(t * Math.PI * 2);
-  const spineLean = state.pose === 'run' ? 0.072 : state.pose === 'walk' ? 0.036 : 0.018;
-  const spineRot = rootAnim.rot + spineWave * spineLean;
-
-  current.torso = offsetFromSourceJoint(current.pelvis, source.pelvis, source.torso, spineRot * 0.55);
-  current.chest = offsetFromSourceJoint(current.torso, source.torso, source.chest, spineRot * 0.75);
-  current.neck = offsetFromSourceJoint(current.chest, source.chest, source.neck, spineRot * 0.90);
-  current.head = offsetFromSourceJoint(current.neck, source.neck, source.head, spineRot * 1.10);
-
-  const shoulderLean = spineRot * 0.35;
-  const hipLean = spineRot * 0.20;
-
-  current['upper arm L'] = offsetFromSourceJoint(current.chest, source.chest, source['upper arm L'], shoulderLean);
-  current['upper arm R'] = offsetFromSourceJoint(current.chest, source.chest, source['upper arm R'], shoulderLean);
-  current['thigh L'] = offsetFromSourceJoint(current.pelvis, source.pelvis, source['thigh L'], hipLean);
-  current['thigh R'] = offsetFromSourceJoint(current.pelvis, source.pelvis, source['thigh R'], hipLean);
-
-  const legUpperL = dist(source['thigh L'], source['shin L']) || state.sourceH * 0.19;
-  const legLowerL = dist(source['shin L'], source['foot L']) || state.sourceH * 0.18;
-  const legUpperR = dist(source['thigh R'], source['shin R']) || state.sourceH * 0.19;
-  const legLowerR = dist(source['shin R'], source['foot R']) || state.sourceH * 0.18;
-  const armUpperL = dist(source['upper arm L'], source['lower arm L']) || state.sourceH * 0.16;
-  const armLowerL = dist(source['lower arm L'], source['hand L']) || state.sourceH * 0.14;
-  const armUpperR = dist(source['upper arm R'], source['lower arm R']) || state.sourceH * 0.16;
-  const armLowerR = dist(source['lower arm R'], source['hand R']) || state.sourceH * 0.14;
-
-  const walkCycle = (side) => (side < 0 ? t : (t + 0.5) % 1);
-  const strideScale = state.pose === 'run' ? 1.55 : state.pose === 'walk' ? 1.0 : 0.55;
-  const liftScale = state.pose === 'run' ? 1.35 : state.pose === 'walk' ? 1.0 : 0.45;
-
-  for (const side of [-1, 1]) {
-    const suffix = side < 0 ? 'L' : 'R';
-    const phase = walkCycle(side);
-    const wave = Math.sin(phase * Math.PI * 2);
-    const waveAbs = Math.max(0, wave);
-    const waveOpp = Math.max(0, -wave);
-
-    const hipBase = current[`thigh ${suffix}`];
-    const shoulderBase = current[`upper arm ${suffix}`];
-
-    const footTarget = {
-      x: hipBase.x + side * facing * (state.sourceW * 0.06 + wave * state.sourceW * 0.09 * strideScale),
-      y: hipBase.y + state.sourceH * 0.20 - waveAbs * state.sourceH * 0.10 * liftScale + waveOpp * state.sourceH * 0.012,
-    };
-    const armTarget = {
-      x: shoulderBase.x - side * facing * (state.sourceW * 0.05 + wave * state.sourceW * 0.07 * strideScale),
-      y: shoulderBase.y + state.sourceH * 0.03 + waveOpp * state.sourceH * 0.05 * liftScale - waveAbs * state.sourceH * 0.012,
-    };
-
-    const legIK = solveTwoBoneIK(hipBase, footTarget, suffix === 'L' ? legUpperL : legUpperR, suffix === 'L' ? legLowerL : legLowerR, side);
-    const armIK = solveTwoBoneIK(shoulderBase, armTarget, suffix === 'L' ? armUpperL : armUpperR, suffix === 'L' ? armLowerL : armLowerR, -side);
-
-    current[`shin ${suffix}`] = legIK.mid;
-    current[`foot ${suffix}`] = legIK.end;
-    current[`lower arm ${suffix}`] = armIK.mid;
-    current[`hand ${suffix}`] = armIK.end;
-  }
-
-  for (const part of state.parts) {
-    const parent = findPart(part.parentId);
-    const srcPoint = sourcePointForPart(part);
-    const srcParent = parent ? sourcePointForPart(parent) : null;
-    const parentPos = parent ? current[parent.type] : null;
-    const partPos = current[part.type] || null;
-
-    let pos;
-    let rot = 0;
-
-    if (part.type === 'pelvis') {
-      pos = current.pelvis;
-      rot = rootAnim.rot;
-    } else if (partPos) {
-      pos = partPos;
-      if (parentPos && srcParent) {
-        const srcAngle = Math.atan2(srcPoint.y - srcParent.y, srcPoint.x - srcParent.x);
-        const curAngle = Math.atan2(pos.y - parentPos.y, pos.x - parentPos.x);
-        rot = curAngle - srcAngle;
-      } else {
-        rot = rootAnim.rot;
-      }
-    } else if (parentPos && srcParent) {
-      const parentRot = transforms.get(parent.id)?.rot ?? rootAnim.rot;
-      const delta = rotateVec(srcPoint.x - srcParent.x, srcPoint.y - srcParent.y, parentRot);
-      pos = { x: parentPos.x + delta.x, y: parentPos.y + delta.y };
-      const srcAngle = Math.atan2(srcPoint.y - srcParent.y, srcPoint.x - srcParent.x);
-      const curAngle = Math.atan2(pos.y - parentPos.y, pos.x - parentPos.x);
-      rot = curAngle - srcAngle;
-    } else {
-      pos = part.joint || sourcePointForPart(part);
-      rot = rootAnim.rot;
-    }
-
-    transforms.set(part.id, { pos, rot, part });
-  }
-
-  return transforms;
-}
-
-function solveTwoBoneIK(base, target, len1, len2, bendDir = 1) {
-  const dx = target.x - base.x;
-  const dy = target.y - base.y;
-  const distTarget = Math.max(0.001, Math.hypot(dx, dy));
-  const maxReach = Math.max(0.001, len1 + len2 - 0.001);
-  const reach = Math.min(distTarget, maxReach);
-  const baseAngle = Math.atan2(dy, dx);
-  const cosA = clamp((len1 * len1 + reach * reach - len2 * len2) / (2 * len1 * reach), -1, 1);
-  const shoulderAngle = baseAngle - bendDir * Math.acos(cosA);
-  const elbow = {
-    x: base.x + Math.cos(shoulderAngle) * len1,
-    y: base.y + Math.sin(shoulderAngle) * len1,
-  };
-  const end = distTarget > maxReach
-    ? { x: base.x + dx * (maxReach / distTarget), y: base.y + dy * (maxReach / distTarget) }
-    : { x: target.x, y: target.y };
-  return { mid: elbow, end };
-}
-
-function offsetFromSourceJoint(parentPos, parentSource, childSource, extraRot = 0) {
-  const dx = childSource.x - parentSource.x;
-  const dy = childSource.y - parentSource.y;
-  const rotated = rotateVec(dx, dy, extraRot);
-  return { x: parentPos.x + rotated.x, y: parentPos.y + rotated.y };
-}
-
-function getSourceJointMap() {
-  const get = (type) => sourcePointForType(type);
-  return {
-    pelvis: get('pelvis'),
-    torso: get('torso'),
-    chest: get('chest'),
-    neck: get('neck'),
-    head: get('head'),
-    'upper arm L': get('upper arm L'),
-    'lower arm L': get('lower arm L'),
-    'hand L': get('hand L'),
-    'upper arm R': get('upper arm R'),
-    'lower arm R': get('lower arm R'),
-    'hand R': get('hand R'),
-    'thigh L': get('thigh L'),
-    'shin L': get('shin L'),
-    'foot L': get('foot L'),
-    'thigh R': get('thigh R'),
-    'shin R': get('shin R'),
-    'foot R': get('foot R'),
-  };
-}
-
-function sourcePointForType(type) {
-  const part = state.parts.find(p => p.type === type);
-  return part?.joint || defaultJointForType(type);
-}
-
-function sourcePointForPart(part) {
-  return part?.joint || defaultJointForType(part?.type || 'torso');
-}
-
-function getFacingSign() {
-  if (state.facing === 'left') return -1;
-  if (state.facing === 'right') return 1;
-  return inferFacingSign();
-}
-
-function inferFacingSign() {
-  const left = state.parts.filter(p => /\b(l|left)\b/i.test(`${p.type} ${p.name}`) && p.joint);
-  const right = state.parts.filter(p => /\b(r|right)\b/i.test(`${p.type} ${p.name}`) && p.joint);
-  if (!left.length || !right.length) return 1;
-  const lx = left.reduce((a, p) => a + p.joint.x, 0) / left.length;
-  const rx = right.reduce((a, p) => a + p.joint.x, 0) / right.length;
-  return lx < rx ? 1 : -1;
-}
-
-// ------------------------------ Animation math ------------------------------
-
-
-
-function rootMotion(pose, t, tiltDeg) {
-  const tilt = degToRad(tiltDeg);
-  const phase = (t % 1 + 1) % 1;
-  const sway = Math.sin(phase * Math.PI * 2);
-  const bob = Math.sin(phase * Math.PI * 2) ** 2;
-
-  switch (pose) {
-    case 'idle':
-      return {
-        dx: sway * 0.8,
-        dy: -bob * 3.5,
-        rot: tilt + sway * 0.015,
-      };
-    case 'walk':
-      return {
-        dx: sway * 1.6,
-        dy: -bob * 7.0,
-        rot: tilt + sway * 0.032,
-      };
-    case 'run':
-      return {
-        dx: sway * 2.8,
-        dy: -bob * 11.0,
-        rot: tilt + sway * 0.06,
-      };
-    case 'jump': {
-      const lift = t < 0.5 ? easeOut(t / 0.5) : 1 - easeIn((t - 0.5) / 0.5);
-      return {
-        dx: 0,
-        dy: -lift * 70,
-        rot: tilt - lift * 0.05,
-      };
-    }
-    default:
-      return { dx: 0, dy: 0, rot: tilt };
-  }
-}
-
-function sampleCycle(keys, phase) {
-  const p = ((phase % 1) + 1) % 1;
-  let a = keys[0], b = keys[keys.length - 1];
-  for (let i = 0; i < keys.length - 1; i++) {
-    if (p >= keys[i].t && p <= keys[i + 1].t) {
-      a = keys[i];
-      b = keys[i + 1];
-      break;
-    }
-  }
-  const span = (b.t - a.t) || 1;
-  const t = clamp((p - a.t) / span, 0, 1);
-  const s = t * t * (3 - 2 * t);
-  const out = {};
-  for (const key of Object.keys(a)) {
-    if (key === 't') continue;
-    const av = a[key];
-    const bv = b[key] ?? av;
-    out[key] = av + (bv - av) * s;
-  }
-  return out;
-}
-
-function partMotion(part, pose, t) {
-  const side = sideSign(part.type, part.name) || (part.name.toLowerCase().includes('l') ? -1 : part.name.toLowerCase().includes('r') ? 1 : 0);
-  const type = part.type.toLowerCase();
-  const phase = (t % 1 + 1) % 1;
-  const leftPhase = phase;
-  const rightPhase = (phase + 0.5) % 1;
-
-  if (pose === 'idle') {
-    const breath = Math.sin(phase * Math.PI * 2);
-    if (type.includes('head') || type.includes('neck')) return degToRad(2.5) * Math.sin(phase * Math.PI * 2 + Math.PI / 2);
-    if (type.includes('torso') || type.includes('chest')) return degToRad(1.2) * breath * 0.35;
-    if (type.includes('pelvis')) return degToRad(1.8) * breath * 0.45;
-    if (type.includes('upper arm')) return degToRad(2.5) * (-side || 1) * breath;
-    if (type.includes('lower arm')) return degToRad(1.8) * (-side || 1) * Math.sin(phase * Math.PI * 2 + 0.6);
-    if (type.includes('hand')) return degToRad(1.0) * (-side || 1) * breath;
-    if (type.includes('thigh')) return degToRad(1.4) * (side || 1) * breath;
-    if (type.includes('shin')) return degToRad(1.0) * (side || 1) * Math.sin(phase * Math.PI * 2 + 0.4);
-    if (type.includes('foot')) return degToRad(0.8) * (side || 1) * Math.sin(phase * Math.PI * 2 + 0.3);
-    if (type.includes('hair')) return degToRad(3.5) * breath;
-    return 0;
-  }
-
-  const walkLeg = sampleCycle([
-    { t: 0.00, thigh: -14, shin:  4, foot:  0 },
-    { t: 0.18, thigh: -20, shin:  2, foot: -2 },
-    { t: 0.35, thigh:  10, shin: 10, foot: -6 },
-    { t: 0.55, thigh:  34, shin: 42, foot: -18 },
-    { t: 0.78, thigh:  -2, shin: 24, foot:  2 },
-    { t: 1.00, thigh: -14, shin:  4, foot:  0 },
-  ], side < 0 ? leftPhase : rightPhase);
-
-  const walkArm = sampleCycle([
-    { t: 0.00, upper: 18, lower:  8, hand:  0 },
-    { t: 0.20, upper: 10, lower: 12, hand:  0 },
-    { t: 0.45, upper: -8, lower: 16, hand: -2 },
-    { t: 0.65, upper: -22, lower: 20, hand: -4 },
-    { t: 0.85, upper:  6, lower: 10, hand:  1 },
-    { t: 1.00, upper: 18, lower:  8, hand:  0 },
-  ], side < 0 ? leftPhase : rightPhase);
-
-  const runLeg = sampleCycle([
-    { t: 0.00, thigh: -20, shin:  0, foot:  0 },
-    { t: 0.15, thigh: -30, shin:  6, foot: -4 },
-    { t: 0.35, thigh:  15, shin: 16, foot: -10 },
-    { t: 0.55, thigh:  54, shin: 58, foot: -22 },
-    { t: 0.75, thigh:  -6, shin: 30, foot:  4 },
-    { t: 1.00, thigh: -20, shin:  0, foot:  0 },
-  ], side < 0 ? leftPhase : rightPhase);
-
-  const runArm = sampleCycle([
-    { t: 0.00, upper: 26, lower: 10, hand:  0 },
-    { t: 0.20, upper: 12, lower: 14, hand:  0 },
-    { t: 0.45, upper: -14, lower: 20, hand: -2 },
-    { t: 0.65, upper: -42, lower: 24, hand: -5 },
-    { t: 0.85, upper:  8, lower: 12, hand:  1 },
-    { t: 1.00, upper: 26, lower: 10, hand:  0 },
-  ], side < 0 ? leftPhase : rightPhase);
-
-  if (pose === 'walk') {
-    if (type.includes('head') || type.includes('neck')) return degToRad(2) * Math.sin(phase * Math.PI * 2 + Math.PI / 2);
-    if (type.includes('torso') || type.includes('chest')) return degToRad(3.5) * Math.sin(phase * Math.PI * 2) * 0.25;
-    if (type.includes('pelvis')) return degToRad(4.5) * Math.sin(phase * Math.PI * 2) * 0.35;
-    if (type.includes('upper arm')) return degToRad(walkArm.upper) * (side < 0 ? 1 : -1);
-    if (type.includes('lower arm')) return degToRad(walkArm.lower) * (side < 0 ? 1 : -1);
-    if (type.includes('hand')) return degToRad(walkArm.hand) * (side < 0 ? 1 : -1);
-    if (type.includes('thigh')) return degToRad(walkLeg.thigh) * (side < 0 ? 1 : -1);
-    if (type.includes('shin')) return degToRad(walkLeg.shin) * (side < 0 ? 1 : -1);
-    if (type.includes('foot')) return degToRad(walkLeg.foot) * (side < 0 ? 1 : -1);
-    if (type.includes('hair')) return degToRad(5) * Math.sin(phase * Math.PI * 2);
-    return 0;
-  }
-
-  if (pose === 'run') {
-    if (type.includes('head') || type.includes('neck')) return degToRad(3) * Math.sin(phase * Math.PI * 2 + Math.PI / 2);
-    if (type.includes('torso') || type.includes('chest')) return degToRad(5) * Math.sin(phase * Math.PI * 2) * 0.30;
-    if (type.includes('pelvis')) return degToRad(7) * Math.sin(phase * Math.PI * 2) * 0.45;
-    if (type.includes('upper arm')) return degToRad(runArm.upper) * (side < 0 ? 1 : -1);
-    if (type.includes('lower arm')) return degToRad(runArm.lower) * (side < 0 ? 1 : -1);
-    if (type.includes('hand')) return degToRad(runArm.hand) * (side < 0 ? 1 : -1);
-    if (type.includes('thigh')) return degToRad(runLeg.thigh) * (side < 0 ? 1 : -1);
-    if (type.includes('shin')) return degToRad(runLeg.shin) * (side < 0 ? 1 : -1);
-    if (type.includes('foot')) return degToRad(runLeg.foot) * (side < 0 ? 1 : -1);
-    if (type.includes('hair')) return degToRad(9) * Math.sin(phase * Math.PI * 2);
-    return 0;
-  }
-
-  if (pose === 'jump') {
-    const bob = t < 0.45 ? easeOut(t / 0.45) : 1 - easeIn((t - 0.45) / 0.55);
-    if (type.includes('head') || type.includes('neck')) return degToRad(-5) * bob;
-    if (type.includes('torso') || type.includes('chest')) return degToRad(-4) * bob;
-    if (type.includes('pelvis')) return degToRad(2) * bob;
-    if (type.includes('upper arm')) return degToRad(22) * (-side || -1) * (1 - bob);
-    if (type.includes('lower arm')) return degToRad(16) * (-side || -1) * (1 - bob);
-    if (type.includes('hand')) return degToRad(8) * (-side || -1) * (1 - bob);
-    if (type.includes('thigh')) return degToRad(22) * (side || 1) * (1 - bob);
-    if (type.includes('shin')) return degToRad(-18) * (side || 1) * (1 - bob);
-    if (type.includes('foot')) return degToRad(10) * (-side || -1) * (1 - bob);
-    return 0;
-  }
-
-  return 0;
-}
-// ------------------------------ Selection helpers ------------------------------
-
-function polygonMaskCanvas(points, w, h, smoothFactor = 0.3) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const ctx = c.getContext('2d');
-  const pts = simplifyPoints(points, smoothFactor);
-  if (pts.length < 3) return c;
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.moveTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.closePath();
-  ctx.fill();
-  return c;
-}
-
-function wandMaskCanvas(srcCanvas, sx, sy, tolerance) {
-  const W = srcCanvas.width;
-  const H = srcCanvas.height;
-  const ctx = srcCanvas.getContext('2d', { willReadFrequently: true });
-  const img = ctx.getImageData(0, 0, W, H);
-  const d = img.data;
-  const start = clampXY(Math.round(sx), Math.round(sy), W, H);
-  const idx0 = (start.y * W + start.x) * 4;
-  const target = { r: d[idx0], g: d[idx0 + 1], b: d[idx0 + 2], a: d[idx0 + 3] };
-  const seen = new Uint8Array(W * H);
-  const out = new Uint8Array(W * H);
-  const q = new Uint32Array(W * H);
-  let qh = 0, qt = 0;
-  const push = (x, y) => {
-    if (x < 0 || y < 0 || x >= W || y >= H) return;
-    const i = y * W + x;
-    if (seen[i]) return;
-    seen[i] = 1;
-    const pi = i * 4;
-    const col = { r: d[pi], g: d[pi + 1], b: d[pi + 2], a: d[pi + 3] };
-    if (col.a < 20) return;
-    if (colorDistance(col, target) <= tolerance) {
-      out[i] = 255;
-      q[qt++] = i;
-    }
-  };
-  push(start.x, start.y);
-  while (qh < qt) {
-    const i = q[qh++];
-    const x = i % W;
-    const y = (i / W) | 0;
-    push(x - 1, y);
-    push(x + 1, y);
-    push(x, y - 1);
-    push(x, y + 1);
-  }
-  const mask = document.createElement('canvas');
-  mask.width = W;
-  mask.height = H;
-  const mctx = mask.getContext('2d');
-  const outImg = mctx.createImageData(W, H);
-  for (let i = 0; i < W * H; i++) {
-    const a = out[i];
-    outImg.data[i * 4 + 3] = a;
-  }
-  mctx.putImageData(outImg, 0, 0);
-  return mask;
-}
-
-function combineMaskCanvases(base, add, op) {
-  const W = Math.max(base.width, add.width);
-  const H = Math.max(base.height, add.height);
-  const out = document.createElement('canvas');
-  out.width = W;
-  out.height = H;
-  const octx = out.getContext('2d');
-  octx.clearRect(0, 0, W, H);
-  octx.drawImage(base, 0, 0);
-  const bd = octx.getImageData(0, 0, W, H);
-  const ad = add.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H);
-  const b = bd.data;
-  const a = ad.data;
-  for (let i = 0; i < W * H; i++) {
-    const bi = i * 4 + 3;
-    const ai = i * 4 + 3;
-    if (op === 'add') b[bi] = Math.max(b[bi], a[ai]);
-    else if (op === 'subtract') b[bi] = Math.max(0, b[bi] - a[ai]);
-  }
-  octx.putImageData(bd, 0, 0);
-  return out;
-}
-
-
-function softenMaskCanvas(maskCanvas, blurPx = 3, dilatePx = 1) {
-  const W = maskCanvas.width;
-  const H = maskCanvas.height;
-  const out = document.createElement('canvas');
-  out.width = W;
-  out.height = H;
-  const ctx = out.getContext('2d');
-  ctx.clearRect(0, 0, W, H);
-  ctx.save();
-  ctx.filter = `blur(${Math.max(0, blurPx)}px)`;
-  for (let dy = -dilatePx; dy <= dilatePx; dy++) {
-    for (let dx = -dilatePx; dx <= dilatePx; dx++) {
-      ctx.drawImage(maskCanvas, dx, dy);
-    }
-  }
-  ctx.restore();
-  return out;
-}
-// ------------------------------ Geometry / transforms ------------------------------
-
-function fitCanvasToImage(canvasW, canvasH, imgW, imgH) {
-  if (!imgW || !imgH) return { scale: 1, ox: 0, oy: 0 };
-  const scale = Math.min(canvasW / imgW, canvasH / imgH) * 0.92;
-  const ox = (canvasW - imgW * scale) / 2;
-  const oy = (canvasH - imgH * scale) / 2;
-  return { scale, ox, oy };
-}
-
-function getEditorTransform() {
-  const fit = fitCanvasToImage(els.editorCanvas.width, els.editorCanvas.height, state.sourceW, state.sourceH);
-  return {
-    scale: fit.scale * state.viewZoom,
-    ox: fit.ox + state.viewPanX,
-    oy: fit.oy + state.viewPanY,
-    base: fit,
-  };
-}
-
-function resetEditorView() {
-  state.viewZoom = 1;
-  state.viewPanX = 0;
-  state.viewPanY = 0;
-  if (els.zoomSlider) els.zoomSlider.value = '1';
-  if (els.zoomVal) els.zoomVal.textContent = '100%';
-  renderAll();
-}
-
-function setEditorZoom(nextZoom, anchorClientX = null, anchorClientY = null) {
-  const prev = state.viewZoom || 1;
-  const clamped = clamp(nextZoom, 0.35, 4);
-  const fit = fitCanvasToImage(els.editorCanvas.width, els.editorCanvas.height, state.sourceW, state.sourceH);
-  const rect = els.editorCanvas.getBoundingClientRect();
-  const ax = anchorClientX == null ? rect.left + rect.width / 2 : anchorClientX;
-  const ay = anchorClientY == null ? rect.top + rect.height / 2 : anchorClientY;
-  const canvasX = (ax - rect.left) * (els.editorCanvas.width / rect.width);
-  const canvasY = (ay - rect.top) * (els.editorCanvas.height / rect.height);
-  const srcX = (canvasX - (fit.ox + state.viewPanX)) / (fit.scale * prev);
-  const srcY = (canvasY - (fit.oy + state.viewPanY)) / (fit.scale * prev);
-  state.viewZoom = clamped;
-  state.viewPanX = canvasX - fit.ox - srcX * (fit.scale * clamped);
-  state.viewPanY = canvasY - fit.oy - srcY * (fit.scale * clamped);
-  if (els.zoomSlider) els.zoomSlider.value = String(clamped);
-  if (els.zoomVal) els.zoomVal.textContent = `${Math.round(clamped * 100)}%`;
-  renderAll();
-}
-
-function handleCanvasWheel(e) {
-  if (!state.cleanCanvas) return;
-  e.preventDefault();
-  const zoomDelta = e.deltaY < 0 ? 1.12 : 0.89;
-  setEditorZoom(state.viewZoom * zoomDelta, e.clientX, e.clientY);
-}
-
-function updateCanvasCursor() {
-  if (state.panning) {
-    els.editorCanvas.style.cursor = 'grabbing';
-    return;
-  }
-  if (state.tool === 'joint') {
-    els.editorCanvas.style.cursor = 'crosshair';
-    return;
-  }
-  els.editorCanvas.style.cursor = state.tool === 'lasso' ? 'crosshair' : 'copy';
-}
-
-function resizeCanvases() {
-  for (const canvas of [els.editorCanvas, els.previewCanvas]) {
-    const wrap = canvas.parentElement;
-    const rect = wrap.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(320, Math.floor(rect.width * dpr));
-    const h = Math.max(320, Math.floor(rect.height * dpr));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-  }
-}
-
-function sourcePointFromEvent(e) {
-  const rect = els.editorCanvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * (els.editorCanvas.width / rect.width);
-  const y = (e.clientY - rect.top) * (els.editorCanvas.height / rect.height);
-  const tr = getEditorTransform();
-  const sx = (x - tr.ox) / tr.scale;
-  const sy = (y - tr.oy) / tr.scale;
-  if (sx < 0 || sy < 0 || sx > state.sourceW || sy > state.sourceH) return null;
-  return { x: sx, y: sy };
-}
-
-function sourceBBox(canvas) {
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  let x0 = canvas.width, y0 = canvas.height, x1 = -1, y1 = -1;
-  for (let y = 0; y < canvas.height; y++) {
-    for (let x = 0; x < canvas.width; x++) {
-      if (d[(y * canvas.width + x) * 4 + 3] > 8) {
-        if (x < x0) x0 = x;
-        if (y < y0) y0 = y;
-        if (x > x1) x1 = x;
-        if (y > y1) y1 = y;
-      }
-    }
-  }
-  if (x1 < x0) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
-  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-}
-
-function chooseRootPart() {
-  const priority = ['pelvis', 'torso', 'chest', 'head'];
-  for (const p of priority) {
-    const found = state.parts.find(x => x.type === p);
-    if (found) return found;
-  }
-  return state.parts.find(p => !p.parentId) || state.parts[0] || null;
-}
-
-function centerOfParts() {
-  if (!state.parts.length) return null;
-  const pts = state.parts.map(p => p.joint).filter(Boolean);
-  if (!pts.length) return null;
-  const x = pts.reduce((a, p) => a + p.x, 0) / pts.length;
-  const y = pts.reduce((a, p) => a + p.y, 0) / pts.length;
-  return { x, y };
-}
-
-function topoOrder() {
-  const out = [];
-  const seen = new Set();
-  const byId = new Map(state.parts.map(p => [p.id, p]));
-  function visit(part) {
-    if (!part || seen.has(part.id)) return;
-    seen.add(part.id);
-    out.push(part);
-    for (const child of state.parts.filter(p => p.parentId === part.id)) visit(child);
-  }
-  for (const part of state.parts) if (!part.parentId) visit(part);
-  for (const part of state.parts) if (!seen.has(part.id)) visit(part);
-  return out;
-}
-
-function depthOf(part) {
-  let d = 0;
-  let cur = part;
-  const map = new Map(state.parts.map(p => [p.id, p]));
-  while (cur?.parentId && map.has(cur.parentId) && d < 50) {
-    d++;
-    cur = map.get(cur.parentId);
-  }
-  return d;
-}
-
-// ------------------------------ Utility ------------------------------
-
-function defaultJointForType(type) {
-  if (!state.sourceW || !state.sourceH) return { x: 0, y: 0 };
-  const bb = { x: state.sourceW * 0.15, y: state.sourceH * 0.10, w: state.sourceW * 0.70, h: state.sourceH * 0.80 };
-  const cx = bb.x + bb.w * 0.5;
-  const left = bb.x + bb.w * 0.28;
-  const right = bb.x + bb.w * 0.72;
-  const top = bb.y + bb.h * 0.14;
-  const upper = bb.y + bb.h * 0.28;
-  const mid = bb.y + bb.h * 0.44;
-  const low = bb.y + bb.h * 0.62;
-  const bottom = bb.y + bb.h * 0.82;
-  const t = type.toLowerCase();
-  if (t.includes('head')) return { x: cx, y: top };
-  if (t.includes('hair')) return { x: cx, y: top - bb.h * 0.04 };
-  if (t.includes('face')) return { x: cx, y: top + bb.h * 0.03 };
-  if (t.includes('neck')) return { x: cx, y: upper };
-  if (t.includes('chest')) return { x: cx, y: mid * 0.86 + upper * 0.14 };
-  if (t.includes('torso')) return { x: cx, y: mid };
-  if (t.includes('pelvis')) return { x: cx, y: low };
-  if (t.includes('upper arm l')) return { x: left, y: upper };
-  if (t.includes('lower arm l')) return { x: left - bb.w * 0.11, y: mid };
-  if (t.includes('hand l')) return { x: left - bb.w * 0.18, y: mid + bb.h * 0.05 };
-  if (t.includes('upper arm r')) return { x: right, y: upper };
-  if (t.includes('lower arm r')) return { x: right + bb.w * 0.11, y: mid };
-  if (t.includes('hand r')) return { x: right + bb.w * 0.18, y: mid + bb.h * 0.05 };
-  if (t.includes('thigh l')) return { x: left, y: low };
-  if (t.includes('shin l')) return { x: left - bb.w * 0.02, y: bottom * 0.9 };
-  if (t.includes('foot l')) return { x: left - bb.w * 0.05, y: bottom };
-  if (t.includes('thigh r')) return { x: right, y: low };
-  if (t.includes('shin r')) return { x: right + bb.w * 0.02, y: bottom * 0.9 };
-  if (t.includes('foot r')) return { x: right + bb.w * 0.05, y: bottom };
-  if (t.includes('shoulder pad l')) return { x: left, y: upper };
-  if (t.includes('shoulder pad r')) return { x: right, y: upper };
-  if (t.includes('cape')) return { x: cx, y: upper };
-  if (t.includes('skirt')) return { x: cx, y: low + bb.h * 0.04 };
-  if (t.includes('weapon')) return { x: right + bb.w * 0.15, y: mid };
-  if (t.includes('shield')) return { x: left - bb.w * 0.15, y: mid };
-  return { x: cx, y: mid };
-}
-
-function colorForType(type) {
-  const idx = Math.abs(hashCode(type)) % PALETTE.length;
-  return PALETTE[idx];
-}
-
-function humanizeType(type) {
-  return type.replace(/\b\w/g, c => c.toUpperCase());
+const DEFAULT_SOURCE_SIZE = 960;
+
+init();
+
+function init() {
+  populateTypeOptions();
+  bindEvents();
+  resizeAll();
+  requestAnimationFrame(loop);
+  renderSource();
+  renderPreview();
+  setStatus('No image loaded.', 'preview');
 }
 
 function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-function colorDistance(a, b) {
-  const dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
-  return Math.sqrt(dr * dr + dg * dg + db * db);
-}
-
-function hashCode(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i) | 0;
-  return h;
-}
-
-function sideSign(type, name) {
-  const s = `${type} ${name}`.toLowerCase();
-  if (s.includes('left') || /\bl\b/.test(s) || s.endsWith(' l')) return -1;
-  if (s.includes('right') || /\br\b/.test(s) || s.endsWith(' r')) return 1;
-  return 0;
-}
-
-function rotateVec(x, y, ang) {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  return { x: x * c - y * s, y: x * s + y * c };
+  if (crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'p_' + Math.random().toString(36).slice(2, 10);
 }
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-function clampPoint(p) { return { x: clamp(p.x, 0, state.sourceW - 1), y: clamp(p.y, 0, state.sourceH - 1) }; }
-function dist(a, b) { const dx = a.x - b.x, dy = a.y - b.y; return Math.hypot(dx, dy); }
-function degToRad(d) { return d * Math.PI / 180; }
-function easeOut(t) { return 1 - Math.pow(1 - clamp(t, 0, 1), 3); }
-function easeIn(t) { return Math.pow(clamp(t, 0, 1), 3); }
-function escapeHtml(str) { return String(str).replace(/[&<>'"]/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[s])); }
-function simplifyPoints(points, smoothFactor) {
-  if (points.length <= 3) return points;
-  const keep = [];
-  const threshold = 2 + (1 - clamp(smoothFactor, 0, 1)) * 10;
-  for (const p of points) {
-    const last = keep[keep.length - 1];
-    if (!last || dist(last, p) >= threshold) keep.push(p);
-  }
-  if (keep.length < 3) return points;
-  return keep;
+function lerp(a, b, t) { return a + (b - a) * t; }
+function hypot(dx, dy) { return Math.hypot(dx, dy); }
+function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function midpoint(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+function colorForIndex(i) { return TYPE_COLORS[i % TYPE_COLORS.length]; }
+function rotatePoint(pt, pivot, ang) {
+  const s = Math.sin(ang), c = Math.cos(ang);
+  const dx = pt.x - pivot.x, dy = pt.y - pivot.y;
+  return { x: pivot.x + dx * c - dy * s, y: pivot.y + dx * s + dy * c };
 }
-async function fileToImage(file) {
+function pointOnCircle(center, radius, angle) {
+  return { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
+}
+function formatPct(v) { return `${Math.round(v * 100)}%`; }
+function sourceHasImage() { return !!state.image; }
+
+function populateTypeOptions() {
+  const fill = (sel, includeNone = false) => {
+    sel.innerHTML = '';
+    if (includeNone) {
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'None';
+      sel.appendChild(o);
+    }
+    for (const type of PART_TYPES) {
+      const o = document.createElement('option');
+      o.value = type;
+      o.textContent = type;
+      sel.appendChild(o);
+    }
+  };
+  fill(els.partTypeAdd);
+  fill(els.partTypeEdit);
+  els.partTypeAdd.value = 'torso';
+  els.partTypeEdit.value = 'torso';
+}
+
+function bindEvents() {
+  els.importBtn.addEventListener('click', () => els.fileInput.click());
+  els.fileInput.addEventListener('change', () => {
+    const file = els.fileInput.files && els.fileInput.files[0];
+    if (file) loadImage(file);
+  });
+
+  window.addEventListener('resize', () => {
+    resizeAll();
+    renderSource();
+    renderPreview();
+  });
+
+  els.sourceCanvas.addEventListener('dragover', (e) => { e.preventDefault(); });
+  els.sourceCanvas.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImage(file);
+  });
+
+  els.sourceZoom.addEventListener('input', () => {
+    state.sourceZoom = parseFloat(els.sourceZoom.value);
+    els.sourceZoomVal.textContent = formatPct(state.sourceZoom);
+    renderSource();
+  });
+
+  els.fitSourceBtn.addEventListener('click', () => {
+    state.sourceZoom = 1;
+    els.sourceZoom.value = '1';
+    els.sourceZoomVal.textContent = '100%';
+    fitSourceView();
+    renderSource();
+  });
+
+  els.poseSelect.addEventListener('change', () => {
+    state.pose = els.poseSelect.value;
+  });
+  els.facingSelect.addEventListener('change', () => {
+    state.facing = els.facingSelect.value;
+  });
+  els.wandTolerance.addEventListener('input', () => {
+    state.wandTolerance = parseFloat(els.wandTolerance.value);
+    els.wandToleranceVal.textContent = String(Math.round(state.wandTolerance));
+  });
+
+  els.speedSlider.addEventListener('input', () => {
+    state.speed = parseFloat(els.speedSlider.value);
+    els.speedVal.textContent = `${state.speed.toFixed(2)}×`;
+  });
+  els.tiltSlider.addEventListener('input', () => {
+    state.tilt = parseFloat(els.tiltSlider.value);
+    els.tiltVal.textContent = `${state.tilt.toFixed(0)}°`;
+  });
+
+  document.querySelectorAll('[data-tool]').forEach(btn => {
+    btn.addEventListener('click', () => setTool(btn.dataset.tool));
+  });
+
+  els.partTypeAdd.addEventListener('change', () => {
+    // no-op; current selection only.
+  });
+
+  els.addPartBtn.addEventListener('click', () => {
+    const part = createPart(els.partTypeAdd.value);
+    state.parts.push(part);
+    state.selectedPartId = part.id;
+    syncPartUI();
+    renderPartList();
+    renderSource();
+    renderPreview();
+    setStatus(`Added ${part.name}.`, 'source');
+  });
+
+  els.maskMode.addEventListener('change', () => {
+    state.maskMode = els.maskMode.value;
+  });
+  els.featherSlider.addEventListener('input', () => {
+    state.feather = parseFloat(els.featherSlider.value);
+    els.featherVal.textContent = `${state.feather.toFixed(1)}px`;
+    if (state.selectedPartId) rebuildSelectedRaster();
+  });
+
+  ['input', 'change'].forEach(evt => {
+    [els.partName, els.partTypeEdit, els.partParent, els.partVisible, els.showMask,
+     els.anchorX, els.anchorY, els.tipX, els.tipY].forEach(el => el.addEventListener(evt, commitSelectedPartEdits));
+  });
+
+  els.clearMaskBtn.addEventListener('click', () => {
+    const part = selectedPart();
+    if (!part) return;
+    part.maskCanvas = null;
+    part.raster = null;
+    renderPartList();
+    renderSource();
+    renderPreview();
+  });
+
+  els.deletePartBtn.addEventListener('click', () => {
+    const part = selectedPart();
+    if (!part) return;
+    const id = part.id;
+    state.parts = state.parts.filter(p => p.id !== id);
+    for (const p of state.parts) {
+      if (p.parentId === id) p.parentId = '';
+    }
+    state.selectedPartId = state.parts[0] ? state.parts[0].id : null;
+    syncPartUI();
+    renderPartList();
+    renderSource();
+    renderPreview();
+  });
+
+  els.fitPreviewBtn.addEventListener('click', () => {
+    resizeAll();
+    renderPreview();
+  });
+
+  els.exportJsonBtn.addEventListener('click', exportProjectJSON);
+  els.exportProjectBtn.addEventListener('click', exportProjectJSON);
+  els.exportPreviewBtn.addEventListener('click', exportPreviewPNG);
+
+  // pointer events for source canvas
+  els.sourceCanvas.addEventListener('pointerdown', onSourcePointerDown);
+  els.sourceCanvas.addEventListener('pointermove', onSourcePointerMove);
+  window.addEventListener('pointerup', onSourcePointerUp);
+  els.sourceCanvas.addEventListener('wheel', onSourceWheel, { passive: false });
+}
+
+function setTool(tool) {
+  state.tool = tool;
+  document.querySelectorAll('[data-tool]').forEach(btn => btn.classList.toggle('active', btn.dataset.tool === tool));
+}
+
+function createPart(type) {
+  const idx = state.parts.length;
+  const anchor = state.image
+    ? { x: state.image.w * 0.5, y: state.image.h * 0.5 }
+    : { x: 200, y: 200 };
+  const tip = defaultTipForType(type, anchor, state.image ? state.image.h : 400);
+  return {
+    id: uid(),
+    name: type,
+    type,
+    parentId: DEFAULT_PARENT[type] || '',
+    visible: true,
+    showMask: true,
+    color: colorForIndex(idx),
+    anchor,
+    tip,
+    maskCanvas: null,
+    raster: null,
+    bounds: null,
+    sourceLength: 0,
+  };
+}
+
+function defaultTipForType(type, anchor, h) {
+  const len = Math.max(24, h * 0.1);
+  switch (type) {
+    case 'head': return { x: anchor.x, y: anchor.y - len * 0.9 };
+    case 'neck': return { x: anchor.x, y: anchor.y - len * 0.7 };
+    case 'chest': return { x: anchor.x, y: anchor.y - len * 0.8 };
+    case 'torso': return { x: anchor.x, y: anchor.y - len * 0.9 };
+    case 'pelvis': return { x: anchor.x, y: anchor.y - len * 0.7 };
+    case 'upper arm L': return { x: anchor.x - len * 0.85, y: anchor.y + len * 0.1 };
+    case 'lower arm L': return { x: anchor.x - len * 0.85, y: anchor.y + len * 0.05 };
+    case 'hand L': return { x: anchor.x - len * 0.4, y: anchor.y };
+    case 'upper arm R': return { x: anchor.x + len * 0.85, y: anchor.y + len * 0.1 };
+    case 'lower arm R': return { x: anchor.x + len * 0.85, y: anchor.y + len * 0.05 };
+    case 'hand R': return { x: anchor.x + len * 0.4, y: anchor.y };
+    case 'thigh L': return { x: anchor.x - len * 0.35, y: anchor.y + len * 0.9 };
+    case 'shin L': return { x: anchor.x - len * 0.28, y: anchor.y + len * 1.0 };
+    case 'foot L': return { x: anchor.x - len * 0.7, y: anchor.y + len * 0.1 };
+    case 'thigh R': return { x: anchor.x + len * 0.35, y: anchor.y + len * 0.9 };
+    case 'shin R': return { x: anchor.x + len * 0.28, y: anchor.y + len * 1.0 };
+    case 'foot R': return { x: anchor.x + len * 0.7, y: anchor.y + len * 0.1 };
+    case 'hair': return { x: anchor.x, y: anchor.y - len * 0.9 };
+    case 'cape': return { x: anchor.x, y: anchor.y + len * 1.2 };
+    case 'skirt': return { x: anchor.x, y: anchor.y + len * 1.0 };
+    default: return { x: anchor.x + len * 0.6, y: anchor.y };
+  }
+}
+
+function loadImage(file) {
   const url = URL.createObjectURL(file);
-  try {
-    return await dataUrlToImage(url);
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth || img.width;
+    c.height = img.naturalHeight || img.height;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    state.image = { img, canvas: c, w: c.width, h: c.height };
+    state.parts = [];
+    state.selectedPartId = null;
+    state.sourceZoom = 1;
+    els.sourceZoom.value = '1';
+    els.sourceZoomVal.textContent = '100%';
+    fitSourceView();
+    fitPreviewView();
+    // Pre-create a torso part for convenience, but it is not required.
+    const torso = createPart('torso');
+    torso.anchor = { x: c.width * 0.5, y: c.height * 0.62 };
+    torso.tip = { x: c.width * 0.5, y: c.height * 0.42 };
+    state.parts.push(torso);
+    state.selectedPartId = torso.id;
+    syncPartUI();
+    renderPartList();
+    renderSource();
+    renderPreview();
+    setStatus(`Loaded ${c.width}×${c.height} image.`, 'source');
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    setStatus('Could not load image.', 'source');
+  };
+  img.src = url;
+}
+
+function resizeAll() {
+  const sourceRect = els.sourceCanvas.parentElement.getBoundingClientRect();
+  const previewRect = els.previewCanvas.parentElement.getBoundingClientRect();
+  els.sourceCanvas.width = Math.max(300, Math.floor(sourceRect.width));
+  els.sourceCanvas.height = Math.max(260, Math.floor(sourceRect.height));
+  els.previewCanvas.width = Math.max(300, Math.floor(previewRect.width));
+  els.previewCanvas.height = Math.max(260, Math.floor(previewRect.height));
+  fitSourceView();
+  fitPreviewView();
+}
+
+function fitSourceView() {
+  if (!state.image) return;
+  const cw = els.sourceCanvas.width, ch = els.sourceCanvas.height;
+  const scale = Math.min(cw / state.image.w, ch / state.image.h) * 0.92;
+  state.sourceFit = scale;
+  state.sourceFitX = (cw - state.image.w * scale) / 2;
+  state.sourceFitY = (ch - state.image.h * scale) / 2;
+}
+
+function fitPreviewView() {
+  const cw = els.previewCanvas.width, ch = els.previewCanvas.height;
+  state.previewFit = Math.min(cw, ch) * 0.96;
+  state.previewFitX = cw / 2;
+  state.previewFitY = ch / 2;
+}
+
+function sourceTransform() {
+  const scale = state.sourceFit * state.sourceZoom;
+  return { scale, x: state.sourceFitX + state.sourcePanX, y: state.sourceFitY + state.sourcePanY };
+}
+
+function sourceToCanvas(pt) {
+  const t = sourceTransform();
+  return { x: pt.x * t.scale + t.x, y: pt.y * t.scale + t.y };
+}
+
+function canvasToSource(x, y) {
+  const t = sourceTransform();
+  return { x: (x - t.x) / t.scale, y: (y - t.y) / t.scale };
+}
+
+function selectedPart() {
+  return state.parts.find(p => p.id === state.selectedPartId) || null;
+}
+
+function syncPartUI() {
+  const part = selectedPart();
+  const has = !!part;
+  els.selectedPartHint.textContent = has ? `Editing ${part.name}` : 'Choose a part to edit its mask and joints';
+  [els.partName, els.partTypeEdit, els.partParent, els.anchorX, els.anchorY, els.tipX, els.tipY, els.partVisible, els.showMask, els.clearMaskBtn, els.deletePartBtn].forEach(el => el.disabled = !has);
+  if (!has) return;
+  els.partName.value = part.name;
+  els.partTypeEdit.value = part.type;
+  populateParentOptions(part.parentId);
+  els.anchorX.value = Math.round(part.anchor.x);
+  els.anchorY.value = Math.round(part.anchor.y);
+  els.tipX.value = Math.round(part.tip.x);
+  els.tipY.value = Math.round(part.tip.y);
+  els.partVisible.checked = part.visible;
+  els.showMask.checked = part.showMask;
+}
+
+function populateParentOptions(selectedParent) {
+  els.partParent.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = 'None';
+  els.partParent.appendChild(none);
+  for (const p of state.parts) {
+    if (p.id === state.selectedPartId) continue;
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.name;
+    els.partParent.appendChild(o);
+  }
+  els.partParent.value = selectedParent || '';
+}
+
+function commitSelectedPartEdits() {
+  const part = selectedPart();
+  if (!part) return;
+  part.name = els.partName.value.trim() || part.type;
+  part.type = els.partTypeEdit.value;
+  part.parentId = els.partParent.value || '';
+  part.anchor = { x: parseFloat(els.anchorX.value) || 0, y: parseFloat(els.anchorY.value) || 0 };
+  part.tip = { x: parseFloat(els.tipX.value) || 0, y: parseFloat(els.tipY.value) || 0 };
+  part.visible = els.partVisible.checked;
+  part.showMask = els.showMask.checked;
+  if (state.image) {
+    rebuildSelectedRaster(false);
+  }
+  renderPartList();
+  renderSource();
+  renderPreview();
+}
+
+function renderPartList() {
+  els.partList.innerHTML = '';
+  if (!state.parts.length) {
+    els.partList.innerHTML = '<div class="panel-subtitle" style="padding:10px 2px">No parts yet. Add any body part from the dropdown.</div>';
+    return;
+  }
+  state.parts.forEach((part, index) => {
+    const row = document.createElement('div');
+    row.className = 'part-item' + (part.id === state.selectedPartId ? ' active' : '');
+    row.innerHTML = `
+      <div class="part-dot" style="background:${part.color}"></div>
+      <div>
+        <div class="part-name">${escapeHtml(part.name)}</div>
+        <div class="part-meta">${escapeHtml(part.type)} · ${part.parentId ? 'linked' : 'root'} · ${part.maskCanvas ? 'masked' : 'no mask'}</div>
+      </div>
+      <button class="part-del btn">Edit</button>
+    `;
+    row.addEventListener('click', (e) => {
+      if (e.target && e.target.classList.contains('part-del')) return;
+      state.selectedPartId = part.id;
+      syncPartUI();
+      renderPartList();
+      renderSource();
+      renderPreview();
+    });
+    row.querySelector('.part-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.selectedPartId = part.id;
+      syncPartUI();
+      renderPartList();
+      renderSource();
+      renderPreview();
+    });
+    els.partList.appendChild(row);
+  });
+  populateParentOptions(selectedPart() && selectedPart().parentId);
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function rebuildSelectedRaster(andRender = true) {
+  const part = selectedPart();
+  if (!part || !state.image) return;
+  if (!part.maskCanvas) {
+    part.raster = null;
+    part.bounds = null;
+    part.sourceLength = distance(part.anchor, part.tip);
+    if (andRender) { renderSource(); renderPreview(); }
+    return;
+  }
+  const bounds = maskBounds(part.maskCanvas);
+  if (!bounds) {
+    part.raster = null;
+    part.bounds = null;
+    part.sourceLength = distance(part.anchor, part.tip);
+    if (andRender) { renderSource(); renderPreview(); }
+    return;
+  }
+  const pad = Math.max(2, Math.ceil(state.feather * 2));
+  const x = clamp(bounds.x - pad, 0, state.image.w - 1);
+  const y = clamp(bounds.y - pad, 0, state.image.h - 1);
+  const w = clamp(bounds.w + pad * 2, 1, state.image.w - x);
+  const h = clamp(bounds.h + pad * 2, 1, state.image.h - y);
+  const crop = document.createElement('canvas');
+  crop.width = w;
+  crop.height = h;
+  const cctx = crop.getContext('2d');
+  cctx.clearRect(0, 0, w, h);
+  cctx.drawImage(state.image.canvas, x, y, w, h, 0, 0, w, h);
+  const maskCrop = document.createElement('canvas');
+  maskCrop.width = w;
+  maskCrop.height = h;
+  const mctx = maskCrop.getContext('2d');
+  mctx.clearRect(0, 0, w, h);
+  mctx.drawImage(part.maskCanvas, x, y, w, h, 0, 0, w, h);
+  if (state.feather > 0) {
+    const blur = document.createElement('canvas');
+    blur.width = w;
+    blur.height = h;
+    const bctx = blur.getContext('2d');
+    bctx.filter = `blur(${state.feather}px)`;
+    bctx.drawImage(maskCrop, 0, 0);
+    mctx.clearRect(0, 0, w, h);
+    mctx.drawImage(blur, 0, 0);
+  }
+  cctx.globalCompositeOperation = 'destination-in';
+  cctx.drawImage(maskCrop, 0, 0);
+  part.raster = crop;
+  part.bounds = { x, y, w, h };
+  part.sourceLength = distance(part.anchor, part.tip);
+  if (andRender) { renderSource(); renderPreview(); }
+}
+
+function maskBounds(maskCanvas) {
+  if (!maskCanvas) return null;
+  const { width: w, height: h } = maskCanvas;
+  const ctx = maskCanvas.getContext('2d');
+  const data = ctx.getImageData(0, 0, w, h).data;
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4 + 3;
+      if (data[i] > 10) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX || maxY < minY) return null;
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+function renderSource() {
+  const w = els.sourceCanvas.width, h = els.sourceCanvas.height;
+  sourceCtx.clearRect(0, 0, w, h);
+  drawPanelBackground(sourceCtx, w, h);
+  if (!state.image) {
+    els.sourceEmpty.classList.remove('hidden');
+    return;
+  }
+  els.sourceEmpty.classList.add('hidden');
+  const t = sourceTransform();
+  sourceCtx.save();
+  sourceCtx.setTransform(t.scale, 0, 0, t.scale, t.x, t.y);
+  sourceCtx.imageSmoothingEnabled = true;
+  sourceCtx.drawImage(state.image.canvas, 0, 0);
+
+  // Selection overlay from active part mask.
+  const part = selectedPart();
+  if (part && part.maskCanvas && part.showMask) {
+    sourceCtx.globalAlpha = 0.25;
+    sourceCtx.fillStyle = part.color;
+    sourceCtx.drawImage(part.maskCanvas, 0, 0);
+    sourceCtx.globalAlpha = 1;
+    sourceCtx.strokeStyle = part.color;
+    sourceCtx.lineWidth = 1 / t.scale;
+    const bounds = maskBounds(part.maskCanvas);
+    if (bounds) sourceCtx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+  }
+
+  // Lasso preview while drawing.
+  if (state.tool === 'lasso' && state.lasso.length > 1) {
+    sourceCtx.strokeStyle = '#ffffff';
+    sourceCtx.lineWidth = 2 / t.scale;
+    sourceCtx.setLineDash([8 / t.scale, 6 / t.scale]);
+    sourceCtx.beginPath();
+    sourceCtx.moveTo(state.lasso[0].x, state.lasso[0].y);
+    for (let i = 1; i < state.lasso.length; i++) sourceCtx.lineTo(state.lasso[i].x, state.lasso[i].y);
+    sourceCtx.stroke();
+    sourceCtx.setLineDash([]);
+  }
+
+  // Draw anchors for selected part.
+  if (part) {
+    drawHandle(sourceCtx, part.anchor, '#5ef0c8', 'A');
+    drawHandle(sourceCtx, part.tip, '#ffcc66', 'T', 'square');
+    sourceCtx.strokeStyle = 'rgba(94,240,200,.5)';
+    sourceCtx.lineWidth = 2 / t.scale;
+    sourceCtx.beginPath();
+    sourceCtx.moveTo(part.anchor.x, part.anchor.y);
+    sourceCtx.lineTo(part.tip.x, part.tip.y);
+    sourceCtx.stroke();
+  }
+  sourceCtx.restore();
+  setStatus(`Image: ${state.image.w}×${state.image.h} · tool: ${state.tool} · mode: ${state.maskMode}`, 'source');
+}
+
+function drawPanelBackground(ctx, w, h) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#10141c';
+  ctx.fillRect(0, 0, w, h);
+}
+
+function drawHandle(ctx, pt, color, label, shape = 'round') {
+  const t = sourceTransform();
+  const size = 8 / t.scale;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2 / t.scale;
+  ctx.beginPath();
+  if (shape === 'square') {
+    ctx.rect(pt.x - size / 2, pt.y - size / 2, size, size);
+  } else {
+    ctx.arc(pt.x, pt.y, size / 2, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = `${12 / t.scale}px system-ui`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, pt.x, pt.y - size * 1.2);
+  ctx.restore();
+}
+
+function renderPreview() {
+  const w = els.previewCanvas.width, h = els.previewCanvas.height;
+  previewCtx.clearRect(0, 0, w, h);
+  drawPanelBackground(previewCtx, w, h);
+  if (!state.image) {
+    els.previewEmpty.classList.remove('hidden');
+    return;
+  }
+  els.previewEmpty.classList.add('hidden');
+  const body = computeBodyPose(w, h, state.phase);
+  const parts = state.parts.slice().filter(p => p.visible && p.raster);
+  parts.sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type));
+
+  // draw a subtle ground shadow
+  previewCtx.save();
+  previewCtx.fillStyle = 'rgba(0,0,0,.16)';
+  previewCtx.beginPath();
+  previewCtx.ellipse(body.pelvis.x, body.groundY + 18, body.scale * 0.34, body.scale * 0.06, 0, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.restore();
+
+  for (const part of parts) {
+    const target = targetForPart(part, body);
+    if (!target) continue;
+    drawPartPreview(part, target, body);
+  }
+
+  if (body.showDebug) drawPreviewSkeleton(body);
+  setStatus(`${state.pose} · ${state.facing} · ${state.speed.toFixed(2)}×`, 'preview');
+}
+
+function drawPreviewSkeleton(body) {
+  const ctx = previewCtx;
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,255,255,.24)';
+  const pairs = [
+    [body.pelvis, body.chest], [body.chest, body.neck], [body.neck, body.head],
+    [body.chestL, body.elbowL], [body.elbowL, body.wristL],
+    [body.chestR, body.elbowR], [body.elbowR, body.wristR],
+    [body.hipL, body.kneeL], [body.kneeL, body.ankleL],
+    [body.hipR, body.kneeR], [body.kneeR, body.ankleR],
+  ];
+  for (const [a, b] of pairs) {
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  for (const p of [body.pelvis, body.chest, body.neck, body.head, body.chestL, body.chestR, body.hipL, body.hipR, body.elbowL, body.elbowR, body.kneeL, body.kneeR, body.wristL, body.wristR, body.ankleL, body.ankleR]) drawPreviewPoint(p);
+  ctx.restore();
+}
+
+function drawPreviewPoint(pt) {
+  const ctx = previewCtx;
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function targetForPart(part, body) {
+  const type = part.type;
+  const len = sourceToPreviewLen(part.sourceLength || distance(part.anchor, part.tip), body);
+  const baseMap = {
+    torso: [body.pelvis, body.chest],
+    pelvis: [body.hipCenter, body.pelvis],
+    chest: [body.pelvis, body.chest],
+    neck: [body.chest, body.neck],
+    head: [body.neck, body.head],
+    face: [body.neck, body.head],
+    hair: [body.head, pointOnCircle(body.head, len * 0.7, body.headAngle - Math.PI / 2)],
+    'upper arm L': [body.chestL, body.elbowL],
+    'lower arm L': [body.elbowL, body.wristL],
+    'hand L': [body.wristL, pointOnCircle(body.wristL, len * 0.28, body.handDirL)],
+    'upper arm R': [body.chestR, body.elbowR],
+    'lower arm R': [body.elbowR, body.wristR],
+    'hand R': [body.wristR, pointOnCircle(body.wristR, len * 0.28, body.handDirR)],
+    'thigh L': [body.hipL, body.kneeL],
+    'shin L': [body.kneeL, body.ankleL],
+    'foot L': [body.ankleL, pointOnCircle(body.ankleL, len * 0.34, body.footDirL)],
+    'thigh R': [body.hipR, body.kneeR],
+    'shin R': [body.kneeR, body.ankleR],
+    'foot R': [body.ankleR, pointOnCircle(body.ankleR, len * 0.34, body.footDirR)],
+    'shoulder pad L': [body.chestL, body.elbowL],
+    'shoulder pad R': [body.chestR, body.elbowR],
+    cape: [body.chest, pointOnCircle(body.chest, len * 0.9, body.capeAngle)],
+    skirt: [body.pelvis, pointOnCircle(body.pelvis, len * 0.8, body.skirtAngle)],
+    weapon: [body.wristR, pointOnCircle(body.wristR, len * 0.8, body.weaponAngle)],
+    shield: [body.wristL, pointOnCircle(body.wristL, len * 0.7, body.weaponAngle + 1.5)],
+    accessory: [body.chest, pointOnCircle(body.chest, len * 0.5, body.accessoryAngle)],
+  };
+  let pair = baseMap[type];
+  if (!pair) {
+    const parent = state.parts.find(p => p.id === part.parentId);
+    const anchor = parent ? targetForPart(parent, body)?.[1] : body.chest;
+    pair = [anchor || body.chest, pointOnCircle(anchor || body.chest, len * 0.6, body.torsoAngle)];
+  }
+  return pair;
+}
+
+function sourceToPreviewLen(srcLen, body) {
+  if (!state.image) return srcLen;
+  const scale = body.scale / Math.max(state.image.w, state.image.h) * 1.0;
+  return Math.max(1, srcLen * scale);
+}
+
+function drawPartPreview(part, target, body) {
+  const [a, b] = target;
+  const srcA = part.anchor;
+  const srcB = part.tip;
+  const mat = affineFromLine(srcA, srcB, a, b, state.facing === 'left');
+  if (!mat) return;
+  previewCtx.save();
+  previewCtx.setTransform(mat.a, mat.b, mat.c, mat.d, mat.e, mat.f);
+  previewCtx.imageSmoothingEnabled = true;
+  previewCtx.drawImage(part.raster, part.bounds.x, part.bounds.y);
+  previewCtx.restore();
+
+  if (part.showMask) {
+    previewCtx.save();
+    previewCtx.setTransform(mat.a, mat.b, mat.c, mat.d, mat.e, mat.f);
+    previewCtx.strokeStyle = part.color;
+    previewCtx.lineWidth = 1.25;
+    previewCtx.strokeRect(part.bounds.x, part.bounds.y, part.bounds.w, part.bounds.h);
+    previewCtx.restore();
   }
 }
-function dataUrlToImage(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = url;
+
+function affineFromLine(srcA, srcB, dstA, dstB, mirrored = false) {
+  const sx = srcB.x - srcA.x;
+  const sy = srcB.y - srcA.y;
+  const dx = dstB.x - dstA.x;
+  const dy = dstB.y - dstA.y;
+  const sl = Math.hypot(sx, sy) || 1;
+  const dl = Math.hypot(dx, dy) || 1;
+  const s = dl / sl;
+  let a1 = Math.atan2(sy, sx);
+  let a2 = Math.atan2(dy, dx);
+  let rot = a2 - a1;
+  if (mirrored) rot = Math.PI - rot;
+  const cos = Math.cos(rot) * s;
+  const sin = Math.sin(rot) * s;
+  const e = dstA.x - (srcA.x * cos - srcA.y * sin);
+  const f = dstA.y - (srcA.x * sin + srcA.y * cos);
+  return { a: cos, b: sin, c: -sin, d: cos, e, f };
+}
+
+function computeBodyPose(w, h, phase) {
+  const facing = state.facing === 'left' ? -1 : 1;
+  const scale = Math.min(w, h) * 0.28;
+  const centerX = w * 0.5;
+  const groundY = h * 0.78;
+  const cycle = state.pose === 'idle' ? phase * 0.5 : phase;
+  const walk = Math.sin(cycle * Math.PI * 2);
+  const walk2 = Math.sin(cycle * Math.PI * 2 + Math.PI);
+  const bob = state.pose === 'idle' ? Math.sin(phase * Math.PI * 2) * scale * 0.008 : Math.abs(Math.sin(cycle * Math.PI * 2)) * -scale * 0.06;
+  const sway = Math.sin(cycle * Math.PI * 2 + Math.PI / 2) * scale * 0.03;
+  const torsoTilt = radians(state.tilt) + Math.sin(cycle * Math.PI * 2) * 0.08;
+  const pelvis = { x: centerX + sway * 0.15, y: groundY - scale * 1.4 + bob };
+  const chest = { x: pelvis.x + Math.sin(torsoTilt) * scale * 0.18, y: pelvis.y - scale * 0.62 };
+  const neck = { x: chest.x + Math.sin(torsoTilt) * scale * 0.08, y: chest.y - scale * 0.18 };
+  const head = { x: neck.x + Math.sin(torsoTilt) * scale * 0.05, y: neck.y - scale * 0.24 };
+  const headAngle = torsoTilt * 0.25;
+  const chestL = { x: chest.x - facing * scale * 0.24, y: chest.y + scale * 0.02 };
+  const chestR = { x: chest.x + facing * scale * 0.24, y: chest.y + scale * 0.02 };
+  const hipL = { x: pelvis.x - facing * scale * 0.13, y: pelvis.y + scale * 0.03 };
+  const hipR = { x: pelvis.x + facing * scale * 0.13, y: pelvis.y + scale * 0.03 };
+  const armLen1 = scale * 0.38;
+  const armLen2 = scale * 0.34;
+  const legLen1 = scale * 0.46;
+  const legLen2 = scale * 0.45;
+  const handBase = scale * 0.12;
+  const footBase = scale * 0.14;
+
+  const armWave = state.pose === 'idle' ? Math.sin(phase * Math.PI * 2) * 0.12 : Math.sin(cycle * Math.PI * 2) * 0.9;
+  const armTargetL = { x: chestL.x - facing * scale * 0.12 - armWave * facing * scale * 0.05, y: chestL.y + scale * 0.44 + Math.max(0, -armWave) * scale * 0.07 };
+  const armTargetR = { x: chestR.x + facing * scale * 0.12 + armWave * facing * scale * 0.05, y: chestR.y + scale * 0.44 + Math.max(0, armWave) * scale * 0.07 };
+  const kneeTargetL = { x: hipL.x - facing * scale * 0.03 + walk * facing * scale * 0.18, y: pelvis.y + scale * 0.66 };
+  const kneeTargetR = { x: hipR.x + facing * scale * 0.03 + walk2 * facing * scale * 0.18, y: pelvis.y + scale * 0.66 };
+  const footTargetL = { x: hipL.x - facing * scale * 0.06 + Math.sin(cycle * Math.PI * 2 + Math.PI * 0.6) * facing * scale * 0.28, y: groundY - Math.max(0, Math.sin(cycle * Math.PI * 2 + Math.PI * 0.6)) * scale * 0.34 };
+  const footTargetR = { x: hipR.x + facing * scale * 0.06 + Math.sin(cycle * Math.PI * 2 - Math.PI * 0.6) * facing * scale * 0.28, y: groundY - Math.max(0, Math.sin(cycle * Math.PI * 2 - Math.PI * 0.6)) * scale * 0.34 };
+  const armL = solve2Bone(chestL, armTargetL, armLen1, armLen2, -facing);
+  const armR = solve2Bone(chestR, armTargetR, armLen1, armLen2, facing);
+  const legL = solve2Bone(hipL, footTargetL, legLen1, legLen2, facing);
+  const legR = solve2Bone(hipR, footTargetR, legLen1, legLen2, -facing);
+
+  return {
+    scale,
+    facing,
+    cycle,
+    groundY,
+    pelvis,
+    chest,
+    neck,
+    head,
+    chestL,
+    chestR,
+    hipL,
+    hipR,
+    elbowL: armL.mid,
+    wristL: armL.end,
+    elbowR: armR.mid,
+    wristR: armR.end,
+    kneeL: legL.mid,
+    ankleL: legL.end,
+    kneeR: legR.mid,
+    ankleR: legR.end,
+    headAngle,
+    torsoAngle: torsoTilt,
+    handDirL: -Math.PI / 2 + facing * 0.35,
+    handDirR: -Math.PI / 2 - facing * 0.35,
+    footDirL: Math.PI / 8 * facing,
+    footDirR: Math.PI / 8 * facing,
+    capeAngle: Math.PI / 2 + Math.sin(cycle * Math.PI * 2) * 0.1,
+    skirtAngle: Math.PI / 2,
+    weaponAngle: -Math.PI / 6 * facing,
+    accessoryAngle: -Math.PI / 2,
+    showDebug: false,
+  };
+}
+
+function solve2Bone(origin, target, len1, len2, bendSign = 1) {
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  const d0 = Math.hypot(dx, dy) || 0.001;
+  const maxD = Math.max(1, len1 + len2 - 0.001);
+  const d = Math.min(d0, maxD);
+  const nx = dx / d0;
+  const ny = dy / d0;
+  const base = Math.atan2(ny, nx);
+  const cosA = clamp((len1 * len1 + d * d - len2 * len2) / (2 * len1 * d), -1, 1);
+  const ang = Math.acos(cosA) * bendSign;
+  const joint = {
+    x: origin.x + Math.cos(base + ang) * len1,
+    y: origin.y + Math.sin(base + ang) * len1,
+  };
+  const end = {
+    x: origin.x + nx * d,
+    y: origin.y + ny * d,
+  };
+  return { mid: joint, end };
+}
+
+function radians(deg) { return deg * Math.PI / 180; }
+
+function renderPartMaskPreview(canvas) {
+  if (!canvas) return;
+}
+
+function setStatus(text, which = 'source') {
+  if (which === 'source') els.sourceStatus.textContent = text;
+  else els.previewStatus.textContent = text;
+}
+
+function onSourceWheel(e) {
+  if (!state.image) return;
+  e.preventDefault();
+  const delta = -e.deltaY * 0.0015;
+  const oldZoom = state.sourceZoom;
+  const newZoom = clamp(oldZoom * (1 + delta), 0.25, 3);
+  const rect = els.sourceCanvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  const before = canvasToSource(mouseX, mouseY);
+  state.sourceZoom = newZoom;
+  els.sourceZoom.value = String(newZoom);
+  els.sourceZoomVal.textContent = formatPct(newZoom);
+  const afterCanvas = sourceToCanvas(before);
+  state.sourcePanX += mouseX - afterCanvas.x;
+  state.sourcePanY += mouseY - afterCanvas.y;
+  renderSource();
+}
+
+function onSourcePointerDown(e) {
+  if (!state.image) return;
+  els.sourceCanvas.setPointerCapture(e.pointerId);
+  const pt = canvasToSource(e.offsetX, e.offsetY);
+  const part = selectedPart();
+
+  if (state.tool === 'pan' || e.button === 1 || e.buttons === 4) {
+    state.dragging = { kind: 'pan', x: e.clientX, y: e.clientY, panX: state.sourcePanX, panY: state.sourcePanY };
+    return;
+  }
+
+  if (part) {
+    const handle = hitHandle(part, pt);
+    if (handle) {
+      state.dragging = { kind: handle, partId: part.id };
+      return;
+    }
+  }
+
+  if (state.tool === 'lasso') {
+    state.lasso = [pt];
+    state.dragging = { kind: 'lasso' };
+    renderSource();
+    return;
+  }
+
+  if (state.tool === 'wand') {
+    applyWandSelection(pt);
+    return;
+  }
+}
+
+function onSourcePointerMove(e) {
+  if (!state.image) return;
+  const part = selectedPart();
+  if (!state.dragging) return;
+  if (state.dragging.kind === 'pan') {
+    state.sourcePanX = state.dragging.panX + (e.clientX - state.dragging.x);
+    state.sourcePanY = state.dragging.panY + (e.clientY - state.dragging.y);
+    renderSource();
+    return;
+  }
+  const pt = canvasToSource(e.offsetX, e.offsetY);
+  if (state.dragging.kind === 'lasso') {
+    const last = state.lasso[state.lasso.length - 1];
+    if (!last || distance(last, pt) > 3) state.lasso.push(pt);
+    renderSource();
+    return;
+  }
+  if (!part) return;
+  if (state.dragging.kind === 'anchor') {
+    part.anchor = pt;
+    syncPartUI();
+    rebuildSelectedRaster();
+  } else if (state.dragging.kind === 'tip') {
+    part.tip = pt;
+    syncPartUI();
+    rebuildSelectedRaster();
+  }
+  renderSource();
+  renderPreview();
+}
+
+function onSourcePointerUp(e) {
+  if (!state.image) return;
+  if (!state.dragging) return;
+  const drag = state.dragging;
+  state.dragging = null;
+  if (drag.kind === 'lasso') {
+    finishLassoSelection();
+  }
+}
+
+function hitHandle(part, pt) {
+  const a = distance(part.anchor, pt);
+  const b = distance(part.tip, pt);
+  const thresh = 12 / (state.sourceFit * state.sourceZoom);
+  if (a < thresh) return 'anchor';
+  if (b < thresh) return 'tip';
+  return null;
+}
+
+function applyWandSelection(pt) {
+  const part = selectedPart();
+  if (!part || !state.image) return;
+  const selection = floodFillSelection(state.image.canvas, Math.round(pt.x), Math.round(pt.y), state.wandTolerance);
+  if (!selection) return;
+  applySelectionToPart(part, selection);
+}
+
+function finishLassoSelection() {
+  const part = selectedPart();
+  if (!part || state.lasso.length < 3 || !state.image) {
+    state.lasso = [];
+    renderSource();
+    return;
+  }
+  const selection = polygonMask(state.image.w, state.image.h, state.lasso);
+  state.lasso = [];
+  applySelectionToPart(part, selection);
+}
+
+function applySelectionToPart(part, selectionCanvas) {
+  if (!part.maskCanvas || state.maskMode === 'replace') {
+    part.maskCanvas = selectionCanvas;
+  } else {
+    const merged = document.createElement('canvas');
+    merged.width = state.image.w;
+    merged.height = state.image.h;
+    const mctx = merged.getContext('2d');
+    mctx.clearRect(0, 0, merged.width, merged.height);
+    mctx.drawImage(part.maskCanvas, 0, 0);
+    mctx.globalCompositeOperation = state.maskMode === 'subtract' ? 'destination-out' : 'source-over';
+    mctx.drawImage(selectionCanvas, 0, 0);
+    part.maskCanvas = merged;
+  }
+  rebuildSelectedRaster();
+  renderPartList();
+  renderSource();
+  renderPreview();
+}
+
+function polygonMask(w, h, points) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
+  ctx.fill();
+  if (state.feather > 0) softenMask(c, state.feather);
+  return c;
+}
+
+function floodFillSelection(imgCanvas, startX, startY, tolerance = 30) {
+  const w = imgCanvas.width, h = imgCanvas.height;
+  if (startX < 0 || startY < 0 || startX >= w || startY >= h) return null;
+  const ctx = imgCanvas.getContext('2d');
+  const img = ctx.getImageData(0, 0, w, h);
+  const data = img.data;
+  const idx = (startY * w + startX) * 4;
+  const seed = [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]];
+  if (seed[3] < 5) return null;
+  const visited = new Uint8Array(w * h);
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const octx = out.getContext('2d');
+  const image = octx.createImageData(w, h);
+  const outData = image.data;
+  const qx = new Int32Array(w * h);
+  const qy = new Int32Array(w * h);
+  let qh = 0, qt = 0;
+  qx[qt] = startX; qy[qt] = startY; qt++;
+  visited[startY * w + startX] = 1;
+
+  const within = (i) => {
+    const dr = Math.abs(data[i] - seed[0]);
+    const dg = Math.abs(data[i + 1] - seed[1]);
+    const db = Math.abs(data[i + 2] - seed[2]);
+    const da = Math.abs(data[i + 3] - seed[3]);
+    return (dr + dg + db + da) <= tolerance * 4;
+  };
+  while (qh < qt) {
+    const x = qx[qh], y = qy[qh];
+    qh++;
+    const i = (y * w + x) * 4;
+    if (!within(i)) continue;
+    outData[i + 3] = 255;
+    if (x > 0) {
+      const n = y * w + (x - 1);
+      if (!visited[n]) { visited[n] = 1; qx[qt] = x - 1; qy[qt] = y; qt++; }
+    }
+    if (x < w - 1) {
+      const n = y * w + (x + 1);
+      if (!visited[n]) { visited[n] = 1; qx[qt] = x + 1; qy[qt] = y; qt++; }
+    }
+    if (y > 0) {
+      const n = (y - 1) * w + x;
+      if (!visited[n]) { visited[n] = 1; qx[qt] = x; qy[qt] = y - 1; qt++; }
+    }
+    if (y < h - 1) {
+      const n = (y + 1) * w + x;
+      if (!visited[n]) { visited[n] = 1; qx[qt] = x; qy[qt] = y + 1; qt++; }
+    }
+  }
+  octx.putImageData(image, 0, 0);
+  if (state.feather > 0) softenMask(out, state.feather);
+  return out;
+}
+
+function softenMask(canvas, px) {
+  const c = document.createElement('canvas');
+  c.width = canvas.width;
+  c.height = canvas.height;
+  const ctx = c.getContext('2d');
+  ctx.filter = `blur(${px}px)`;
+  ctx.drawImage(canvas, 0, 0);
+  const dst = canvas.getContext('2d');
+  dst.clearRect(0, 0, canvas.width, canvas.height);
+  dst.drawImage(c, 0, 0);
+}
+
+function exportProjectJSON() {
+  if (!state.image) return;
+  const data = {
+    source: { width: state.image.w, height: state.image.h },
+    settings: { pose: state.pose, facing: state.facing, speed: state.speed, tilt: state.tilt, feather: state.feather },
+    parts: state.parts.map(p => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      parentId: p.parentId,
+      visible: p.visible,
+      showMask: p.showMask,
+      color: p.color,
+      anchor: p.anchor,
+      tip: p.tip,
+      mask: p.maskCanvas ? p.maskCanvas.toDataURL('image/png') : null,
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, 'spritemith-project.json');
+}
+
+function exportPreviewPNG() {
+  if (!state.image) return;
+  renderPreview();
+  els.previewCanvas.toBlob(blob => {
+    if (blob) downloadBlob(blob, 'spritemith-preview.png');
   });
 }
+
 function downloadBlob(blob, filename) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
-function downloadBlobCanvas(canvas, filename) {
-  canvas.toBlob(blob => blob && downloadBlob(blob, filename), 'image/png');
+
+function loop(now) {
+  state.raf = requestAnimationFrame(loop);
+  if (!state.image) return;
+  const speed = state.speed || 1;
+  const increment = speed * (state.pose === 'idle' ? 0.004 : 0.009);
+  state.phase = (state.phase + increment) % 1;
+  renderPreview();
 }
-function clampXY(x, y, W, H) { return { x: clamp(x, 0, W - 1), y: clamp(y, 0, H - 1) } }
+
+function resizePreviewOnly() {
+  const rect = els.previewCanvas.parentElement.getBoundingClientRect();
+  els.previewCanvas.width = Math.max(300, Math.floor(rect.width));
+  els.previewCanvas.height = Math.max(260, Math.floor(rect.height));
+  fitPreviewView();
+}
+
+function resizeSourceOnly() {
+  const rect = els.sourceCanvas.parentElement.getBoundingClientRect();
+  els.sourceCanvas.width = Math.max(300, Math.floor(rect.width));
+  els.sourceCanvas.height = Math.max(260, Math.floor(rect.height));
+  fitSourceView();
+}
 
 
-// initial UI sync
-els.wandToleranceVal.textContent = String(state.wandTolerance);
-els.selectionSmoothVal.textContent = state.selectionSmooth.toFixed(2);
-els.speedVal.textContent = `${state.speed.toFixed(2)}×`;
-els.tiltVal.textContent = `${state.tiltDeg}°`;
-if (els.facingSelect) els.facingSelect.value = state.facing;
-if (els.zoomVal) els.zoomVal.textContent = `${Math.round(state.viewZoom * 100)}%`;
-if (els.zoomSlider) els.zoomSlider.value = String(state.viewZoom);
-els.poseSelect.value = state.pose;
 
-// animation loop
-function tick(now) {
-  if (!state.cleanCanvas) {
-    els.previewPlaceholder.classList.remove('hidden');
-  } else {
-    drawPreview(previewCtx, now, false);
-  }
-  requestAnimationFrame(tick);
-}
-requestAnimationFrame(tick);
