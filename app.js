@@ -1,24 +1,29 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-
   const sourceCanvas = $('sourceCanvas');
   const previewCanvas = $('previewCanvas');
-  const sCtx = sourceCanvas.getContext('2d');
+  const sCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
   const pCtx = previewCanvas.getContext('2d');
+
   const sourceBadge = $('sourceBadge');
   const previewBadge = $('previewBadge');
 
   const ui = {
     fileInput: $('fileInput'),
     demoBtn: $('demoBtn'),
-    autoMaskBtn: $('autoMaskBtn'),
-    autoRigBtn: $('autoRigBtn'),
     fitBtn: $('fitBtn'),
-    resetBtn: $('resetBtn'),
+    presetBtn: $('presetBtn'),
+    clearPartsBtn: $('clearPartsBtn'),
     playBtn: $('playBtn'),
+    recordBtn: $('recordBtn'),
     facingSelect: $('facingSelect'),
-    toolSelect: $('toolSelect'),
-    maskModeSelect: $('maskModeSelect'),
+    partPresetSelect: $('partPresetSelect'),
+    addPartBtn: $('addPartBtn'),
+    assignMaskBtn: $('assignMaskBtn'),
+    commitSelectionBtn: $('commitSelectionBtn'),
+    invertSelectionBtn: $('invertSelectionBtn'),
+    clearSelectionBtn: $('clearSelectionBtn'),
+    selectionModeSelect: $('selectionModeSelect'),
     wandRange: $('wandRange'),
     featherRange: $('featherRange'),
     zoomRange: $('zoomRange'),
@@ -26,1314 +31,1344 @@
     strideRange: $('strideRange'),
     bounceRange: $('bounceRange'),
     leanRange: $('leanRange'),
+    travelRange: $('travelRange'),
     armRange: $('armRange'),
-    showMaskToggle: $('showMaskToggle'),
-    showRigToggle: $('showRigToggle'),
+    resetRigBtn: $('resetRigBtn'),
+    exportStillBtn: $('exportStillBtn'),
+    partsList: $('partsList'),
   };
 
-  const artCanvas = document.createElement('canvas');
-  const artCtx = artCanvas.getContext('2d', { willReadFrequently: true });
-  const maskCanvas = document.createElement('canvas');
-  const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
-  const softMaskCanvas = document.createElement('canvas');
-  const softMaskCtx = softMaskCanvas.getContext('2d');
-  const cutoutCanvas = document.createElement('canvas');
-  const cutoutCtx = cutoutCanvas.getContext('2d');
-  const tempCanvas = document.createElement('canvas');
-  const tempCtx = tempCanvas.getContext('2d');
-
   const TAU = Math.PI * 2;
-  const MAX_IMPORT_DIM = 980;
-  const JOINT_NAMES = [
+  const JOINTS = [
     'pelvis', 'chest', 'neck', 'head',
     'lShoulder', 'lElbow', 'lHand',
     'rShoulder', 'rElbow', 'rHand',
     'lHip', 'lKnee', 'lFoot',
     'rHip', 'rKnee', 'rFoot',
   ];
-  const BONE_DEFS = [
-    { name: 'spine', a: 'pelvis', b: 'chest', group: 'torso' },
-    { name: 'neck', a: 'chest', b: 'neck', group: 'torso' },
-    { name: 'head', a: 'neck', b: 'head', group: 'head' },
-    { name: 'lUpperArm', a: 'lShoulder', b: 'lElbow', group: 'armL' },
-    { name: 'lLowerArm', a: 'lElbow', b: 'lHand', group: 'armL' },
-    { name: 'rUpperArm', a: 'rShoulder', b: 'rElbow', group: 'armR' },
-    { name: 'rLowerArm', a: 'rElbow', b: 'rHand', group: 'armR' },
-    { name: 'lThigh', a: 'lHip', b: 'lKnee', group: 'legL' },
-    { name: 'lShin', a: 'lKnee', b: 'lFoot', group: 'legL' },
-    { name: 'rThigh', a: 'rHip', b: 'rKnee', group: 'legR' },
-    { name: 'rShin', a: 'rKnee', b: 'rFoot', group: 'legR' },
-  ];
+
+  const PART_PRESETS = {
+    torso: { label: 'Torso', prox: 'pelvis', dist: 'chest', depth: 40 },
+    pelvis: { label: 'Pelvis', prox: 'pelvis', dist: 'chest', depth: 42 },
+    head: { label: 'Head', prox: 'neck', dist: 'head', depth: 90 },
+    neck: { label: 'Neck', prox: 'chest', dist: 'neck', depth: 85 },
+    lUpperArm: { label: 'Left Upper Arm', prox: 'lShoulder', dist: 'lElbow', depth: 66 },
+    lForearm: { label: 'Left Forearm', prox: 'lElbow', dist: 'lHand', depth: 68 },
+    rUpperArm: { label: 'Right Upper Arm', prox: 'rShoulder', dist: 'rElbow', depth: 64 },
+    rForearm: { label: 'Right Forearm', prox: 'rElbow', dist: 'rHand', depth: 66 },
+    lThigh: { label: 'Left Thigh', prox: 'lHip', dist: 'lKnee', depth: 22 },
+    lShin: { label: 'Left Shin', prox: 'lKnee', dist: 'lFoot', depth: 24 },
+    rThigh: { label: 'Right Thigh', prox: 'rHip', dist: 'rKnee', depth: 20 },
+    rShin: { label: 'Right Shin', prox: 'rKnee', dist: 'rFoot', depth: 22 },
+    hair: { label: 'Hair', prox: 'head', dist: 'neck', depth: 95 },
+    cape: { label: 'Cape', prox: 'chest', dist: 'pelvis', depth: 10 },
+    weapon: { label: 'Weapon', prox: 'rHand', dist: 'rHand', depth: 100 },
+    shield: { label: 'Shield', prox: 'lHand', dist: 'lHand', depth: 100 },
+    custom: { label: 'Custom Part', prox: 'chest', dist: 'chest', depth: 50 },
+  };
 
   const state = {
-    artW: 0,
-    artH: 0,
-    imageLoaded: false,
+    image: null,
+    imgW: 0,
+    imgH: 0,
+    facing: 'right',
     playing: true,
-    phase: 0,
-    lastTS: 0,
-    facing: 1,
-    tool: 'joints',
-    maskMode: 'add',
-    wandTol: 30,
-    feather: 1.5,
-    speed: 1,
-    stride: 0.12,
-    bounce: 0.022,
-    lean: 0.10,
-    armSwing: 1.0,
-    showMask: true,
-    showRig: true,
-    sourceFit: 1,
+    time: 0,
+    lastTs: 0,
     sourceZoom: 1,
     sourcePanX: 0,
     sourcePanY: 0,
-    isPanning: false,
-    dragJoint: null,
-    dragOffset: { x: 0, y: 0 },
-    lasso: [],
+    sourceFit: 1,
+    tool: 'pan',
+    selectionMode: 'replace',
+    wandTol: 26,
+    feather: 3,
+    selectionMask: null,
+    selectionPath: [],
     drawingLasso: false,
-    maskBits: null,
-    geometry: [],
-    vertices: [],
-    bones: [],
-    restJoints: {},
-    poseJoints: {},
-    sourceNeedsRedraw: true,
-    previewNeedsRedraw: true,
-    cutoutDirty: true,
-    maskDirty: true,
-    sourceBounds: null,
+    panning: false,
+    panStart: null,
+    lassoActive: false,
+    dragJoint: null,
+    joints: {},
+    parts: [],
+    selectedPartId: null,
+    selectedJoint: null,
+    placePivotPartId: null,
+    needsSourceRedraw: true,
+    needsPreviewRedraw: true,
+    recorder: null,
+    recorderChunks: [],
+    recording: false,
+    demoLoaded: false,
+    baseImageBounds: null,
+    sourceLayout: null,
   };
 
-  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-  const lerp = (a, b, t) => a + (b - a) * t;
-  const easeInOut = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  const len2 = (x, y) => Math.hypot(x, y);
-  const point = (x, y) => ({ x, y });
-  const clonePoint = (p) => ({ x: p.x, y: p.y });
-  const TA = (deg) => deg * Math.PI / 180;
+  const sourceBaseCanvas = document.createElement('canvas');
+  const sourceBaseCtx = sourceBaseCanvas.getContext('2d', { willReadFrequently: true });
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+  const maskCanvas = document.createElement('canvas');
+  const maskCtx = maskCanvas.getContext('2d');
+  const overlayCanvas = document.createElement('canvas');
+  const overlayCtx = overlayCanvas.getContext('2d');
 
-  function resizeDisplayCanvas(canvas, ctx) {
-    const r = canvas.getBoundingClientRect();
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const easeInOut = (t) => (t < 0.5) ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const hypot = Math.hypot;
+  const normAngle = (a) => {
+    while (a > Math.PI) a -= TAU;
+    while (a < -Math.PI) a += TAU;
+    return a;
+  };
+
+  function point(x, y) { return { x, y }; }
+  function clonePoint(p) { return { x: p.x, y: p.y }; }
+
+  function makeCanvasSize(canvas, ctx) {
+    const rect = canvas.getBoundingClientRect();
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const w = Math.max(1, Math.round(r.width * dpr));
-    const h = Math.max(1, Math.round(r.height * dpr));
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    return { w: r.width, h: r.height, dpr };
+    return { w: rect.width, h: rect.height, dpr };
   }
 
-  function fitSourceToCanvas() {
-    if (!state.artW || !state.artH) return;
-    const r = sourceCanvas.getBoundingClientRect();
-    state.sourceFit = Math.min(r.width / state.artW, r.height / state.artH) * 0.94;
+  function imageBoundsFallback() {
+    if (!state.imgW || !state.imgH) return { x: 0, y: 0, w: 1, h: 1 };
+    return { x: 0, y: 0, w: state.imgW, h: state.imgH };
+  }
+
+  function defaultJoints(bounds, facing = state.facing) {
+    const dir = facing === 'right' ? 1 : -1;
+    const cx = bounds.x + bounds.w * 0.52;
+    const top = bounds.y + bounds.h * 0.04;
+    const shoulderY = top + bounds.h * 0.24;
+    const neckY = top + bounds.h * 0.17;
+    const headY = top + bounds.h * 0.07;
+    const pelvisY = top + bounds.h * 0.52;
+    const kneeY = top + bounds.h * 0.80;
+    const footY = top + bounds.h * 0.98;
+    const shoulderSpan = bounds.w * 0.13;
+    const hipSpan = bounds.w * 0.11;
+    const armBend = bounds.w * 0.07;
+    const legBend = bounds.w * 0.05;
+    return {
+      pelvis: point(cx, pelvisY),
+      chest: point(cx + dir * bounds.w * 0.02, shoulderY),
+      neck: point(cx + dir * bounds.w * 0.025, neckY),
+      head: point(cx + dir * bounds.w * 0.03, headY),
+      lShoulder: point(cx - shoulderSpan * 0.5 - dir * armBend * 0.25, shoulderY),
+      lElbow: point(cx - shoulderSpan * 0.7 - dir * armBend * 0.8, top + bounds.h * 0.42),
+      lHand: point(cx - shoulderSpan * 0.9 - dir * armBend * 1.2, top + bounds.h * 0.56),
+      rShoulder: point(cx + shoulderSpan * 0.5 + dir * armBend * 0.25, shoulderY),
+      rElbow: point(cx + shoulderSpan * 0.7 + dir * armBend * 0.8, top + bounds.h * 0.42),
+      rHand: point(cx + shoulderSpan * 0.9 + dir * armBend * 1.2, top + bounds.h * 0.56),
+      lHip: point(cx - hipSpan * 0.48 - dir * legBend * 0.10, pelvisY),
+      lKnee: point(cx - hipSpan * 0.56 + dir * legBend * 0.24, kneeY),
+      lFoot: point(cx - hipSpan * 0.50 + dir * legBend * 0.28, footY),
+      rHip: point(cx + hipSpan * 0.48 + dir * legBend * 0.10, pelvisY),
+      rKnee: point(cx + hipSpan * 0.56 + dir * legBend * 0.24, kneeY),
+      rFoot: point(cx + hipSpan * 0.50 + dir * legBend * 0.28, footY),
+    };
+  }
+
+  function buildStarterRig() {
+    state.parts = [
+      makePart('torso'), makePart('pelvis'), makePart('head'), makePart('neck'),
+      makePart('lUpperArm'), makePart('lForearm'), makePart('rUpperArm'), makePart('rForearm'),
+      makePart('lThigh'), makePart('lShin'), makePart('rThigh'), makePart('rShin'),
+    ];
+    state.selectedPartId = state.parts[0]?.id || null;
+    bakeDefaultJoints();
+    rebuildAllPartArt();
+    renderPartsList();
+    setBadge('Starter rig created. Select a part and use Lasso or Wand to assign its mask.');
+  }
+
+  function makePart(kind = 'custom') {
+    const preset = PART_PRESETS[kind] || PART_PRESETS.custom;
+    const id = `part_${Math.random().toString(36).slice(2, 9)}`;
+    return {
+      id,
+      kind,
+      name: preset.label,
+      proxJoint: preset.prox,
+      distJoint: preset.dist,
+      depth: preset.depth,
+      visible: true,
+      pivotSource: null,
+      pivotMode: 'prox',
+      maskCanvas: null,
+      artCanvas: null,
+      artRect: null,
+      sourceLength: null,
+    };
+  }
+
+  function setBadge(text) { sourceBadge.textContent = text; }
+  function setPreviewBadge(text) { previewBadge.textContent = text; }
+
+  function fitSource() {
+    if (!state.imgW || !state.imgH) return;
+    const rect = sourceCanvas.getBoundingClientRect();
+    state.sourceFit = Math.min(rect.width / state.imgW, rect.height / state.imgH) * 0.94;
     state.sourceZoom = 1;
     state.sourcePanX = 0;
     state.sourcePanY = 0;
     ui.zoomRange.value = '1';
-    state.sourceNeedsRedraw = true;
+    state.needsSourceRedraw = true;
   }
 
   function sourceLayout() {
-    const r = sourceCanvas.getBoundingClientRect();
+    const rect = sourceCanvas.getBoundingClientRect();
     const scale = state.sourceFit * state.sourceZoom;
-    const w = state.artW * scale;
-    const h = state.artH * scale;
-    const x = r.width / 2 - w / 2 + state.sourcePanX;
-    const y = r.height / 2 - h / 2 + state.sourcePanY;
-    return { r, scale, x, y, w, h };
+    const w = state.imgW * scale;
+    const h = state.imgH * scale;
+    const x = rect.width / 2 - w / 2 + state.sourcePanX;
+    const y = rect.height / 2 - h / 2 + state.sourcePanY;
+    return { rect, scale, x, y, w, h };
   }
 
-  function previewLayout() {
-    const r = previewCanvas.getBoundingClientRect();
-    const scale = Math.min(r.width / (state.artW || 1), r.height / (state.artH || 1)) * 0.90;
-    const w = state.artW * scale;
-    const h = state.artH * scale;
-    const x = r.width / 2 - w / 2;
-    const y = r.height * 0.83 - h;
-    return { r, scale, x, y, w, h };
+  function screenToImage(pt) {
+    const lay = state.sourceLayout || sourceLayout();
+    return { x: (pt.x - lay.x) / lay.scale, y: (pt.y - lay.y) / lay.scale };
   }
 
-  function artToScreen(pt, layout = sourceLayout()) {
-    return { x: layout.x + pt.x * layout.scale, y: layout.y + pt.y * layout.scale };
+  function imageToScreen(pt) {
+    const lay = state.sourceLayout || sourceLayout();
+    return { x: lay.x + pt.x * lay.scale, y: lay.y + pt.y * lay.scale };
   }
 
-  function screenToArt(pt, layout = sourceLayout()) {
-    return { x: (pt.x - layout.x) / layout.scale, y: (pt.y - layout.y) / layout.scale };
+  function updateJointUIFromState() {
+    if (!state.selectedJoint) return;
   }
 
-  function screenToPreviewArt(pt, layout = previewLayout()) {
-    return { x: (pt.x - layout.x) / layout.scale, y: (pt.y - layout.y) / layout.scale };
+  function bakeDefaultJoints() {
+    const bounds = imageBoundsFallback();
+    state.joints = defaultJoints(bounds);
+    state.needsSourceRedraw = true;
   }
 
-  function setStatus(text) {
-    sourceBadge.textContent = text;
+  function createDemoImage() {
+    const c = document.createElement('canvas');
+    c.width = 900;
+    c.height = 1200;
+    const ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 0, c.height);
+    g.addColorStop(0, '#f6f0dd');
+    g.addColorStop(1, '#d4c5a8');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#3d2c55';
+    ctx.beginPath();
+    ctx.ellipse(450, 265, 95, 112, -0.08, 0, TAU);
+    ctx.fill();
+    ctx.fillRect(338, 350, 200, 315);
+    ctx.beginPath();
+    ctx.moveTo(338, 375);
+    ctx.lineTo(250, 515);
+    ctx.lineTo(286, 540);
+    ctx.lineTo(370, 430);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(538, 375);
+    ctx.lineTo(640, 510);
+    ctx.lineTo(600, 530);
+    ctx.lineTo(500, 430);
+    ctx.fill();
+    ctx.fillRect(364, 655, 74, 325);
+    ctx.fillRect(462, 655, 74, 325);
+    ctx.beginPath();
+    ctx.moveTo(364, 955);
+    ctx.lineTo(330, 1160);
+    ctx.lineTo(420, 1160);
+    ctx.lineTo(438, 955);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(462, 955);
+    ctx.lineTo(438, 1160);
+    ctx.lineTo(530, 1160);
+    ctx.lineTo(536, 955);
+    ctx.fill();
+    ctx.fillStyle = '#201828';
+    ctx.beginPath();
+    ctx.arc(405, 225, 16, 0, TAU); ctx.arc(496, 225, 16, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#1d1823';
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(448, 290); ctx.lineTo(444, 326); ctx.stroke();
+    ctx.strokeStyle = '#8c6c63';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.arc(450, 260, 126, Math.PI * 1.07, Math.PI * 1.94); ctx.stroke();
+    ctx.fillStyle = '#6b4e8c';
+    ctx.beginPath();
+    ctx.arc(440, 245, 170, Math.PI * 1.1, Math.PI * 1.9); ctx.fill();
+    return c.toDataURL('image/png');
   }
 
-  function defaultJointsFromBounds(bounds) {
-    const f = state.facing;
-    const cx = bounds.x + bounds.w * 0.52;
-    const top = bounds.y;
-    const bottom = bounds.y + bounds.h;
-    const shoulderY = top + bounds.h * 0.32;
-    const neckY = top + bounds.h * 0.24;
-    const headY = top + bounds.h * 0.11;
-    const pelvisY = top + bounds.h * 0.57;
-    const kneeY = top + bounds.h * 0.78;
-    const footY = bottom - bounds.h * 0.02;
-    const shoulderSpan = bounds.w * 0.17;
-    const hipSpan = bounds.w * 0.14;
-    const armBend = bounds.w * 0.10;
-    const legBend = bounds.w * 0.06;
-
-    return {
-      pelvis: point(cx + f * bounds.w * 0.00, pelvisY),
-      chest: point(cx + f * bounds.w * 0.02, shoulderY),
-      neck: point(cx + f * bounds.w * 0.02, neckY),
-      head: point(cx + f * bounds.w * 0.03, headY),
-
-      lShoulder: point(cx - shoulderSpan * 0.55 - f * armBend * 0.30, shoulderY),
-      lElbow: point(cx - shoulderSpan * 0.78 - f * armBend * 0.80, top + bounds.h * 0.47),
-      lHand: point(cx - shoulderSpan * 0.95 - f * armBend * 1.20, top + bounds.h * 0.60),
-
-      rShoulder: point(cx + shoulderSpan * 0.55 + f * armBend * 0.30, shoulderY),
-      rElbow: point(cx + shoulderSpan * 0.78 + f * armBend * 0.80, top + bounds.h * 0.47),
-      rHand: point(cx + shoulderSpan * 0.95 + f * armBend * 1.20, top + bounds.h * 0.60),
-
-      lHip: point(cx - hipSpan * 0.48 - f * legBend * 0.15, pelvisY),
-      lKnee: point(cx - hipSpan * 0.55 + f * legBend * 0.20, kneeY),
-      lFoot: point(cx - hipSpan * 0.50 + f * legBend * 0.24, footY),
-
-      rHip: point(cx + hipSpan * 0.48 + f * legBend * 0.15, pelvisY),
-      rKnee: point(cx + hipSpan * 0.55 + f * legBend * 0.20, kneeY),
-      rFoot: point(cx + hipSpan * 0.50 + f * legBend * 0.24, footY),
-    };
-  }
-
-  function cloneJoints(src) {
-    const out = {};
-    for (const name of JOINT_NAMES) out[name] = clonePoint(src[name]);
-    return out;
-  }
-
-  function setJoints(newJoints) {
-    state.restJoints = cloneJoints(newJoints);
-    state.poseJoints = cloneJoints(newJoints);
-    rebuildBones();
-    buildMesh();
-    state.sourceNeedsRedraw = true;
-    state.previewNeedsRedraw = true;
-  }
-
-  function rebuildBones() {
-    if (!state.restJoints.pelvis) return;
-    state.bones = BONE_DEFS.map((def) => {
-      const a = state.restJoints[def.a];
-      const b = state.restJoints[def.b];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      return {
-        name: def.name,
-        a: def.a,
-        b: def.b,
-        group: def.group,
-        restA: clonePoint(a),
-        restB: clonePoint(b),
-        restLen: Math.max(1, Math.hypot(dx, dy)),
-        restAngle: Math.atan2(dy, dx),
-        sigma: Math.max(12, Math.hypot(dx, dy) * 0.70),
-      };
+  function loadImageFromSrc(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
     });
-    computeVertexWeights();
   }
 
-  function getMaskAlphaAt(x, y) {
-    if (!state.maskBits || x < 0 || y < 0 || x >= state.artW || y >= state.artH) return 0;
-    return state.maskBits[(y | 0) * state.artW + (x | 0)] ? 255 : 0;
+  async function loadImageFile(file) {
+    const url = URL.createObjectURL(file);
+    const img = await loadImageFromSrc(url);
+    URL.revokeObjectURL(url);
+    setImage(img);
   }
 
-  function syncMaskBits() {
-    if (!state.artW || !state.artH) return;
-    const data = maskCtx.getImageData(0, 0, state.artW, state.artH).data;
-    state.maskBits = new Uint8Array(state.artW * state.artH);
-    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-      state.maskBits[p] = data[i + 3] > 20 ? 1 : 0;
-    }
-    state.maskDirty = false;
+  function setImage(img) {
+    state.image = img;
+    state.imgW = img.naturalWidth || img.width;
+    state.imgH = img.naturalHeight || img.height;
+    sourceBaseCanvas.width = state.imgW;
+    sourceBaseCanvas.height = state.imgH;
+    sourceBaseCtx.clearRect(0, 0, state.imgW, state.imgH);
+    sourceBaseCtx.drawImage(img, 0, 0);
+    state.baseImageBounds = { x: 0, y: 0, w: state.imgW, h: state.imgH };
+    bakeDefaultJoints();
+    fitSource();
+    state.selectionMask = null;
+    state.selectionPath = [];
+    if (!state.parts.length) buildStarterRig();
+    rebuildAllPartArt();
+    state.needsSourceRedraw = true;
+    state.needsPreviewRedraw = true;
+    setBadge(`Loaded ${state.imgW} × ${state.imgH} image`);
+    setPreviewBadge('Use the rig controls to animate');
   }
 
-  function writeMaskBits(bits) {
-    const img = maskCtx.createImageData(state.artW, state.artH);
-    for (let i = 0, p = 0; i < img.data.length; i += 4, p++) {
-      if (bits[p]) {
-        img.data[i] = 255;
-        img.data[i + 1] = 255;
-        img.data[i + 2] = 255;
-        img.data[i + 3] = 255;
+  function rebuildAllPartArt() {
+    for (const part of state.parts) rebuildPartArt(part);
+    renderPartsList();
+    state.needsPreviewRedraw = true;
+  }
+
+  function maskToBounds(mask) {
+    if (!mask) return null;
+    const w = mask.width, h = mask.height;
+    const data = mask.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+      let row = y * w * 4;
+      for (let x = 0; x < w; x++) {
+        const a = data[row + x * 4 + 3];
+        if (a > 0) {
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
       }
     }
-    maskCtx.putImageData(img, 0, 0);
-    syncMaskBits();
-    rebuildDerived();
-  }
-
-  function rebuildDerived() {
-    if (!state.artW || !state.artH) return;
-    buildCutout();
-    buildMesh();
-    state.sourceNeedsRedraw = true;
-    state.previewNeedsRedraw = true;
-  }
-
-  function buildCutout() {
-    if (!state.artW || !state.artH) return;
-    softMaskCanvas.width = state.artW;
-    softMaskCanvas.height = state.artH;
-    cutoutCanvas.width = state.artW;
-    cutoutCanvas.height = state.artH;
-    tempCanvas.width = state.artW;
-    tempCanvas.height = state.artH;
-
-    softMaskCtx.clearRect(0, 0, state.artW, state.artH);
-    softMaskCtx.save();
-    softMaskCtx.filter = state.feather > 0 ? `blur(${state.feather}px)` : 'none';
-    softMaskCtx.drawImage(maskCanvas, 0, 0);
-    softMaskCtx.restore();
-
-    cutoutCtx.clearRect(0, 0, state.artW, state.artH);
-    cutoutCtx.drawImage(artCanvas, 0, 0);
-    cutoutCtx.globalCompositeOperation = 'destination-in';
-    cutoutCtx.drawImage(softMaskCanvas, 0, 0);
-    cutoutCtx.globalCompositeOperation = 'source-over';
-  }
-
-  function bboxFromMask() {
-    if (!state.maskBits || !state.maskBits.length) {
-      return { x: 0, y: 0, w: state.artW, h: state.artH };
-    }
-    let minX = state.artW, minY = state.artH, maxX = -1, maxY = -1;
-    for (let y = 0; y < state.artH; y++) {
-      const row = y * state.artW;
-      for (let x = 0; x < state.artW; x++) {
-        if (!state.maskBits[row + x]) continue;
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-    }
-    if (maxX < minX || maxY < minY) return { x: 0, y: 0, w: state.artW, h: state.artH };
+    if (maxX < 0) return null;
     return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
   }
 
-  function autoRigFromMask() {
-    if (!state.artW || !state.artH) return;
-    const bounds = bboxFromMask();
-    state.sourceBounds = bounds;
-    setJoints(defaultJointsFromBounds(bounds));
+  function computeSourceLength(part, rect) {
+    if (!rect) return 1;
+    const kind = part.kind || '';
+    if (/(Arm|Leg|Thigh|Shin|Forearm)/i.test(kind)) return Math.max(1, rect.h * 0.98);
+    if (/(Torso|Pelvis|Cape|Hair)/i.test(kind)) return Math.max(1, rect.h * 0.85);
+    if (/Head|Neck/i.test(kind)) return Math.max(1, rect.h * 0.8);
+    return Math.max(1, Math.hypot(rect.w, rect.h) * 0.9);
   }
 
-  function autoMask() {
-    if (!state.artW || !state.artH) return;
-    const img = artCtx.getImageData(0, 0, state.artW, state.artH);
-    const data = img.data;
-    const pxCount = state.artW * state.artH;
-    const out = new Uint8Array(pxCount);
-
-    let alphaBorder = 0;
-    const borderSamples = [];
-    for (let x = 0; x < state.artW; x++) {
-      borderSamples.push(samplePixel(data, x, 0));
-      borderSamples.push(samplePixel(data, x, state.artH - 1));
-    }
-    for (let y = 0; y < state.artH; y++) {
-      borderSamples.push(samplePixel(data, 0, y));
-      borderSamples.push(samplePixel(data, state.artW - 1, y));
-    }
-    for (const s of borderSamples) if (s[3] < 12) alphaBorder++;
-
-    if (alphaBorder / borderSamples.length > 0.5) {
-      for (let i = 0; i < pxCount; i++) {
-        out[i] = data[i * 4 + 3] > 16 ? 1 : 0;
-      }
-      writeMaskBits(out);
-      autoRigFromMask();
-      setStatus('Transparent background detected');
+  function rebuildPartArt(part) {
+    if (!state.image || !part.maskCanvas) {
+      part.artCanvas = null;
+      part.artRect = null;
+      part.sourceLength = null;
       return;
     }
-
-    const bg = averageBorderColor(data);
-    const visited = new Uint8Array(pxCount);
-    const queue = new Uint32Array(pxCount);
-    let head = 0;
-    let tail = 0;
-    const tol = 30 * 30;
-
-    const pushIfBg = (x, y) => {
-      if (x < 0 || y < 0 || x >= state.artW || y >= state.artH) return;
-      const idx = y * state.artW + x;
-      if (visited[idx]) return;
-      const i = idx * 4;
-      if (colorDistSq(data, i, bg) <= tol || data[i + 3] < 12) {
-        visited[idx] = 1;
-        queue[tail++] = idx;
-      }
-    };
-
-    for (let x = 0; x < state.artW; x++) {
-      pushIfBg(x, 0);
-      pushIfBg(x, state.artH - 1);
+    const bounds = maskToBounds(part.maskCanvas);
+    if (!bounds) {
+      part.artCanvas = null;
+      part.artRect = null;
+      part.sourceLength = null;
+      return;
     }
-    for (let y = 0; y < state.artH; y++) {
-      pushIfBg(0, y);
-      pushIfBg(state.artW - 1, y);
-    }
-
-    while (head < tail) {
-      const idx = queue[head++];
-      const x = idx % state.artW;
-      const y = (idx / state.artW) | 0;
-      const i = idx * 4;
-      if (!(colorDistSq(data, i, bg) <= tol || data[i + 3] < 12)) continue;
-      out[idx] = 0;
-      const n1 = idx - 1;
-      const n2 = idx + 1;
-      const n3 = idx - state.artW;
-      const n4 = idx + state.artW;
-      if (x > 0 && !visited[n1]) { visited[n1] = 1; queue[tail++] = n1; }
-      if (x < state.artW - 1 && !visited[n2]) { visited[n2] = 1; queue[tail++] = n2; }
-      if (y > 0 && !visited[n3]) { visited[n3] = 1; queue[tail++] = n3; }
-      if (y < state.artH - 1 && !visited[n4]) { visited[n4] = 1; queue[tail++] = n4; }
-    }
-
-    for (let i = 0; i < pxCount; i++) {
-      out[i] = out[i] ? 1 : (data[i * 4 + 3] > 16 ? 1 : 0);
-    }
-    writeMaskBits(out);
-    autoRigFromMask();
-    setStatus('Auto mask applied');
-  }
-
-  function samplePixel(data, x, y) {
-    const i = (y * state.artW + x) * 4;
-    return [data[i], data[i + 1], data[i + 2], data[i + 3]];
-  }
-
-  function averageBorderColor(data) {
-    let r = 0, g = 0, b = 0, n = 0;
-    const sample = (x, y) => {
-      const i = (y * state.artW + x) * 4;
-      r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
-    };
-    for (let x = 0; x < state.artW; x++) {
-      sample(x, 0); sample(x, state.artH - 1);
-    }
-    for (let y = 0; y < state.artH; y++) {
-      sample(0, y); sample(state.artW - 1, y);
-    }
-    return [r / n, g / n, b / n];
-  }
-
-  function colorDistSq(data, idx, rgb) {
-    const dr = data[idx] - rgb[0];
-    const dg = data[idx + 1] - rgb[1];
-    const db = data[idx + 2] - rgb[2];
-    return dr * dr + dg * dg + db * db;
-  }
-
-  function floodFillMask(seedX, seedY, tolerance, mode) {
-    if (!state.artW || !state.artH) return;
-    const img = artCtx.getImageData(0, 0, state.artW, state.artH);
-    const data = img.data;
-    const pxCount = state.artW * state.artH;
-    const seedIdx = (seedY | 0) * state.artW + (seedX | 0);
-    if (seedIdx < 0 || seedIdx >= pxCount) return;
-
-    const si = seedIdx * 4;
-    const target = [data[si], data[si + 1], data[si + 2], data[si + 3]];
-    const visited = new Uint8Array(pxCount);
-    const queue = new Uint32Array(pxCount);
-    let head = 0;
-    let tail = 0;
-    const maxDist = tolerance * tolerance;
-
-    const maskBits = state.maskBits ? state.maskBits.slice() : new Uint8Array(pxCount);
-    const isMatch = (idx) => {
-      const i = idx * 4;
-      if (data[i + 3] < 8) return false;
-      const dr = data[i] - target[0];
-      const dg = data[i + 1] - target[1];
-      const db = data[i + 2] - target[2];
-      return dr * dr + dg * dg + db * db <= maxDist;
-    };
-
-    const enqueue = (idx) => {
-      if (idx < 0 || idx >= pxCount || visited[idx]) return;
-      visited[idx] = 1;
-      queue[tail++] = idx;
-    };
-
-    enqueue(seedIdx);
-
-    while (head < tail) {
-      const idx = queue[head++];
-      if (!isMatch(idx)) continue;
-      if (mode === 'add') maskBits[idx] = 1; else maskBits[idx] = 0;
-      const x = idx % state.artW;
-      const y = (idx / state.artW) | 0;
-      if (x > 0) enqueue(idx - 1);
-      if (x < state.artW - 1) enqueue(idx + 1);
-      if (y > 0) enqueue(idx - state.artW);
-      if (y < state.artH - 1) enqueue(idx + state.artW);
-    }
-
-    writeMaskBits(maskBits);
-    autoRigFromMask();
-    setStatus(mode === 'add' ? 'Wand selection added' : 'Wand selection erased');
-  }
-
-  function applyLasso(points, mode) {
-    if (!points || points.length < 3) return;
-    const artPts = points.map((p) => screenToArt(p));
-    maskCtx.save();
-    maskCtx.beginPath();
-    const first = artPts[0];
-    maskCtx.moveTo(first.x, first.y);
-    for (let i = 1; i < artPts.length; i++) maskCtx.lineTo(artPts[i].x, artPts[i].y);
-    maskCtx.closePath();
-    maskCtx.globalCompositeOperation = mode === 'subtract' ? 'destination-out' : 'source-over';
-    maskCtx.fillStyle = 'white';
-    maskCtx.fill();
-    maskCtx.restore();
-    syncMaskBits();
-    autoRigFromMask();
-    rebuildDerived();
-    state.sourceNeedsRedraw = true;
-    state.previewNeedsRedraw = true;
-  }
-
-  function buildMesh() {
-    state.geometry = [];
-    state.vertices = [];
-    if (!state.artW || !state.artH || !state.maskBits) return;
-
-    const spacing = clamp(Math.round(Math.max(14, Math.min(24, Math.max(state.artW, state.artH) / 44))), 14, 24);
-    const cols = Math.ceil(state.artW / spacing);
-    const rows = Math.ceil(state.artH / spacing);
-    const vMap = new Map();
-
-    const makeKey = (x, y) => `${x}|${y}`;
-    const getV = (x, y) => {
-      const k = makeKey(x, y);
-      if (vMap.has(k)) return vMap.get(k);
-      const idx = state.vertices.length;
-      const v = { x, y, influences: null };
-      state.vertices.push(v);
-      vMap.set(k, idx);
-      return idx;
-    };
-
-    const inside = (x, y) => {
-      const ix = clamp(Math.round(x), 0, state.artW - 1);
-      const iy = clamp(Math.round(y), 0, state.artH - 1);
-      return state.maskBits[iy * state.artW + ix] === 1;
-    };
-
-    for (let j = 0; j < rows; j++) {
-      const y0 = j * spacing;
-      const y1 = j === rows - 1 ? state.artH - 1 : Math.min(state.artH - 1, (j + 1) * spacing);
-      for (let i = 0; i < cols; i++) {
-        const x0 = i * spacing;
-        const x1 = i === cols - 1 ? state.artW - 1 : Math.min(state.artW - 1, (i + 1) * spacing);
-        const cx = (x0 + x1) * 0.5;
-        const cy = (y0 + y1) * 0.5;
-        if (!(inside(x0, y0) || inside(x1, y0) || inside(x0, y1) || inside(x1, y1) || inside(cx, cy))) continue;
-        const p00 = getV(x0, y0);
-        const p10 = getV(x1, y0);
-        const p01 = getV(x0, y1);
-        const p11 = getV(x1, y1);
-        state.geometry.push([p00, p10, p11]);
-        state.geometry.push([p00, p11, p01]);
-      }
-    }
-    computeVertexWeights();
-  }
-
-  function computeVertexWeights() {
-    if (!state.vertices.length || !state.bones.length) return;
-    for (const v of state.vertices) {
-      const scores = [];
-      for (let i = 0; i < state.bones.length; i++) {
-        const b = state.bones[i];
-        const d = distancePointToSegment(v, b.restA, b.restB);
-        let weight = Math.exp(-(d * d) / (2 * b.sigma * b.sigma));
-        const root = state.restJoints.pelvis || { x: 0, y: 0 };
-        const chest = state.restJoints.chest || root;
-        const neck = state.restJoints.neck || chest;
-        if (b.group === 'head' && v.y > chest.y + 8) weight *= 0.15;
-        if (b.group === 'torso' && v.y < neck.y - 18) weight *= 0.60;
-        if (b.group === 'armL' && v.x > chest.x + 30) weight *= 0.45;
-        if (b.group === 'armR' && v.x < chest.x - 30) weight *= 0.45;
-        if (b.group === 'legL' && v.y < root.y - 10) weight *= 0.35;
-        if (b.group === 'legR' && v.y < root.y - 10) weight *= 0.35;
-        scores.push([i, weight]);
-      }
-      scores.sort((a, b) => b[1] - a[1]);
-      const top = scores.slice(0, 4).filter(([, w]) => w > 0.001);
-      const total = top.reduce((sum, [, w]) => sum + w, 0) || 1;
-      v.influences = top.map(([i, w]) => ({ bone: i, weight: w / total }));
-    }
-  }
-
-  function distancePointToSegment(p, a, b) {
-    const vx = b.x - a.x;
-    const vy = b.y - a.y;
-    const wx = p.x - a.x;
-    const wy = p.y - a.y;
-    const c1 = vx * wx + vy * wy;
-    if (c1 <= 0) return Math.hypot(p.x - a.x, p.y - a.y);
-    const c2 = vx * vx + vy * vy;
-    if (c2 <= c1) return Math.hypot(p.x - b.x, p.y - b.y);
-    const t = c1 / c2;
-    const px = a.x + t * vx;
-    const py = a.y + t * vy;
-    return Math.hypot(p.x - px, p.y - py);
-  }
-
-  function boneMatrix(restA, restB, poseA, poseB) {
-    const ra = Math.atan2(restB.y - restA.y, restB.x - restA.x);
-    const pa = Math.atan2(poseB.y - poseA.y, poseB.x - poseA.x);
-    const d = pa - ra;
-    const s = Math.max(0.0001, Math.hypot(poseB.x - poseA.x, poseB.y - poseA.y) / Math.max(1, Math.hypot(restB.x - restA.x, restB.y - restA.y)));
-    const c = Math.cos(d) * s;
-    const si = Math.sin(d) * s;
-    return {
-      a: c,
-      b: si,
-      c: -si,
-      d: c,
-      e: poseA.x - c * restA.x + si * restA.y,
-      f: poseA.y - si * restA.x - c * restA.y,
-    };
-  }
-
-  function applyMat(m, x, y) {
-    return { x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f };
-  }
-
-  function solveTwoBone(root, target, len1, len2, bendSign) {
-    const dx = target.x - root.x;
-    const dy = target.y - root.y;
-    const dRaw = Math.hypot(dx, dy);
-    const d = clamp(dRaw, Math.abs(len1 - len2) + 0.001, len1 + len2 - 0.001);
-    const base = Math.atan2(dy, dx);
-    const cosA = clamp((len1 * len1 + d * d - len2 * len2) / (2 * len1 * d), -1, 1);
-    const a = Math.acos(cosA);
-    const angle = base + bendSign * a;
-    return {
-      joint: point(root.x + Math.cos(angle) * len1, root.y + Math.sin(angle) * len1),
-      end: point(root.x + dx * (len1 + len2 > 0 ? (d / (len1 + len2)) : 1), root.y + dy * (len1 + len2 > 0 ? (d / (len1 + len2)) : 1)),
-    };
-  }
-
-  function updatePose(dt) {
-    if (!state.restJoints.pelvis) return;
-    const rest = state.restJoints;
-    const dir = state.facing;
-    const stride = state.stride * state.artW * 0.70;
-    const lift = Math.max(8, state.stride * state.artH * 0.22);
-    const bounce = state.bounce * state.artH;
-    const lean = state.lean * dir * Math.sin(state.phase * TAU);
-    const coreX = dir * stride * 0.08 * Math.sin(state.phase * TAU);
-    const coreY = bounce * (0.5 - 0.5 * Math.cos(state.phase * TAU * 2));
-
-    const core = { x: coreX, y: coreY };
-    const pivot = rest.pelvis;
-    const c = Math.cos(lean);
-    const s = Math.sin(lean);
-    const coreTransform = (p) => ({
-      x: pivot.x + core.x + (p.x - pivot.x) * c - (p.y - pivot.y) * s,
-      y: pivot.y + core.y + (p.x - pivot.x) * s + (p.y - pivot.y) * c,
-    });
-
-    const pelvis = coreTransform(rest.pelvis);
-    const chest = coreTransform(rest.chest);
-    const neck = coreTransform(rest.neck);
-    const head = coreTransform(rest.head);
-    const lShoulder = coreTransform(rest.lShoulder);
-    const rShoulder = coreTransform(rest.rShoulder);
-    const lHip = coreTransform(rest.lHip);
-    const rHip = coreTransform(rest.rHip);
-
-    const frontX = pelvis.x + dir * stride * 0.36;
-    const backX = pelvis.x - dir * stride * 0.36;
-    const groundY = Math.max(rest.lFoot.y, rest.rFoot.y) + core.y * 0.35;
-
-    const leftLegPhase = state.phase % 1;
-    const rightLegPhase = (state.phase + 0.5) % 1;
-    const leftArmPhase = (state.phase + 0.5) % 1;
-    const rightArmPhase = state.phase % 1;
-
-    const footTrack = (phase, stanceX, swingX) => {
-      if (phase < 0.5) return point(stanceX, groundY);
-      const t = (phase - 0.5) / 0.5;
-      return point(lerp(stanceX, swingX, easeInOut(t)), groundY - Math.sin(t * Math.PI) * lift);
-    };
-
-    const lFoot = footTrack(leftLegPhase, frontX, backX);
-    const rFoot = footTrack(rightLegPhase, backX, frontX);
-
-    const thighLenL = Math.max(1, Math.hypot(rest.lKnee.x - rest.lHip.x, rest.lKnee.y - rest.lHip.y));
-    const shinLenL = Math.max(1, Math.hypot(rest.lFoot.x - rest.lKnee.x, rest.lFoot.y - rest.lKnee.y));
-    const thighLenR = Math.max(1, Math.hypot(rest.rKnee.x - rest.rHip.x, rest.rKnee.y - rest.rHip.y));
-    const shinLenR = Math.max(1, Math.hypot(rest.rFoot.x - rest.rKnee.x, rest.rFoot.y - rest.rKnee.y));
-
-    const legBiasL = dir > 0 ? 1 : -1;
-    const legBiasR = -legBiasL;
-    const kneeL = solveTwoBone(lHip, lFoot, thighLenL, shinLenL, legBiasL);
-    const kneeR = solveTwoBone(rHip, rFoot, thighLenR, shinLenR, legBiasR);
-
-    const armReach = state.armSwing * state.artW * 0.14;
-    const armLift = state.artH * 0.05;
-    const handTrack = (phase, shoulder, sideSign) => {
-      const swing = Math.sin(phase * TAU);
-      const liftAmt = Math.max(0, -Math.cos(phase * TAU)) * armLift;
-      return point(
-        shoulder.x + dir * swing * armReach * sideSign,
-        shoulder.y + armLift * 0.3 + liftAmt + Math.cos(phase * TAU) * state.artH * 0.02
-      );
-    };
-
-    const lHandTarget = handTrack(leftArmPhase, lShoulder, -1);
-    const rHandTarget = handTrack(rightArmPhase, rShoulder, 1);
-
-    const upperArmLenL = Math.max(1, Math.hypot(rest.lElbow.x - rest.lShoulder.x, rest.lElbow.y - rest.lShoulder.y));
-    const lowerArmLenL = Math.max(1, Math.hypot(rest.lHand.x - rest.lElbow.x, rest.lHand.y - rest.lElbow.y));
-    const upperArmLenR = Math.max(1, Math.hypot(rest.rElbow.x - rest.rShoulder.x, rest.rElbow.y - rest.rShoulder.y));
-    const lowerArmLenR = Math.max(1, Math.hypot(rest.rHand.x - rest.rElbow.x, rest.rHand.y - rest.rElbow.y));
-
-    const armBiasL = dir > 0 ? -1 : 1;
-    const armBiasR = -armBiasL;
-    const elbowL = solveTwoBone(lShoulder, lHandTarget, upperArmLenL, lowerArmLenL, armBiasL);
-    const elbowR = solveTwoBone(rShoulder, rHandTarget, upperArmLenR, lowerArmLenR, armBiasR);
-
-    state.poseJoints = {
-      pelvis, chest, neck, head,
-      lShoulder, lElbow: elbowL.joint, lHand: lHandTarget,
-      rShoulder, rElbow: elbowR.joint, rHand: rHandTarget,
-      lHip, lKnee: kneeL.joint, lFoot,
-      rHip, rKnee: kneeR.joint, rFoot,
-    };
-    state.previewNeedsRedraw = true;
-  }
-
-  function drawTriangleFromCutout(ctx, srcA, srcB, srcC, dstA, dstB, dstC) {
-    tempCtx.clearRect(0, 0, state.artW, state.artH);
-    tempCtx.save();
-    tempCtx.beginPath();
-    tempCtx.moveTo(srcA.x, srcA.y);
-    tempCtx.lineTo(srcB.x, srcB.y);
-    tempCtx.lineTo(srcC.x, srcC.y);
-    tempCtx.closePath();
-    tempCtx.clip();
-    tempCtx.drawImage(cutoutCanvas, 0, 0);
-    tempCtx.restore();
-
-    const m = triangleMatrix(srcA, srcB, srcC, dstA, dstB, dstC);
+    const pad = 2;
+    const x = clamp(bounds.x - pad, 0, state.imgW);
+    const y = clamp(bounds.y - pad, 0, state.imgH);
+    const w = clamp(bounds.w + pad * 2, 1, state.imgW - x);
+    const h = clamp(bounds.h + pad * 2, 1, state.imgH - y);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w));
+    c.height = Math.max(1, Math.round(h));
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.drawImage(sourceBaseCanvas, x, y, w, h, 0, 0, c.width, c.height);
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(dstA.x, dstA.y);
-    ctx.lineTo(dstB.x, dstB.y);
-    ctx.lineTo(dstC.x, dstC.y);
-    ctx.closePath();
-    ctx.clip();
-    ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
-    ctx.drawImage(tempCanvas, 0, 0);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(part.maskCanvas, x, y, w, h, 0, 0, c.width, c.height);
     ctx.restore();
+    part.artCanvas = c;
+    part.artRect = { x, y, w, h };
+    part.sourceLength = computeSourceLength(part, part.artRect);
+    if (part.pivotMode !== 'custom') {
+      const anchor = state.joints[part.proxJoint] || { x: x + w / 2, y: y + h / 2 };
+      part.pivotSource = clonePoint(anchor);
+    } else if (!part.pivotSource) {
+      const anchor = state.joints[part.proxJoint] || { x: x + w / 2, y: y + h / 2 };
+      part.pivotSource = clonePoint(anchor);
+    }
+    state.needsPreviewRedraw = true;
+    state.needsSourceRedraw = true;
   }
 
-  function triangleMatrix(s1, s2, s3, d1, d2, d3) {
-    const den = s1.x * (s2.y - s3.y) + s2.x * (s3.y - s1.y) + s3.x * (s1.y - s2.y);
-    if (Math.abs(den) < 1e-8) return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
-    const a = (d1.x * (s2.y - s3.y) + d2.x * (s3.y - s1.y) + d3.x * (s1.y - s2.y)) / den;
-    const b = (d1.y * (s2.y - s3.y) + d2.y * (s3.y - s1.y) + d3.y * (s1.y - s2.y)) / den;
-    const c = (d1.x * (s3.x - s2.x) + d2.x * (s1.x - s3.x) + d3.x * (s2.x - s1.x)) / den;
-    const d = (d1.y * (s3.x - s2.x) + d2.y * (s1.x - s3.x) + d3.y * (s2.x - s1.x)) / den;
-    const e = (d1.x * (s2.x * s3.y - s3.x * s2.y) + d2.x * (s3.x * s1.y - s1.x * s3.y) + d3.x * (s1.x * s2.y - s2.x * s1.y)) / den;
-    const f = (d1.y * (s2.x * s3.y - s3.x * s2.y) + d2.y * (s3.x * s1.y - s1.x * s3.y) + d3.y * (s1.x * s2.y - s2.x * s1.y)) / den;
-    return { a, b, c, d, e, f };
+  function selectionCanvasFromLasso(points) {
+    if (!state.image || points.length < 3) return null;
+    const c = document.createElement('canvas');
+    c.width = state.imgW;
+    c.height = state.imgH;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.closePath();
+    ctx.fill();
+    if (state.feather > 0) {
+      const blurred = document.createElement('canvas');
+      blurred.width = c.width;
+      blurred.height = c.height;
+      const bctx = blurred.getContext('2d');
+      bctx.filter = `blur(${state.feather}px)`;
+      bctx.drawImage(c, 0, 0);
+      return blurred;
+    }
+    return c;
   }
 
-  function deformPoint(v, boneMatrices) {
-    if (!v.influences || !v.influences.length) return point(v.x, v.y);
-    let x = 0;
-    let y = 0;
-    for (const inf of v.influences) {
-      const mat = boneMatrices[inf.bone];
-      const p = applyMat(mat, v.x, v.y);
-      x += p.x * inf.weight;
-      y += p.y * inf.weight;
-    }
-    return point(x, y);
+  function selectionCanvasFromMask(mask) {
+    if (!mask) return null;
+    const out = document.createElement('canvas');
+    out.width = mask.width;
+    out.height = mask.height;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(mask, 0, 0);
+    return out;
   }
 
-  function renderPreview() {
-    if (!state.imageLoaded || !state.artW || !state.artH) return;
-    const lay = previewLayout();
-    const fullW = lay.r.width;
-    const fullH = lay.r.height;
-    pCtx.clearRect(0, 0, fullW, fullH);
-
-    // background and stage
-    const grad = pCtx.createLinearGradient(0, 0, 0, fullH);
-    grad.addColorStop(0, 'rgba(255,255,255,0.04)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.06)');
-    pCtx.fillStyle = grad;
-    pCtx.fillRect(0, 0, fullW, fullH);
-
-    const groundY = lay.r.height * 0.83;
-    pCtx.strokeStyle = 'rgba(255,255,255,0.08)';
-    pCtx.lineWidth = 1;
-    pCtx.beginPath();
-    pCtx.moveTo(0, groundY + 0.5);
-    pCtx.lineTo(fullW, groundY + 0.5);
-    pCtx.stroke();
-
-    const matScale = lay.scale;
-    const ox = lay.x;
-    const oy = lay.y;
-
-    const boneMatrices = {};
-    for (let i = 0; i < state.bones.length; i++) {
-      const bone = state.bones[i];
-      const restA = state.restJoints[bone.a];
-      const restB = state.restJoints[bone.b];
-      const poseA = state.poseJoints[bone.a];
-      const poseB = state.poseJoints[bone.b];
-      boneMatrices[i] = boneMatrix(restA, restB, poseA, poseB);
-    }
-
-    // shadow
-    const footMid = {
-      x: (state.poseJoints.lFoot.x + state.poseJoints.rFoot.x) * 0.5,
-      y: Math.max(state.poseJoints.lFoot.y, state.poseJoints.rFoot.y),
-    };
-    const shadowX = ox + footMid.x * matScale;
-    const shadowY = oy + footMid.y * matScale + 8;
-    pCtx.save();
-    pCtx.translate(shadowX, shadowY);
-    pCtx.scale(1.45, 0.42);
-    pCtx.fillStyle = 'rgba(0,0,0,0.26)';
-    pCtx.beginPath();
-    pCtx.ellipse(0, 0, 52, 22, 0, 0, TAU);
-    pCtx.fill();
-    pCtx.restore();
-
-    // render mesh triangles
-    for (const tri of state.geometry) {
-      const v0 = state.vertices[tri[0]];
-      const v1 = state.vertices[tri[1]];
-      const v2 = state.vertices[tri[2]];
-      const s0 = point(v0.x, v0.y);
-      const s1 = point(v1.x, v1.y);
-      const s2 = point(v2.x, v2.y);
-      const d0 = deformPoint(v0, boneMatrices);
-      const d1 = deformPoint(v1, boneMatrices);
-      const d2 = deformPoint(v2, boneMatrices);
-      d0.x = ox + d0.x * matScale; d0.y = oy + d0.y * matScale;
-      d1.x = ox + d1.x * matScale; d1.y = oy + d1.y * matScale;
-      d2.x = ox + d2.x * matScale; d2.y = oy + d2.y * matScale;
-      drawTriangleFromCutout(pCtx, s0, s1, s2, d0, d1, d2);
-    }
-
-    if (state.showRig) {
-      pCtx.save();
-      pCtx.lineWidth = 2;
-      pCtx.strokeStyle = 'rgba(124,196,255,0.7)';
-      pCtx.fillStyle = 'rgba(124,196,255,0.9)';
-      const drawBone = (a, b) => {
-        const pa = state.poseJoints[a];
-        const pb = state.poseJoints[b];
-        pCtx.beginPath();
-        pCtx.moveTo(ox + pa.x * matScale, oy + pa.y * matScale);
-        pCtx.lineTo(ox + pb.x * matScale, oy + pb.y * matScale);
-        pCtx.stroke();
-      };
-      drawBone('pelvis', 'chest');
-      drawBone('chest', 'neck');
-      drawBone('neck', 'head');
-      drawBone('lShoulder', 'lElbow');
-      drawBone('lElbow', 'lHand');
-      drawBone('rShoulder', 'rElbow');
-      drawBone('rElbow', 'rHand');
-      drawBone('lHip', 'lKnee');
-      drawBone('lKnee', 'lFoot');
-      drawBone('rHip', 'rKnee');
-      drawBone('rKnee', 'rFoot');
-
-      for (const name of JOINT_NAMES) {
-        const j = state.poseJoints[name];
-        const x = ox + j.x * matScale;
-        const y = oy + j.y * matScale;
-        pCtx.beginPath();
-        pCtx.arc(x, y, 4.5, 0, TAU);
-        pCtx.fill();
+  function floodFillMask(seedX, seedY, tolerance = 26) {
+    if (!state.image) return null;
+    const w = state.imgW, h = state.imgH;
+    const img = sourceBaseCtx.getImageData(0, 0, w, h);
+    const data = img.data;
+    const mask = document.createElement('canvas');
+    mask.width = w; mask.height = h;
+    const mctx = mask.getContext('2d');
+    const out = mctx.createImageData(w, h);
+    const outData = out.data;
+    const idx = ((Math.floor(seedY) * w) + Math.floor(seedX)) * 4;
+    if (idx < 0 || idx >= data.length) return null;
+    const sr = data[idx], sg = data[idx + 1], sb = data[idx + 2], sa = data[idx + 3];
+    const tol = tolerance * tolerance * 3;
+    const visited = new Uint8Array(w * h);
+    const qx = new Int32Array(w * h);
+    const qy = new Int32Array(w * h);
+    let qh = 0, qt = 0;
+    const seedI = (Math.floor(seedY) * w + Math.floor(seedX));
+    qx[qt] = Math.floor(seedX); qy[qt] = Math.floor(seedY); qt++;
+    visited[seedI] = 1;
+    while (qh < qt) {
+      const x = qx[qh], y = qy[qh]; qh++;
+      const i = y * w + x;
+      const di = i * 4;
+      const dr = data[di] - sr;
+      const dg = data[di + 1] - sg;
+      const db = data[di + 2] - sb;
+      const da = data[di + 3] - sa;
+      const dist = dr * dr + dg * dg + db * db + da * da * 0.5;
+      if (dist > tol) continue;
+      outData[di + 3] = 255;
+      if (x > 0) {
+        const ni = i - 1;
+        if (!visited[ni]) { visited[ni] = 1; qx[qt] = x - 1; qy[qt] = y; qt++; }
       }
-      pCtx.restore();
+      if (x < w - 1) {
+        const ni = i + 1;
+        if (!visited[ni]) { visited[ni] = 1; qx[qt] = x + 1; qy[qt] = y; qt++; }
+      }
+      if (y > 0) {
+        const ni = i - w;
+        if (!visited[ni]) { visited[ni] = 1; qx[qt] = x; qy[qt] = y - 1; qt++; }
+      }
+      if (y < h - 1) {
+        const ni = i + w;
+        if (!visited[ni]) { visited[ni] = 1; qx[qt] = x; qy[qt] = y + 1; qt++; }
+      }
     }
+    mctx.putImageData(out, 0, 0);
+    if (state.feather > 0) {
+      const blurred = document.createElement('canvas');
+      blurred.width = w; blurred.height = h;
+      const bctx = blurred.getContext('2d');
+      bctx.filter = `blur(${state.feather}px)`;
+      bctx.drawImage(mask, 0, 0);
+      return blurred;
+    }
+    return mask;
+  }
 
-    previewBadge.textContent = state.playing ? 'Playing' : 'Paused';
+  function combineMasks(target, source, mode = 'replace') {
+    if (!source) return target;
+    if (!target) return mode === 'subtract' ? null : selectionCanvasFromMask(source);
+    if (mode === 'replace') return selectionCanvasFromMask(source);
+    const out = document.createElement('canvas');
+    out.width = source.width;
+    out.height = source.height;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(target, 0, 0);
+    ctx.globalCompositeOperation = mode === 'subtract' ? 'destination-out' : 'source-over';
+    ctx.drawImage(source, 0, 0);
+    return out;
+  }
+
+  function applySelectionToPart(part, mode = 'replace') {
+    if (!state.selectionMask) return;
+    part.maskCanvas = combineMasks(part.maskCanvas, state.selectionMask, mode);
+    rebuildPartArt(part);
+  }
+
+  function invertMask(mask) {
+    if (!mask) return null;
+    const c = document.createElement('canvas');
+    c.width = mask.width;
+    c.height = mask.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(mask, 0, 0);
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    for (let i = 0; i < img.data.length; i += 4) {
+      img.data[i + 3] = 255 - img.data[i + 3];
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  }
+
+  function clearSelection() {
+    state.selectionMask = null;
+    state.selectionPath = [];
+    state.drawingLasso = false;
+    state.needsSourceRedraw = true;
+  }
+
+  function updateSelectionMaskFromPath() {
+    if (state.selectionPath.length < 3) {
+      state.selectionPath = [];
+      state.drawingLasso = false;
+      state.needsSourceRedraw = true;
+      return;
+    }
+    state.selectionMask = selectionCanvasFromLasso(state.selectionPath);
+    state.selectionPath = [];
+    state.drawingLasso = false;
+    state.needsSourceRedraw = true;
+  }
+
+  function selectedPart() { return state.parts.find(p => p.id === state.selectedPartId) || null; }
+  function partById(id) { return state.parts.find(p => p.id === id) || null; }
+
+  function renderPartsList() {
+    const current = state.selectedPartId;
+    ui.partsList.innerHTML = '';
+    if (!state.parts.length) {
+      ui.partsList.innerHTML = '<div class="help-text">No parts yet. Use <b>Add Standard Rig</b> or create a custom part.</div>';
+      return;
+    }
+    for (const part of state.parts) {
+      const row = document.createElement('div');
+      row.className = 'part-row' + (part.id === current ? ' active' : '');
+      row.dataset.id = part.id;
+      row.innerHTML = `
+        <input class="part-name" value="${escapeHtml(part.name)}" title="Part name" />
+        <select class="part-kind"></select>
+        <select class="prox-joint"></select>
+        <select class="dist-joint"></select>
+        <label class="toggle"><input type="checkbox" class="vis-toggle" ${part.visible ? 'checked' : ''}/>show</label>
+        <button class="btn tiny bind-pivot">Pivot</button>
+        <button class="btn tiny ghost delete-part">Del</button>
+      `;
+      const kindSel = row.querySelector('.part-kind');
+      for (const k of Object.keys(PART_PRESETS)) {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = PART_PRESETS[k].label;
+        if (k === part.kind) opt.selected = true;
+        kindSel.appendChild(opt);
+      }
+      const proxSel = row.querySelector('.prox-joint');
+      const distSel = row.querySelector('.dist-joint');
+      for (const j of JOINTS) {
+        const o1 = document.createElement('option'); o1.value = j; o1.textContent = j; if (j === part.proxJoint) o1.selected = true; proxSel.appendChild(o1);
+        const o2 = document.createElement('option'); o2.value = j; o2.textContent = j; if (j === part.distJoint) o2.selected = true; distSel.appendChild(o2);
+      }
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+        state.selectedPartId = part.id;
+        state.placePivotPartId = null;
+        renderPartsList();
+        state.needsSourceRedraw = true;
+      });
+      row.querySelector('.part-name').addEventListener('input', (e) => { part.name = e.target.value; });
+      row.querySelector('.part-kind').addEventListener('change', (e) => {
+        part.kind = e.target.value;
+        const preset = PART_PRESETS[part.kind] || PART_PRESETS.custom;
+        part.proxJoint = preset.prox;
+        part.distJoint = preset.dist;
+        part.depth = preset.depth;
+        renderPartsList();
+        rebuildPartArt(part);
+      });
+      row.querySelector('.prox-joint').addEventListener('change', (e) => { part.proxJoint = e.target.value; rebuildPartArt(part); });
+      row.querySelector('.dist-joint').addEventListener('change', (e) => { part.distJoint = e.target.value; rebuildPartArt(part); });
+      row.querySelector('.vis-toggle').addEventListener('change', (e) => { part.visible = e.target.checked; state.needsPreviewRedraw = true; });
+      row.querySelector('.bind-pivot').addEventListener('click', () => {
+        state.placePivotPartId = part.id;
+        setBadge(`Click on the source image to place the pivot for “${part.name}”.`);
+      });
+      row.querySelector('.delete-part').addEventListener('click', () => {
+        state.parts = state.parts.filter(p => p.id !== part.id);
+        if (state.selectedPartId === part.id) state.selectedPartId = state.parts[0]?.id || null;
+        renderPartsList();
+        state.needsPreviewRedraw = true;
+      });
+      ui.partsList.appendChild(row);
+    }
+  }
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function addPart(kind) {
+    const part = makePart(kind);
+    state.parts.push(part);
+    state.selectedPartId = part.id;
+    renderPartsList();
+    rebuildPartArt(part);
+    state.needsPreviewRedraw = true;
+  }
+
+  function clearParts() {
+    state.parts = [];
+    state.selectedPartId = null;
+    renderPartsList();
+    state.needsPreviewRedraw = true;
+    setBadge('Parts cleared. Add a standard rig or create custom parts.');
+  }
+
+  function getCanvasPoint(evt, canvas) {
+    const r = canvas.getBoundingClientRect();
+    return { x: evt.clientX - r.left, y: evt.clientY - r.top };
+  }
+
+  function sourceHitJoint(pos) {
+    const lay = state.sourceLayout || sourceLayout();
+    const imagePt = screenToImage(pos);
+    let best = null;
+    let bestD = 18 / lay.scale;
+    for (const [k, p] of Object.entries(state.joints)) {
+      const d = hypot(imagePt.x - p.x, imagePt.y - p.y);
+      if (d < bestD) { best = k; bestD = d; }
+    }
+    return best;
+  }
+
+  function setJoint(name, imgPt) {
+    state.joints[name] = clonePoint(imgPt);
+    state.needsSourceRedraw = true;
+    state.needsPreviewRedraw = true;
+    for (const part of state.parts) if (part.pivotMode === 'prox' && part.proxJoint === name && !part.pivotSource) part.pivotSource = clonePoint(imgPt);
+    for (const part of state.parts) if (part.pivotSource && part.pivotSourceJoint === name) part.pivotSource = clonePoint(imgPt);
+  }
+
+  function drawChecker(ctx, w, h) {
+    const size = 24;
+    for (let y = 0; y < h; y += size) {
+      for (let x = 0; x < w; x += size) {
+        ctx.fillStyle = ((x / size + y / size) % 2 === 0) ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.06)';
+        ctx.fillRect(x, y, size, size);
+      }
+    }
   }
 
   function drawSource() {
-    const lay = sourceLayout();
-    const w = lay.r.width;
-    const h = lay.r.height;
-    sCtx.clearRect(0, 0, w, h);
-
-    if (!state.imageLoaded) {
-      sCtx.fillStyle = 'rgba(255,255,255,0.06)';
-      sCtx.font = '600 16px system-ui, sans-serif';
-      sCtx.fillText('Import an image to begin', 20, 32);
+    const rect = makeCanvasSize(sourceCanvas, sCtx);
+    if (!state.image) {
+      sCtx.clearRect(0, 0, rect.w, rect.h);
+      drawChecker(sCtx, rect.w, rect.h);
+      sCtx.fillStyle = 'rgba(255,255,255,.10)';
+      sCtx.textAlign = 'center';
+      sCtx.font = '600 18px Inter, sans-serif';
+      sCtx.fillText('Import a character image to begin', rect.w / 2, rect.h / 2 - 10);
+      sCtx.font = '13px Inter, sans-serif';
+      sCtx.fillText('Use Lasso or Wand to build part masks, then animate with the rig.', rect.w / 2, rect.h / 2 + 14);
       return;
     }
+    const lay = sourceLayout();
+    state.sourceLayout = lay;
+    sCtx.clearRect(0, 0, rect.w, rect.h);
+    drawChecker(sCtx, rect.w, rect.h);
+    sCtx.drawImage(sourceBaseCanvas, lay.x, lay.y, lay.w, lay.h);
 
-    sCtx.fillStyle = 'rgba(255,255,255,0.02)';
-    sCtx.fillRect(0, 0, w, h);
-    sCtx.drawImage(artCanvas, lay.x, lay.y, lay.w, lay.h);
-
-    if (state.showMask) {
+    if (state.selectionMask) {
       sCtx.save();
-      sCtx.translate(lay.x, lay.y);
-      sCtx.scale(lay.scale, lay.scale);
-      sCtx.fillStyle = 'rgba(124,196,255,0.22)';
-      sCtx.fillRect(0, 0, state.artW, state.artH);
+      sCtx.globalCompositeOperation = 'source-over';
+      sCtx.fillStyle = 'rgba(109,201,255,0.32)';
+      sCtx.fillRect(lay.x, lay.y, lay.w, lay.h);
       sCtx.globalCompositeOperation = 'destination-in';
-      sCtx.drawImage(maskCanvas, 0, 0);
+      sCtx.drawImage(state.selectionMask, lay.x, lay.y, lay.w, lay.h);
       sCtx.restore();
-    }
-
-    if (state.showRig && state.restJoints.pelvis) {
       sCtx.save();
-      sCtx.lineWidth = 1.5;
-      sCtx.strokeStyle = 'rgba(124,196,255,0.6)';
-      sCtx.fillStyle = 'rgba(124,196,255,0.95)';
-      const drawBone = (a, b) => {
-        const pa = state.restJoints[a];
-        const pb = state.restJoints[b];
-        sCtx.beginPath();
-        sCtx.moveTo(lay.x + pa.x * lay.scale, lay.y + pa.y * lay.scale);
-        sCtx.lineTo(lay.x + pb.x * lay.scale, lay.y + pb.y * lay.scale);
-        sCtx.stroke();
-      };
-      drawBone('pelvis', 'chest');
-      drawBone('chest', 'neck');
-      drawBone('neck', 'head');
-      drawBone('lShoulder', 'lElbow');
-      drawBone('lElbow', 'lHand');
-      drawBone('rShoulder', 'rElbow');
-      drawBone('rElbow', 'rHand');
-      drawBone('lHip', 'lKnee');
-      drawBone('lKnee', 'lFoot');
-      drawBone('rHip', 'rKnee');
-      drawBone('rKnee', 'rFoot');
-      for (const name of JOINT_NAMES) {
-        const j = state.restJoints[name];
-        const x = lay.x + j.x * lay.scale;
-        const y = lay.y + j.y * lay.scale;
-        sCtx.beginPath();
-        sCtx.arc(x, y, 4.5, 0, TAU);
-        sCtx.fill();
-        sCtx.strokeStyle = 'rgba(0,0,0,0.25)';
-        sCtx.lineWidth = 3;
-        sCtx.stroke();
-        sCtx.strokeStyle = 'rgba(124,196,255,0.95)';
-        sCtx.lineWidth = 1.5;
-        sCtx.stroke();
-      }
-      sCtx.restore();
-    }
-
-    if (state.tool === 'lasso' && state.lasso.length > 1) {
-      sCtx.save();
-      sCtx.strokeStyle = 'rgba(103,232,160,0.95)';
+      sCtx.strokeStyle = 'rgba(109,201,255,0.98)';
       sCtx.lineWidth = 2;
+      sCtx.setLineDash([8, 6]);
+      const b = maskBounds(state.selectionMask);
+      if (b) sCtx.strokeRect(lay.x + b.x * lay.scale, lay.y + b.y * lay.scale, b.w * lay.scale, b.h * lay.scale);
+      sCtx.restore();
+    }
+
+    if (state.drawingLasso && state.selectionPath.length > 1) {
+      sCtx.save();
+      sCtx.strokeStyle = 'rgba(255,201,107,0.98)';
+      sCtx.lineWidth = 2.5;
       sCtx.beginPath();
-      sCtx.moveTo(state.lasso[0].x, state.lasso[0].y);
-      for (let i = 1; i < state.lasso.length; i++) sCtx.lineTo(state.lasso[i].x, state.lasso[i].y);
+      const p0 = imageToScreen(state.selectionPath[0]);
+      sCtx.moveTo(p0.x, p0.y);
+      for (let i = 1; i < state.selectionPath.length; i++) {
+        const p = imageToScreen(state.selectionPath[i]);
+        sCtx.lineTo(p.x, p.y);
+      }
       sCtx.stroke();
       sCtx.restore();
     }
 
-    sCtx.fillStyle = 'rgba(255,255,255,0.65)';
-    sCtx.font = '12px system-ui, sans-serif';
-    sCtx.fillText(`Zoom ${(state.sourceZoom * 100).toFixed(0)}%`, 14, h - 14);
-  }
-
-  function sourcePointerPosition(evt) {
-    const rect = sourceCanvas.getBoundingClientRect();
-    return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
-  }
-
-  function hitJoint(screenPt) {
-    if (!state.restJoints.pelvis) return null;
-    const lay = sourceLayout();
-    const limit = 10;
-    for (const name of JOINT_NAMES) {
-      const j = state.restJoints[name];
-      const sx = lay.x + j.x * lay.scale;
-      const sy = lay.y + j.y * lay.scale;
-      const d = Math.hypot(screenPt.x - sx, screenPt.y - sy);
-      if (d <= limit) return name;
+    if (state.parts.length) {
+      for (const part of state.parts) {
+        if (!part.visible || !part.artRect) continue;
+        const c = part.id === state.selectedPartId ? 'rgba(139,255,204,.95)' : 'rgba(255,255,255,.20)';
+        sCtx.save();
+        sCtx.strokeStyle = c;
+        sCtx.lineWidth = part.id === state.selectedPartId ? 2.2 : 1.2;
+        sCtx.setLineDash([5, 4]);
+        const x = lay.x + part.artRect.x * lay.scale;
+        const y = lay.y + part.artRect.y * lay.scale;
+        const w = part.artRect.w * lay.scale;
+        const h = part.artRect.h * lay.scale;
+        sCtx.strokeRect(x, y, w, h);
+        sCtx.restore();
+      }
     }
-    return null;
+
+    sCtx.save();
+    sCtx.fillStyle = 'rgba(109,201,255,.95)';
+    sCtx.strokeStyle = 'rgba(7,10,14,.95)';
+    sCtx.lineWidth = 2;
+    for (const [name, p] of Object.entries(state.joints)) {
+      const s = imageToScreen(p);
+      sCtx.beginPath(); sCtx.arc(s.x, s.y, 6.5, 0, TAU); sCtx.fill(); sCtx.stroke();
+      sCtx.fillStyle = 'rgba(236,244,252,.8)';
+      sCtx.font = '11px Inter, sans-serif';
+      sCtx.fillText(name, s.x + 9, s.y - 8);
+      sCtx.fillStyle = 'rgba(109,201,255,.95)';
+    }
+    for (const part of state.parts) {
+      if (!part.pivotSource) continue;
+      const s = imageToScreen(part.pivotSource);
+      sCtx.fillStyle = part.id === state.selectedPartId ? 'rgba(255,201,107,.95)' : 'rgba(139,255,204,.85)';
+      sCtx.beginPath(); sCtx.arc(s.x, s.y, 4, 0, TAU); sCtx.fill();
+    }
+    sCtx.restore();
+
+    if (state.placePivotPartId) {
+      const part = partById(state.placePivotPartId);
+      if (part?.pivotSource) {
+        const s = imageToScreen(part.pivotSource);
+        sCtx.save();
+        sCtx.strokeStyle = 'rgba(255,201,107,.95)';
+        sCtx.lineWidth = 2;
+        sCtx.beginPath(); sCtx.moveTo(s.x - 10, s.y); sCtx.lineTo(s.x + 10, s.y); sCtx.moveTo(s.x, s.y - 10); sCtx.lineTo(s.x, s.y + 10); sCtx.stroke();
+        sCtx.restore();
+      }
+    }
+
+    sCtx.save();
+    sCtx.fillStyle = 'rgba(255,255,255,.06)';
+    sCtx.fillRect(10, rect.h - 30, 246, 20);
+    sCtx.fillStyle = 'rgba(230,240,250,.85)';
+    sCtx.font = '12px Inter, sans-serif';
+    sCtx.fillText(`Tool: ${state.tool}  |  Zoom: ${state.sourceZoom.toFixed(2)}x  |  Selection: ${state.selectionMode}`, 18, rect.h - 15);
+    sCtx.restore();
   }
 
-  function loadImageFromSource(img) {
-    const scale = Math.min(1, MAX_IMPORT_DIM / Math.max(img.width, img.height));
-    state.artW = Math.max(1, Math.round(img.width * scale));
-    state.artH = Math.max(1, Math.round(img.height * scale));
-
-    artCanvas.width = state.artW;
-    artCanvas.height = state.artH;
-    maskCanvas.width = state.artW;
-    maskCanvas.height = state.artH;
-    softMaskCanvas.width = state.artW;
-    softMaskCanvas.height = state.artH;
-    cutoutCanvas.width = state.artW;
-    cutoutCanvas.height = state.artH;
-    tempCanvas.width = state.artW;
-    tempCanvas.height = state.artH;
-
-    artCtx.clearRect(0, 0, state.artW, state.artH);
-    artCtx.drawImage(img, 0, 0, state.artW, state.artH);
-
-    // Start with transparent mask if possible, otherwise full mask.
-    maskCtx.clearRect(0, 0, state.artW, state.artH);
-    const imageData = artCtx.getImageData(0, 0, state.artW, state.artH).data;
-    let hasAlpha = false;
-    for (let i = 3; i < imageData.length; i += 4) {
-      if (imageData[i] < 245) { hasAlpha = true; break; }
+  function maskBounds(maskCanvasEl) {
+    if (!maskCanvasEl) return null;
+    const ctx = maskCanvasEl.getContext('2d', { willReadFrequently: true });
+    const { width, height } = maskCanvasEl;
+    const data = ctx.getImageData(0, 0, width, height).data;
+    let minX = width, minY = height, maxX = -1, maxY = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const a = data[(y * width + x) * 4 + 3];
+        if (a > 0) {
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      }
     }
-    if (hasAlpha) {
-      const out = new Uint8Array(state.artW * state.artH);
-      for (let i = 0, p = 0; i < imageData.length; i += 4, p++) out[p] = imageData[i + 3] > 18 ? 1 : 0;
-      writeMaskBits(out);
-      autoRigFromMask();
+    if (maxX < 0) return null;
+    return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+  }
+
+  function solve2Bone(root, target, len1, len2, bendSign) {
+    const dx = target.x - root.x;
+    const dy = target.y - root.y;
+    const dist = Math.max(0.0001, Math.min(Math.hypot(dx, dy), len1 + len2 - 0.001));
+    const baseAngle = Math.atan2(dy, dx);
+    const cosA = clamp((len1 * len1 + dist * dist - len2 * len2) / (2 * len1 * dist), -1, 1);
+    const angOffset = Math.acos(cosA);
+    const ang = baseAngle + bendSign * angOffset;
+    const mid = { x: root.x + Math.cos(ang) * len1, y: root.y + Math.sin(ang) * len1 };
+    return { mid, end: { x: target.x, y: target.y }, angle1: Math.atan2(mid.y - root.y, mid.x - root.x), angle2: Math.atan2(target.y - mid.y, target.x - mid.x) };
+  }
+
+  function poseAt(t) {
+    const rect = previewCanvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    const dir = state.facing === 'right' ? 1 : -1;
+    const cycle = (t * state.speed * 0.9) % 1;
+    const phase = cycle * TAU;
+    const bob = Math.sin(phase * 2) * (h * 0.025 * state.bounce);
+    const sway = Math.sin(phase) * (w * 0.015 * state.travel);
+    const centerX = w * 0.5 + sway;
+    const groundY = h * 0.82;
+    const baseY = groundY - (state.imgH || 900) * 0.30 + bob;
+    const torsoLen = (state.imgH || 900) * 0.16;
+    const neckLen = torsoLen * 0.35;
+    const headLen = torsoLen * 0.7;
+    const upperArmLen = (state.imgH || 900) * 0.14;
+    const lowerArmLen = (state.imgH || 900) * 0.13;
+    const thighLen = (state.imgH || 900) * 0.17;
+    const shinLen = (state.imgH || 900) * 0.18;
+    const hipGap = (state.imgW || 700) * 0.055;
+    const shoulderGap = (state.imgW || 700) * 0.075;
+    const stride = (state.imgW || 700) * 0.12 * state.stride;
+    const lift = (state.imgH || 900) * 0.055 * state.bounce;
+    const armSwing = (state.imgW || 700) * 0.09 * state.armSwing;
+    const lean = dir * (0.12 + state.lean * 0.28) * Math.sin(phase) + dir * state.lean * 0.06;
+
+    const pelvis = { x: centerX, y: baseY };
+    const chest = { x: centerX + dir * torsoLen * lean * 0.45, y: baseY - torsoLen * 0.88 };
+    const neck = { x: chest.x + dir * torsoLen * lean * 0.25, y: chest.y - neckLen };
+    const head = { x: neck.x + dir * torsoLen * lean * 0.20, y: neck.y - headLen * 0.65 };
+
+    const lHip = { x: pelvis.x - hipGap, y: pelvis.y };
+    const rHip = { x: pelvis.x + hipGap, y: pelvis.y };
+    const lShoulder = { x: chest.x - shoulderGap, y: chest.y };
+    const rShoulder = { x: chest.x + shoulderGap, y: chest.y };
+
+    const leftFront = dir * stride * 0.52;
+    const leftBack = -dir * stride * 0.28;
+    const rightFront = dir * stride * 0.52;
+    const rightBack = -dir * stride * 0.28;
+
+    const leftSwing = cycle < 0.5 ? false : true;
+    const rightSwing = cycle < 0.5 ? true : false;
+    const swingT = easeInOut(leftSwing ? (cycle - 0.5) / 0.5 : cycle / 0.5);
+    const swingT2 = easeInOut(rightSwing ? cycle / 0.5 : (cycle - 0.5) / 0.5);
+
+    const leftFoot = leftSwing
+      ? { x: pelvis.x + lerp(leftFront, leftBack, swingT), y: groundY - Math.sin(swingT * Math.PI) * lift }
+      : { x: pelvis.x + leftFront, y: groundY };
+    const rightFoot = rightSwing
+      ? { x: pelvis.x + lerp(rightBack, rightFront, swingT2), y: groundY - Math.sin(swingT2 * Math.PI) * lift }
+      : { x: pelvis.x + rightBack, y: groundY };
+
+    const leftHandTarget = { x: lShoulder.x - dir * armSwing * Math.cos(phase + Math.PI * 0.05), y: lShoulder.y + Math.sin(phase + Math.PI * 0.45) * lift * 0.5 + (cycle < 0.5 ? lift * 0.06 : -lift * 0.04) };
+    const rightHandTarget = { x: rShoulder.x + dir * armSwing * Math.cos(phase + Math.PI * 0.05), y: rShoulder.y + Math.sin(phase + Math.PI * 0.45 + Math.PI) * lift * 0.5 + (cycle < 0.5 ? -lift * 0.04 : lift * 0.06) };
+
+    const leftLeg = solve2Bone(lHip, leftFoot, thighLen, shinLen, dir * (leftSwing ? 1 : -1) * 0.95);
+    const rightLeg = solve2Bone(rHip, rightFoot, thighLen, shinLen, dir * (rightSwing ? 1 : -1) * 0.95);
+    const leftArm = solve2Bone(lShoulder, leftHandTarget, upperArmLen, lowerArmLen, dir * (cycle < 0.5 ? -1 : 1));
+    const rightArm = solve2Bone(rShoulder, rightHandTarget, upperArmLen, lowerArmLen, dir * (cycle < 0.5 ? 1 : -1));
+
+    const joints = {
+      pelvis, chest, neck, head,
+      lShoulder, lElbow: leftArm.mid, lHand: leftArm.end,
+      rShoulder, rElbow: rightArm.mid, rHand: rightArm.end,
+      lHip, lKnee: leftLeg.mid, lFoot: leftLeg.end,
+      rHip, rKnee: rightLeg.mid, rFoot: rightLeg.end,
+    };
+
+    const bones = {
+      torso: Math.atan2(chest.y - pelvis.y, chest.x - pelvis.x),
+      neck: Math.atan2(neck.y - chest.y, neck.x - chest.x),
+      head: Math.atan2(head.y - neck.y, head.x - neck.x),
+      lUpperArm: leftArm.angle1,
+      lForearm: leftArm.angle2,
+      rUpperArm: rightArm.angle1,
+      rForearm: rightArm.angle2,
+      lThigh: leftLeg.angle1,
+      lShin: leftLeg.angle2,
+      rThigh: rightLeg.angle1,
+      rShin: rightLeg.angle2,
+    };
+    return { joints, bones, centerX, groundY, cycle };
+  }
+
+  function partAngleForPose(part, pose) {
+    const k = part.kind;
+    if (k === 'torso' || k === 'pelvis') return pose.bones.torso;
+    if (k === 'neck') return pose.bones.neck;
+    if (k === 'head') return pose.bones.head;
+    if (k === 'lUpperArm') return pose.bones.lUpperArm;
+    if (k === 'lForearm') return pose.bones.lForearm;
+    if (k === 'rUpperArm') return pose.bones.rUpperArm;
+    if (k === 'rForearm') return pose.bones.rForearm;
+    if (k === 'lThigh') return pose.bones.lThigh;
+    if (k === 'lShin') return pose.bones.lShin;
+    if (k === 'rThigh') return pose.bones.rThigh;
+    if (k === 'rShin') return pose.bones.rShin;
+    if (part.proxJoint && part.distJoint && pose.joints[part.proxJoint] && pose.joints[part.distJoint]) {
+      const a = pose.joints[part.proxJoint], b = pose.joints[part.distJoint];
+      return Math.atan2(b.y - a.y, b.x - a.x);
+    }
+    if (part.proxJoint && pose.joints[part.proxJoint] && state.joints[part.proxJoint]) {
+      const parent = state.joints[part.proxJoint];
+      return 0 + (state.facing === 'right' ? 0 : Math.PI);
+    }
+    return 0;
+  }
+
+  function partScaleForPose(part, pose) {
+    const kind = part.kind || '';
+    const a = pose.joints[part.proxJoint];
+    const b = pose.joints[part.distJoint];
+    const targetLen = (a && b) ? Math.hypot(b.x - a.x, b.y - a.y) : null;
+    if (!targetLen || !part.sourceLength) return 1;
+    if (/Torso|Pelvis|Head|Neck|Arm|Forearm|Leg|Thigh|Shin/i.test(kind)) return targetLen / Math.max(1, part.sourceLength);
+    return 1;
+  }
+
+  function sortPartsForDraw() {
+    return [...state.parts].filter(p => p.visible && p.artCanvas).sort((a, b) => (a.depth || 0) - (b.depth || 0));
+  }
+
+  function drawPreview(ts) {
+    const rect = makeCanvasSize(previewCanvas, pCtx);
+    pCtx.clearRect(0, 0, rect.w, rect.h);
+    const bg = pCtx.createLinearGradient(0, 0, 0, rect.h);
+    bg.addColorStop(0, '#1b2633');
+    bg.addColorStop(1, '#0b1016');
+    pCtx.fillStyle = bg;
+    pCtx.fillRect(0, 0, rect.w, rect.h);
+
+    const groundY = rect.h * 0.82;
+    pCtx.save();
+    pCtx.fillStyle = 'rgba(255,255,255,0.04)';
+    pCtx.fillRect(0, groundY, rect.w, rect.h - groundY);
+    pCtx.strokeStyle = 'rgba(109,201,255,0.25)';
+    pCtx.lineWidth = 2;
+    pCtx.beginPath(); pCtx.moveTo(0, groundY + 0.5); pCtx.lineTo(rect.w, groundY + 0.5); pCtx.stroke();
+    pCtx.restore();
+
+    if (!state.image || !state.parts.length) {
+      pCtx.save();
+      pCtx.fillStyle = 'rgba(255,255,255,.12)';
+      pCtx.textAlign = 'center';
+      pCtx.font = '600 20px Inter, sans-serif';
+      pCtx.fillText('Add a rig and assign masks to see the walk preview', rect.w / 2, rect.h / 2 - 8);
+      pCtx.font = '13px Inter, sans-serif';
+      pCtx.fillText('This version uses cutout layers + bones, not mesh warping.', rect.w / 2, rect.h / 2 + 16);
+      pCtx.restore();
+      return;
+    }
+
+    const pose = poseAt(state.time);
+    const parts = sortPartsForDraw();
+    // Layer order tuned for side-scroller overlap.
+    const nearFront = state.facing === 'right';
+    const drawOrder = [];
+    const byKind = (k) => parts.filter(p => p.kind === k);
+    const torsoParts = parts.filter(p => /torso|pelvis|neck/i.test(p.kind));
+    const headParts = parts.filter(p => /head|hair/i.test(p.kind));
+    const leftBack = parts.filter(p => ['lThigh','lShin','lUpperArm','lForearm'].includes(p.kind));
+    const rightBack = parts.filter(p => ['rThigh','rShin','rUpperArm','rForearm'].includes(p.kind));
+
+    if (nearFront) {
+      drawOrder.push(...byKind('lThigh'), ...byKind('lShin'), ...byKind('lUpperArm'), ...byKind('lForearm'));
+      drawOrder.push(...torsoParts);
+      drawOrder.push(...byKind('rUpperArm'), ...byKind('rForearm'), ...headParts);
+      drawOrder.push(...byKind('rThigh'), ...byKind('rShin'));
     } else {
-      const out = new Uint8Array(state.artW * state.artH);
-      for (let i = 0; i < out.length; i++) out[i] = 1;
-      writeMaskBits(out);
-      autoRigFromMask();
+      drawOrder.push(...byKind('rThigh'), ...byKind('rShin'), ...byKind('rUpperArm'), ...byKind('rForearm'));
+      drawOrder.push(...torsoParts);
+      drawOrder.push(...byKind('lUpperArm'), ...byKind('lForearm'), ...headParts);
+      drawOrder.push(...byKind('lThigh'), ...byKind('lShin'));
+    }
+    // Add anything not handled.
+    for (const part of parts) if (!drawOrder.includes(part)) drawOrder.push(part);
+
+    // Optional silhouette shadow.
+    pCtx.save();
+    pCtx.fillStyle = 'rgba(0,0,0,0.20)';
+    pCtx.beginPath(); pCtx.ellipse(pose.centerX, groundY + 5, 120, 22, 0, 0, TAU); pCtx.fill();
+    pCtx.restore();
+
+    for (const part of drawOrder) {
+      if (!part.visible || !part.artCanvas || !part.proxJoint) continue;
+      const anchor = pose.joints[part.proxJoint];
+      if (!anchor) continue;
+      const angle = partAngleForPose(part, pose);
+      const scale = partScaleForPose(part, pose);
+      const pivot = part.pivotSource || state.joints[part.proxJoint] || { x: 0, y: 0 };
+      const localPivotX = (part.artRect ? pivot.x - part.artRect.x : 0);
+      const localPivotY = (part.artRect ? pivot.y - part.artRect.y : 0);
+      pCtx.save();
+      pCtx.translate(anchor.x, anchor.y);
+      pCtx.rotate(angle);
+      pCtx.scale(scale, scale);
+      pCtx.drawImage(part.artCanvas, -localPivotX, -localPivotY);
+      pCtx.restore();
     }
 
-    state.imageLoaded = true;
-    state.playing = true;
-    ui.playBtn.textContent = 'Pause';
-    state.phase = 0;
-    state.lastTS = 0;
-    fitSourceToCanvas();
-    rebuildDerived();
-    setStatus(`Loaded ${state.artW}×${state.artH}`);
+    if (!state.playing) {
+      pCtx.save();
+      pCtx.fillStyle = 'rgba(255,201,107,.85)';
+      pCtx.font = '600 12px Inter, sans-serif';
+      pCtx.fillText('Paused', 14, 22);
+      pCtx.restore();
+    }
   }
 
-  function fileToImage(file) {
-    return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        resolve(img);
-      };
-      img.onerror = (e) => {
-        URL.revokeObjectURL(url);
-        reject(e);
-      };
-      img.src = url;
-    });
+  function exportStillPNG() {
+    const c = document.createElement('canvas');
+    const rect = previewCanvas.getBoundingClientRect();
+    c.width = previewCanvas.width;
+    c.height = previewCanvas.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(previewCanvas, 0, 0);
+    const a = document.createElement('a');
+    a.download = 'walk-preview.png';
+    a.href = c.toDataURL('image/png');
+    a.click();
   }
 
-  function demoImage() {
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="760" height="900" viewBox="0 0 760 900">
-        <rect width="100%" height="100%" fill="none"/>
-        <defs>
-          <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#ffd7a8"/>
-            <stop offset="1" stop-color="#ba7c4c"/>
-          </linearGradient>
-          <linearGradient id="cloth" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#5ea7ff"/>
-            <stop offset="1" stop-color="#2450b6"/>
-          </linearGradient>
-        </defs>
-        <ellipse cx="410" cy="820" rx="120" ry="28" fill="rgba(0,0,0,0.18)"/>
-        <circle cx="380" cy="150" r="72" fill="url(#body)"/>
-        <path d="M322 132c14-54 47-79 77-79 41 0 70 29 82 70-17 9-37 14-58 14-23 0-45-7-68-7-10 0-21 1-33 2z" fill="#241a28"/>
-        <ellipse cx="355" cy="145" rx="7" ry="9" fill="#1a1a1a"/>
-        <ellipse cx="407" cy="145" rx="7" ry="9" fill="#1a1a1a"/>
-        <path d="M376 168c14 12 28 12 42 0" fill="none" stroke="#7c4230" stroke-width="6" stroke-linecap="round"/>
-        <path d="M310 224c0-44 27-74 70-74 44 0 69 25 69 70v72h-139z" fill="url(#cloth)"/>
-        <path d="M312 236c-35 18-61 48-80 100-10 28 2 42 16 49 17 8 28 1 38-22 17-39 33-61 53-77z" fill="url(#body)"/>
-        <path d="M448 236c32 18 57 49 78 102 11 28 0 44-14 51-17 8-28 0-40-24-16-36-31-60-50-77z" fill="url(#body)"/>
-        <path d="M336 300c-34 14-54 40-60 79-4 23 8 38 30 42 20 3 30-11 38-31 11-31 23-49 41-60z" fill="url(#body)"/>
-        <path d="M426 300c36 13 58 39 64 78 4 23-8 39-31 42-20 3-30-11-40-31-12-29-24-48-41-60z" fill="url(#body)"/>
-        <path d="M349 425c-20 65-39 133-47 210-2 15 15 31 35 31 22 0 35-16 40-33 16-58 31-124 45-206z" fill="#35415f"/>
-        <path d="M430 425c18 65 38 133 46 209 2 15-15 31-35 31-22 0-35-16-40-33-14-59-28-123-42-205z" fill="#35415f"/>
-        <path d="M343 644c-13 48-17 77-17 107 0 18 15 31 34 31 21 0 33-15 37-33 7-36 17-78 28-118z" fill="#2d2033"/>
-        <path d="M419 644c14 48 18 77 18 107 0 18-15 31-34 31-21 0-33-15-37-33-8-36-18-78-29-118z" fill="#2d2033"/>
-        <path d="M292 286l-70 90" stroke="#ba7c4c" stroke-width="36" stroke-linecap="round"/>
-        <path d="M468 286l79 84" stroke="#ba7c4c" stroke-width="36" stroke-linecap="round"/>
-        <path d="M232 379l-25 118" stroke="#ba7c4c" stroke-width="28" stroke-linecap="round"/>
-        <path d="M548 370l24 118" stroke="#ba7c4c" stroke-width="28" stroke-linecap="round"/>
-        <path d="M203 499l-22 28" stroke="#ba7c4c" stroke-width="24" stroke-linecap="round"/>
-        <path d="M574 490l22 27" stroke="#ba7c4c" stroke-width="24" stroke-linecap="round"/>
-      </svg>`;
-    const img = new Image();
-    img.onload = () => loadImageFromSource(img);
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-  }
-
-  function resetRig() {
-    if (!state.artW || !state.artH) return;
-    autoRigFromMask();
-    rebuildDerived();
-    setStatus('Rig reset');
-  }
-
-  function updateUIFromState() {
-    ui.facingSelect.value = String(state.facing);
-    ui.toolSelect.value = state.tool;
-    ui.maskModeSelect.value = state.maskMode;
-    ui.wandRange.value = String(state.wandTol);
-    ui.featherRange.value = String(state.feather);
-    ui.zoomRange.value = String(state.sourceZoom);
-    ui.speedRange.value = String(state.speed);
-    ui.strideRange.value = String(state.stride);
-    ui.bounceRange.value = String(state.bounce);
-    ui.leanRange.value = String(state.lean);
-    ui.armRange.value = String(state.armSwing);
-    ui.showMaskToggle.checked = state.showMask;
-    ui.showRigToggle.checked = state.showRig;
-    ui.playBtn.textContent = state.playing ? 'Pause' : 'Play';
-  }
-
-  function pointerCanvasCoords(evt, canvas) {
-    const rect = canvas.getBoundingClientRect();
-    return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+  function startRecording() {
+    if (state.recording) {
+      state.recorder?.stop();
+      return;
+    }
+    const stream = previewCanvas.captureStream(60);
+    let mime = 'video/webm';
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) mime = 'video/webm;codecs=vp9';
+    else if (window.MediaRecorder && MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) mime = 'video/webm;codecs=vp8';
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+    state.recorder = rec;
+    state.recorderChunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) state.recorderChunks.push(e.data); };
+    rec.onstop = () => {
+      const blob = new Blob(state.recorderChunks, { type: rec.mimeType || 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'walk-preview.webm';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      state.recording = false;
+      ui.recordBtn.textContent = 'Record';
+    };
+    rec.start();
+    state.recording = true;
+    ui.recordBtn.textContent = 'Stop';
+    setTimeout(() => { if (state.recording) rec.stop(); }, 5000);
   }
 
   function onSourcePointerDown(evt) {
-    if (!state.imageLoaded) return;
-    const p = sourcePointerPosition(evt);
-    const tool = state.tool;
-    const lay = sourceLayout();
-    const art = screenToArt(p, lay);
-
-    if (tool === 'joints') {
-      const hit = hitJoint(p);
+    if (!state.image) return;
+    const pos = getCanvasPoint(evt, sourceCanvas);
+    if (state.placePivotPartId) {
+      const part = partById(state.placePivotPartId);
+      if (part) {
+        part.pivotSource = screenToImage(pos);
+        part.pivotMode = 'custom';
+        state.placePivotPartId = null;
+        rebuildPartArt(part);
+        setBadge(`Pivot placed for ${part.name}.`);
+        state.needsSourceRedraw = true;
+      }
+      return;
+    }
+    if (state.tool === 'pan') {
+      state.panning = true;
+      state.panStart = { x: pos.x, y: pos.y, panX: state.sourcePanX, panY: state.sourcePanY };
+      sourceCanvas.setPointerCapture(evt.pointerId);
+      return;
+    }
+    if (state.tool === 'joint') {
+      const hit = sourceHitJoint(pos);
       if (hit) {
         state.dragJoint = hit;
-        evt.preventDefault();
+        state.selectedJoint = hit;
         sourceCanvas.setPointerCapture(evt.pointerId);
-        return;
+        setBadge(`Dragging joint ${hit}.`);
+      } else {
+        const imgPt = screenToImage(pos);
+        const closest = nearestJoint(imgPt, 26 / (state.sourceLayout?.scale || 1));
+        if (closest) state.selectedJoint = closest;
       }
-      state.isPanning = true;
-      state.dragOffset = { x: p.x, y: p.y };
-      sourceCanvas.setPointerCapture(evt.pointerId);
+      state.needsSourceRedraw = true;
       return;
     }
-
-    if (tool === 'wand') {
-      floodFillMask(art.x | 0, art.y | 0, state.wandTol, state.maskMode);
-      return;
-    }
-
-    if (tool === 'lasso') {
-      state.lasso = [p];
+    if (state.tool === 'lasso') {
       state.drawingLasso = true;
+      state.selectionPath = [screenToImage(pos)];
       sourceCanvas.setPointerCapture(evt.pointerId);
+      state.needsSourceRedraw = true;
       return;
     }
-
-    if (tool === 'erase') {
-      floodFillMask(art.x | 0, art.y | 0, state.wandTol, 'subtract');
+    if (state.tool === 'wand') {
+      const imgPt = screenToImage(pos);
+      const mask = floodFillMask(imgPt.x, imgPt.y, Number(ui.wandRange.value));
+      if (mask) {
+        const mode = state.selectionMode;
+        state.selectionMask = combineMasks(state.selectionMask, mask, mode);
+        state.needsSourceRedraw = true;
+        setBadge('Wand selection created. Assign it to the active part.');
+      }
+      return;
     }
   }
 
+  function nearestJoint(imgPt, maxDist) {
+    let best = null; let bestD = maxDist;
+    for (const name of JOINTS) {
+      const p = state.joints[name]; if (!p) continue;
+      const d = Math.hypot(imgPt.x - p.x, imgPt.y - p.y);
+      if (d < bestD) { best = name; bestD = d; }
+    }
+    return best;
+  }
+
   function onSourcePointerMove(evt) {
-    if (!state.imageLoaded) return;
-    const p = sourcePointerPosition(evt);
-    if (state.dragJoint) {
-      const lay = sourceLayout();
-      const art = screenToArt(p, lay);
-      state.restJoints[state.dragJoint] = point(art.x, art.y);
-      state.poseJoints[state.dragJoint] = point(art.x, art.y);
-      rebuildBones();
-      buildMesh();
-      rebuildDerived();
-      state.sourceNeedsRedraw = true;
-      state.previewNeedsRedraw = true;
+    if (!state.image) return;
+    const pos = getCanvasPoint(evt, sourceCanvas);
+    if (state.panning && state.panStart) {
+      state.sourcePanX = state.panStart.panX + (pos.x - state.panStart.x);
+      state.sourcePanY = state.panStart.panY + (pos.y - state.panStart.y);
+      state.needsSourceRedraw = true;
       return;
     }
-    if (state.isPanning) {
-      state.sourcePanX += p.x - state.dragOffset.x;
-      state.sourcePanY += p.y - state.dragOffset.y;
-      state.dragOffset = p;
-      state.sourceNeedsRedraw = true;
+    if (state.dragJoint) {
+      setJoint(state.dragJoint, screenToImage(pos));
       return;
     }
     if (state.drawingLasso) {
-      const last = state.lasso[state.lasso.length - 1];
-      if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 2) state.lasso.push(p);
-      state.sourceNeedsRedraw = true;
+      const p = screenToImage(pos);
+      const last = state.selectionPath[state.selectionPath.length - 1];
+      if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 2) {
+        state.selectionPath.push(p);
+        state.needsSourceRedraw = true;
+      }
     }
   }
 
   function onSourcePointerUp(evt) {
-    if (state.dragJoint) {
-      state.dragJoint = null;
-      sourceCanvas.releasePointerCapture(evt.pointerId);
-      return;
-    }
-    if (state.isPanning) {
-      state.isPanning = false;
-      sourceCanvas.releasePointerCapture(evt.pointerId);
-      return;
-    }
+    if (state.panning) state.panning = false;
+    if (state.dragJoint) state.dragJoint = null;
     if (state.drawingLasso) {
       state.drawingLasso = false;
-      sourceCanvas.releasePointerCapture(evt.pointerId);
-      applyLasso(state.lasso.slice(), state.maskMode);
-      state.lasso = [];
-      return;
+      updateSelectionMaskFromPath();
     }
+    state.panStart = null;
   }
 
-  function onSourceWheel(evt) {
-    if (!state.imageLoaded) return;
-    evt.preventDefault();
+  function zoomAtPointer(factor, clientX, clientY) {
+    if (!state.image) return;
     const rect = sourceCanvas.getBoundingClientRect();
-    const pt = { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
-    const oldLayout = sourceLayout();
-    const art = screenToArt(pt, oldLayout);
-    const delta = Math.sign(evt.deltaY) * -0.10;
-    state.sourceZoom = clamp(state.sourceZoom * (1 + delta), 0.25, 4);
+    const before = { x: clientX - rect.left, y: clientY - rect.top };
+    const imgPt = screenToImage(before);
+    state.sourceZoom = clamp(state.sourceZoom * factor, 0.5, 4);
     ui.zoomRange.value = String(state.sourceZoom);
-    const newLayout = sourceLayout();
-    const projected = artToScreen(art, newLayout);
-    state.sourcePanX += pt.x - projected.x;
-    state.sourcePanY += pt.y - projected.y;
-    state.sourceNeedsRedraw = true;
+    const lay = sourceLayout();
+    const newScreen = { x: lay.x + imgPt.x * lay.scale, y: lay.y + imgPt.y * lay.scale };
+    state.sourcePanX += before.x - newScreen.x;
+    state.sourcePanY += before.y - newScreen.y;
+    state.needsSourceRedraw = true;
   }
 
-  function bindUI() {
-    ui.fileInput.addEventListener('change', async () => {
-      const file = ui.fileInput.files && ui.fileInput.files[0];
-      if (!file) return;
-      const img = await fileToImage(file);
-      loadImageFromSource(img);
+  function setupEvents() {
+    window.addEventListener('resize', () => {
+      state.needsSourceRedraw = true;
+      state.needsPreviewRedraw = true;
     });
 
-    ui.demoBtn.addEventListener('click', () => demoImage());
-    ui.autoMaskBtn.addEventListener('click', () => autoMask());
-    ui.autoRigBtn.addEventListener('click', () => autoRigFromMask());
-    ui.fitBtn.addEventListener('click', () => fitSourceToCanvas());
-    ui.resetBtn.addEventListener('click', () => resetRig());
-    ui.playBtn.addEventListener('click', () => {
-      state.playing = !state.playing;
-      ui.playBtn.textContent = state.playing ? 'Pause' : 'Play';
-      state.previewNeedsRedraw = true;
-    });
-
-    ui.facingSelect.addEventListener('change', () => {
-      state.facing = parseInt(ui.facingSelect.value, 10) || 1;
-      autoRigFromMask();
-      rebuildDerived();
-    });
-
-    ui.toolSelect.addEventListener('change', () => {
-      state.tool = ui.toolSelect.value;
-      state.sourceNeedsRedraw = true;
-    });
-
-    ui.maskModeSelect.addEventListener('change', () => {
-      state.maskMode = ui.maskModeSelect.value;
-    });
-
-    ui.wandRange.addEventListener('input', () => {
-      state.wandTol = parseInt(ui.wandRange.value, 10);
-    });
-    ui.featherRange.addEventListener('input', () => {
-      state.feather = parseFloat(ui.featherRange.value);
-      if (state.imageLoaded) rebuildDerived();
-    });
-    ui.zoomRange.addEventListener('input', () => {
-      state.sourceZoom = parseFloat(ui.zoomRange.value);
-      state.sourceNeedsRedraw = true;
-    });
-    ui.speedRange.addEventListener('input', () => state.speed = parseFloat(ui.speedRange.value));
-    ui.strideRange.addEventListener('input', () => { state.stride = parseFloat(ui.strideRange.value); });
-    ui.bounceRange.addEventListener('input', () => { state.bounce = parseFloat(ui.bounceRange.value); });
-    ui.leanRange.addEventListener('input', () => { state.lean = parseFloat(ui.leanRange.value); });
-    ui.armRange.addEventListener('input', () => { state.armSwing = parseFloat(ui.armRange.value); });
-    ui.showMaskToggle.addEventListener('change', () => { state.showMask = ui.showMaskToggle.checked; state.sourceNeedsRedraw = true; });
-    ui.showRigToggle.addEventListener('change', () => { state.showRig = ui.showRigToggle.checked; state.sourceNeedsRedraw = true; state.previewNeedsRedraw = true; });
+    sourceCanvas.addEventListener('wheel', (e) => {
+      if (!state.image) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.08 : 0.92;
+      zoomAtPointer(factor, e.clientX, e.clientY);
+    }, { passive: false });
 
     sourceCanvas.addEventListener('pointerdown', onSourcePointerDown);
     sourceCanvas.addEventListener('pointermove', onSourcePointerMove);
     sourceCanvas.addEventListener('pointerup', onSourcePointerUp);
     sourceCanvas.addEventListener('pointercancel', onSourcePointerUp);
-    sourceCanvas.addEventListener('wheel', onSourceWheel, { passive: false });
 
-    window.addEventListener('resize', () => {
-      resizeDisplayCanvas(sourceCanvas, sCtx);
-      resizeDisplayCanvas(previewCanvas, pCtx);
-      fitSourceToCanvas();
-      state.sourceNeedsRedraw = true;
-      state.previewNeedsRedraw = true;
+    ui.fileInput.addEventListener('change', async (e) => {
+      const f = e.target.files?.[0];
+      if (f) await loadImageFile(f);
     });
+
+    ui.demoBtn.addEventListener('click', async () => {
+      const img = await loadImageFromSrc(createDemoImage());
+      setImage(img);
+      state.demoLoaded = true;
+      if (!state.parts.length) buildStarterRig();
+      setBadge('Demo image loaded. You can replace it with your own character image anytime.');
+    });
+
+    ui.fitBtn.addEventListener('click', fitSource);
+
+    ui.presetBtn.addEventListener('click', () => {
+      buildStarterRig();
+    });
+    ui.clearPartsBtn.addEventListener('click', clearParts);
+
+    ui.playBtn.addEventListener('click', () => {
+      state.playing = !state.playing;
+      ui.playBtn.textContent = state.playing ? 'Pause' : 'Play';
+      if (state.playing) state.lastTs = performance.now();
+    });
+    ui.recordBtn.addEventListener('click', startRecording);
+
+    ui.facingSelect.addEventListener('change', () => {
+      state.facing = ui.facingSelect.value;
+      bakeDefaultJoints();
+      state.needsSourceRedraw = true;
+      state.needsPreviewRedraw = true;
+    });
+
+    document.querySelectorAll('input[name="tool"]').forEach(r => {
+      r.addEventListener('change', () => {
+        if (r.checked) state.tool = r.value;
+      });
+    });
+
+    ui.selectionModeSelect.addEventListener('change', () => state.selectionMode = ui.selectionModeSelect.value);
+    ui.wandRange.addEventListener('input', () => state.wandTol = Number(ui.wandRange.value));
+    ui.featherRange.addEventListener('input', () => { state.feather = Number(ui.featherRange.value); state.needsSourceRedraw = true; });
+    ui.zoomRange.addEventListener('input', () => { state.sourceZoom = Number(ui.zoomRange.value); state.needsSourceRedraw = true; });
+
+    ui.speedRange.addEventListener('input', () => state.speed = Number(ui.speedRange.value));
+    ui.strideRange.addEventListener('input', () => state.stride = Number(ui.strideRange.value));
+    ui.bounceRange.addEventListener('input', () => state.bounce = Number(ui.bounceRange.value));
+    ui.leanRange.addEventListener('input', () => state.lean = Number(ui.leanRange.value));
+    ui.travelRange.addEventListener('input', () => state.travel = Number(ui.travelRange.value));
+    ui.armRange.addEventListener('input', () => state.armSwing = Number(ui.armRange.value));
+
+    ui.addPartBtn.addEventListener('click', () => addPart(ui.partPresetSelect.value));
+    ui.assignMaskBtn.addEventListener('click', () => {
+      const part = selectedPart();
+      if (!part) return setBadge('Select a part first.');
+      applySelectionToPart(part, state.selectionMode);
+      setBadge(`Assigned selection to ${part.name}.`);
+      clearSelection();
+      renderPartsList();
+    });
+
+    ui.commitSelectionBtn.addEventListener('click', () => {
+      const part = selectedPart();
+      if (!part) return setBadge('Select a part first.');
+      applySelectionToPart(part, state.selectionMode);
+      clearSelection();
+      renderPartsList();
+      setBadge(`Selection assigned to ${part.name}.`);
+    });
+
+    ui.invertSelectionBtn.addEventListener('click', () => {
+      state.selectionMask = invertMask(state.selectionMask);
+      state.needsSourceRedraw = true;
+    });
+    ui.clearSelectionBtn.addEventListener('click', clearSelection);
+
+    ui.resetRigBtn.addEventListener('click', () => {
+      bakeDefaultJoints();
+      for (const part of state.parts) {
+        part.pivotSource = null;
+        rebuildPartArt(part);
+      }
+      setBadge('Rig reset to default joint placement.');
+    });
+
+    ui.exportStillBtn.addEventListener('click', exportStillPNG);
   }
 
-  function drawFrame(ts) {
-    if (!state.lastTS) state.lastTS = ts;
-    const dt = Math.min(0.05, (ts - state.lastTS) / 1000);
-    state.lastTS = ts;
-
-    if (state.playing && state.imageLoaded) {
-      state.phase = (state.phase + dt * state.speed * 0.55) % 1;
-      updatePose(dt);
-      state.previewNeedsRedraw = true;
-    } else if (state.imageLoaded) {
-      // Keep pose in sync when paused or joints move.
-      updatePose(0);
+  function ensurePresetOptions() {
+    ui.partPresetSelect.innerHTML = '';
+    for (const [key, preset] of Object.entries(PART_PRESETS)) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = preset.label;
+      ui.partPresetSelect.appendChild(opt);
     }
-
-    if (state.sourceNeedsRedraw) {
-      drawSource();
-      state.sourceNeedsRedraw = false;
-    }
-    if (state.previewNeedsRedraw) {
-      renderPreview();
-      state.previewNeedsRedraw = false;
-    }
-
-    requestAnimationFrame(drawFrame);
   }
 
-  function init() {
-    resizeDisplayCanvas(sourceCanvas, sCtx);
-    resizeDisplayCanvas(previewCanvas, pCtx);
-    bindUI();
-    updateUIFromState();
-    demoImage();
-    requestAnimationFrame(drawFrame);
-    setStatus('Ready');
+  function frame(ts) {
+    if (state.playing) {
+      if (!state.lastTs) state.lastTs = ts;
+      const dt = Math.min(0.05, (ts - state.lastTs) / 1000);
+      state.lastTs = ts;
+      state.time += dt;
+      state.needsPreviewRedraw = true;
+    } else {
+      state.lastTs = ts;
+    }
+    if (state.needsSourceRedraw) { drawSource(); state.needsSourceRedraw = false; }
+    if (state.needsPreviewRedraw) { drawPreview(ts); state.needsPreviewRedraw = false; }
+    requestAnimationFrame(frame);
   }
 
-  init();
+  async function boot() {
+    ensurePresetOptions();
+    setupEvents();
+    state.sourceZoom = 1;
+    ui.zoomRange.value = '1';
+    state.speed = Number(ui.speedRange.value);
+    state.stride = Number(ui.strideRange.value);
+    state.bounce = Number(ui.bounceRange.value);
+    state.lean = Number(ui.leanRange.value);
+    state.travel = Number(ui.travelRange.value);
+    state.armSwing = Number(ui.armRange.value);
+    state.wandTol = Number(ui.wandRange.value);
+    state.feather = Number(ui.featherRange.value);
+    state.selectionMode = ui.selectionModeSelect.value;
+    state.facing = ui.facingSelect.value;
+    setBadge('Import a character image or load the demo.');
+    setPreviewBadge('Build masks for parts, then the walk will update here.');
+    buildStarterRig();
+    requestAnimationFrame(frame);
+  }
+
+  boot();
 })();

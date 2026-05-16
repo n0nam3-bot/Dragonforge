@@ -2,123 +2,142 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-  <title>SideScroller Mesh Rig Animator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SideScroller Puppet Studio</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
-    <header class="toolbar">
-      <div class="row row-primary">
-        <div class="brand">
-          <strong>SideScroller Mesh Rig Animator</strong>
-          <span>Whole-character mesh deformation for natural walk cycles</span>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">SS</div>
+      <div>
+        <h1>SideScroller Puppet Studio</h1>
+        <p>Free, static, GitHub Pages-friendly 2D walk-cycle rig editor</p>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <label class="btn file-btn">
+        Import Image
+        <input id="fileInput" type="file" accept="image/*" />
+      </label>
+      <button id="demoBtn" class="btn">Load Demo</button>
+      <button id="fitBtn" class="btn">Fit Image</button>
+      <button id="presetBtn" class="btn">Add Standard Rig</button>
+      <button id="clearPartsBtn" class="btn ghost">Clear Parts</button>
+      <button id="playBtn" class="btn">Pause</button>
+      <button id="recordBtn" class="btn ghost">Record</button>
+      <label class="mini-field">Facing
+        <select id="facingSelect">
+          <option value="right">Right</option>
+          <option value="left">Left</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Source Image</h2>
+        <div class="head-tools">
+          <label class="tool-pill"><input type="radio" name="tool" value="pan" checked>Pan</label>
+          <label class="tool-pill"><input type="radio" name="tool" value="lasso">Lasso</label>
+          <label class="tool-pill"><input type="radio" name="tool" value="wand">Wand</label>
+          <label class="tool-pill"><input type="radio" name="tool" value="joint">Joints</label>
         </div>
-
-        <label class="file-btn">
-          <span>Import image</span>
-          <input id="fileInput" type="file" accept="image/*" />
-        </label>
-
-        <button id="demoBtn">Load demo</button>
-        <button id="autoMaskBtn" class="primary">Auto mask</button>
-        <button id="autoRigBtn" class="primary">Auto rig</button>
-        <button id="fitBtn">Fit source</button>
-        <button id="resetBtn" class="warn">Reset rig</button>
-        <button id="playBtn" class="good">Pause</button>
       </div>
 
-      <div class="row row-controls">
-        <label class="field">Facing
-          <select id="facingSelect">
-            <option value="1">Right</option>
-            <option value="-1">Left</option>
-          </select>
-        </label>
-
-        <label class="field">Tool
-          <select id="toolSelect">
-            <option value="joints">Move joints</option>
-            <option value="lasso">Lasso</option>
-            <option value="wand">Magic wand</option>
-            <option value="erase">Erase mask</option>
-          </select>
-        </label>
-
-        <label class="field">Mode
-          <select id="maskModeSelect">
-            <option value="add">Add</option>
-            <option value="subtract">Subtract</option>
-          </select>
-        </label>
-
-        <label class="field">Wand tolerance
-          <input id="wandRange" type="range" min="4" max="120" step="1" value="30" />
-        </label>
-
-        <label class="field">Feather
-          <input id="featherRange" type="range" min="0" max="10" step="0.25" value="1.5" />
-        </label>
-
-        <label class="field">Zoom
-          <input id="zoomRange" type="range" min="0.25" max="4" step="0.01" value="1" />
-        </label>
-
-        <label class="field">Speed
-          <input id="speedRange" type="range" min="0.2" max="2.2" step="0.01" value="1" />
-        </label>
-
-        <label class="field">Stride
-          <input id="strideRange" type="range" min="0.02" max="0.24" step="0.005" value="0.12" />
-        </label>
-
-        <label class="field">Bounce
-          <input id="bounceRange" type="range" min="0" max="0.08" step="0.002" value="0.022" />
-        </label>
-
-        <label class="field">Lean
-          <input id="leanRange" type="range" min="0" max="0.22" step="0.005" value="0.10" />
-        </label>
-
-        <label class="field">Arm swing
-          <input id="armRange" type="range" min="0.2" max="1.8" step="0.02" value="1.00" />
-        </label>
-
-        <label class="pill"><input id="showMaskToggle" type="checkbox" checked /> Show mask</label>
-        <label class="pill"><input id="showRigToggle" type="checkbox" checked /> Show rig</label>
+      <div class="canvas-shell">
+        <canvas id="sourceCanvas"></canvas>
+        <div class="canvas-badge" id="sourceBadge">Load an image to begin</div>
       </div>
-    </header>
 
-    <main class="workspace">
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <h2>Source editor</h2>
-            <p>Wheel to zoom • drag empty space to pan • drag joints in Move joints mode • lasso / wand the full character silhouette</p>
+      <div class="footer-grid">
+        <div class="card compact">
+          <div class="card-title">Selection</div>
+          <div class="row wrap">
+            <button id="commitSelectionBtn" class="btn small">Assign to Part</button>
+            <button id="invertSelectionBtn" class="btn small ghost">Invert</button>
+            <button id="clearSelectionBtn" class="btn small ghost">Clear</button>
           </div>
-          <div class="badge" id="sourceBadge">No image loaded</div>
+          <div class="slim-row">
+            <label>Mode
+              <select id="selectionModeSelect">
+                <option value="replace">Replace</option>
+                <option value="add">Add</option>
+                <option value="subtract">Subtract</option>
+              </select>
+            </label>
+            <label>Tolerance
+              <input id="wandRange" type="range" min="4" max="90" value="26" />
+            </label>
+            <label>Feather
+              <input id="featherRange" type="range" min="0" max="12" value="3" />
+            </label>
+          </div>
+          <div class="slim-row">
+            <label>Zoom
+              <input id="zoomRange" type="range" min="0.5" max="4" step="0.01" value="1" />
+            </label>
+          </div>
         </div>
-        <div class="canvas-shell">
-          <canvas id="sourceCanvas"></canvas>
-          <div class="hint">Start with <strong>Auto mask</strong>, then refine the silhouette with <strong>Lasso</strong> or <strong>Magic wand</strong>. The preview is driven by a soft mesh, not box cutouts.</div>
-        </div>
-      </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <h2>Animated preview</h2>
-            <p>Soft mesh deformation with planted feet and side-scroller walk motion</p>
+        <div class="card compact parts-card">
+          <div class="card-title">Parts</div>
+          <div class="row wrap parts-actions">
+            <label class="mini-field">New part
+              <select id="partPresetSelect"></select>
+            </label>
+            <button id="addPartBtn" class="btn small">Add</button>
+            <button id="assignMaskBtn" class="btn small ghost">Use Selection</button>
           </div>
-          <div class="badge" id="previewBadge">Idle</div>
+          <div id="partsList" class="parts-list"></div>
         </div>
-        <div class="canvas-shell">
-          <canvas id="previewCanvas"></canvas>
-          <div class="hint">The character is animated from the silhouette mesh, which keeps motion smoother than sliced parts.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Walk Preview</h2>
+        <div class="head-tools">
+          <label class="mini-field">Speed <input id="speedRange" type="range" min="0" max="2.5" step="0.01" value="1" /></label>
+          <label class="mini-field">Stride <input id="strideRange" type="range" min="0" max="1" step="0.01" value="0.42" /></label>
+          <label class="mini-field">Bounce <input id="bounceRange" type="range" min="0" max="1" step="0.01" value="0.16" /></label>
+          <label class="mini-field">Lean <input id="leanRange" type="range" min="0" max="1" step="0.01" value="0.18" /></label>
         </div>
-      </section>
-    </main>
-  </div>
+      </div>
+
+      <div class="canvas-shell">
+        <canvas id="previewCanvas"></canvas>
+        <div class="canvas-badge" id="previewBadge">Rig the parts to see the walk</div>
+      </div>
+
+      <div class="footer-grid preview-footer">
+        <div class="card compact">
+          <div class="card-title">Rig Controls</div>
+          <div class="slim-row">
+            <label>Travel
+              <input id="travelRange" type="range" min="0" max="1" step="0.01" value="0.45" />
+            </label>
+            <label>Arm swing
+              <input id="armRange" type="range" min="0" max="1.5" step="0.01" value="1" />
+            </label>
+          </div>
+          <div class="row wrap">
+            <button id="resetRigBtn" class="btn small ghost">Reset Rig</button>
+            <button id="exportStillBtn" class="btn small ghost">Export PNG</button>
+          </div>
+        </div>
+
+        <div class="card compact">
+          <div class="card-title">How it works</div>
+          <p class="help-text">Use <b>Wand</b> for clean background separation, <b>Lasso</b> for manual outlines, then assign the selection to a part and bind its pivot to a joint. The preview uses layered cutouts and bone-driven walking — no mesh warping.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
   <script src="app.js"></script>
 </body>
 </html>

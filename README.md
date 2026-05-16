@@ -1,29 +1,25 @@
-# SideScroller Mesh Rig Animator
+# SideScroller Puppet Studio
 
-A browser-based side-scroller character animator that uses a **soft mesh over the whole silhouette** instead of slicing the sprite into boxes.
+A free, static, GitHub Pages-friendly 2D puppet rig editor for side-scroller characters.
 
 ## What it does
-- Import a character image directly in the browser.
-- Auto-remove the background when possible.
-- Refine the silhouette with **Lasso** or **Magic wand**.
-- Drag joints to fit the character.
-- Preview a planted-foot walk cycle with smooth mesh deformation.
-- Keep the source image and the preview side by side.
-- Zoom and pan the source canvas while editing.
+- Imports a character image directly in the browser
+- Keeps the source image and animation preview side by side
+- Lets you use **Lasso** or **Magic Wand** to build part masks
+- Uses draggable joints and cutout layers instead of mesh warping
+- Plays a layered walk cycle with planted-foot motion
+- Exports the preview as **PNG** or **WebM**
 
-## Controls
-- **Auto mask**: attempts a background removal pass.
-- **Auto rig**: places the joint rig around the current mask.
-- **Move joints**: drag joints to fit the pose.
-- **Lasso / Magic wand**: add or erase mask areas.
-- **Zoom**: source editor zoom.
-- **Facing**: flip the rig direction.
-- **Speed / Stride / Bounce / Lean / Arm swing**: walk-cycle tuning.
+## Recommended workflow
+1. Import your character image.
+2. Click **Add Standard Rig**.
+3. Pick a part such as torso, head, arm, thigh, or shin.
+4. Use **Lasso** or **Wand** to select the visible pixels for that part.
+5. Click **Assign to Part**.
+6. Click **Pivot** on the part, then click the source image where that part should rotate.
+7. Adjust facing, stride, bounce, travel, and arm swing.
 
 ## Notes
-- The app downscales very large imports for smoother browser performance.
-- A transparent PNG usually gives the cleanest results.
-- For busy backgrounds, use the wand or lasso to isolate the character before rigging.
-
-## Run
-Open `index.html` in a modern browser or publish the folder to GitHub Pages.
+- This is a single-page static app. It does not need a backend.
+- It runs on GitHub Pages because it uses only browser Canvas APIs.
+- For the cleanest results, use a character image with a simple background and clear limb separation.
