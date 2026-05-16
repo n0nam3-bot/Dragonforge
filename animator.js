@@ -1,318 +1,305 @@
-// animator.js — skeletal pose interpolation and rendering
-
-import { normalizeKind } from './bodyDetect.js';
+// animator.js — Puppet renderer
+// Uses ctx.save/translate/rotate/drawImage per part.
+// Draw order respects z-layering (back limbs behind torso, front limbs on top).
 
 export const POSES = [
-  { id: 'idle',   ico: '🫥', label: 'Idle' },
-  { id: 'walk',   ico: '🚶', label: 'Walk' },
-  { id: 'run',    ico: '🏃', label: 'Run' },
-  { id: 'jump',   ico: '⬆',  label: 'Jump' },
-  { id: 'attack', ico: '⚔',  label: 'Attack' },
-  { id: 'hurt',   ico: '💥',  label: 'Hurt' },
-  { id: 'crouch', ico: '🧎',  label: 'Crouch' },
-  { id: 'cast',   ico: '✨',  label: 'Cast' },
-  { id: 'die',    ico: '✖',  label: 'Die' },
+  { id:'idle',   label:'IDLE',   ico:'🧍' },
+  { id:'walk',   label:'WALK',   ico:'🚶' },
+  { id:'run',    label:'RUN',    ico:'🏃' },
+  { id:'jump',   label:'JUMP',   ico:'🦘' },
+  { id:'attack', label:'ATTACK', ico:'⚔️'  },
+  { id:'hurt',   label:'HURT',   ico:'💢' },
+  { id:'die',    label:'DIE',    ico:'💀' },
+  { id:'crouch', label:'CROUCH', ico:'🦆' },
+  { id:'cast',   label:'CAST',   ico:'✨' },
 ];
 
-const DEG = Math.PI / 180;
-const TAU = Math.PI * 2;
+const PI2     = Math.PI * 2;
+const DEG     = Math.PI / 180;
+const sin1    = t => Math.sin(t * PI2);
+const cos1    = t => Math.cos(t * PI2);
+const sin2    = t => Math.sin(t * PI2 * 2);
+const abs1    = t => Math.abs(sin1(t));
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const ease    = (t,p=2) => t<.5?Math.pow(t*2,p)/2:1-Math.pow((1-t)*2,p)/2;
 
-function sin1(t) { return Math.sin(t * TAU); }
-function cos1(t) { return Math.cos(t * TAU); }
-function abs1(t) { return Math.abs(Math.sin(t * TAU)); }
-function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-function ease(t, power = 2) { return Math.pow(clamp(t, 0, 1), power); }
-function lerp(a, b, t) { return a + (b - a) * t; }
-function rot(x, y, a) { const c = Math.cos(a), s = Math.sin(a); return { x: x * c - y * s, y: x * s + y * c }; }
-
-function kindOf(part) {
-  return normalizeKind(part.kind || part.label);
-}
-
-function sideOf(part) {
-  const k = `${part.kind || ''} ${part.label || ''}`.toLowerCase();
-  if (k.includes('left') || k.includes(' l') || /l$/.test(k)) return -1;
-  if (k.includes('right') || k.includes(' r') || /r$/.test(k)) return 1;
-  if (k.endsWith('l')) return -1;
-  if (k.endsWith('r')) return 1;
-  return 0;
-}
-
-function motionFor(part, pose, phase, scale, depth = 0) {
-  const kind = kindOf(part);
-  const side = sideOf(part) || 1;
-  const wave = sin1(phase);
-  const sway = sin1(phase + 0.25);
-  const bob = abs1(phase) * 3;
-
-  const base = { rot: 0, dx: 0, dy: 0 };
-
-  const subtle = {
-    rot: sway * DEG * 2.0 * (1 / (depth + 1)),
-    dx: 0,
-    dy: -bob * 0.2,
-  };
-
+// ── Pose definitions ──────────────────────────────────────────────────────────
+// H = character pixel height in dest canvas (after scaling)
+// Returns { order[], per-part: { rot, dx, dy }, globalDY, alpha? }
+export function getPoseTransforms(pose, t, H) {
   switch (pose) {
-    case 'idle':
-      if (kind === 'head') return { rot: sway * DEG * -2.0, dx: 0, dy: -bob * 0.35 };
-      if (kind === 'neck') return { rot: sway * DEG * -1.1, dx: 0, dy: -bob * 0.18 };
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: sway * DEG * 1.6, dx: 0, dy: bob * 0.12 };
-      if (kind === 'hair') return { rot: sway * DEG * -3.0, dx: 0, dy: -bob * 0.25 };
-      return subtle;
+
+    case 'idle': {
+      const bob  = sin1(t) * H * 0.008;
+      const sway = sin1(t) * 1.5 * DEG;
+      const arm  = sin1(t) * 3 * DEG;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','neck','head','hair'],
+        hair:  { rot: sway*2.2,    dx:0, dy:-bob },
+        head:  { rot: sway*0.5,    dx:0, dy:-bob },
+        neck:  { rot: sway*0.3,    dx:0, dy:-bob*0.8 },
+        torso: { rot: sway*0.2,    dx:0, dy:-bob*0.6 },
+        armL:  { rot: arm+5*DEG,   dx:0, dy:-bob*0.5 },
+        armR:  { rot:-arm-5*DEG,   dx:0, dy:-bob*0.5 },
+        hips:  { rot:-sway*0.1,    dx:0, dy: bob*0.3 },
+        legL:  { rot: sway*0.8,    dx:0, dy: bob*0.2 },
+        legR:  { rot:-sway*0.8,    dx:0, dy: bob*0.2 },
+        globalDY: bob * 0.3,
+      };
+    }
 
     case 'walk': {
-      const step = wave;
-      const leg = step * DEG * 34 * side;
-      const arm = -step * DEG * 26 * side;
-      const lowerLeg = Math.max(0, -step) * DEG * 14 * side;
-      const foot = Math.max(0, step) * DEG * 10 * side;
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: Math.sin(phase * TAU) * DEG * 4, dx: 0, dy: -bob * 0.15 };
-      if (kind === 'head') return { rot: -Math.sin(phase * TAU) * DEG * 3, dx: 0, dy: -bob * 0.45 };
-      if (kind === 'neck') return { rot: -Math.sin(phase * TAU) * DEG * 2, dx: 0, dy: -bob * 0.25 };
-      if (kind === 'upperLegL' || kind === 'upperLegR') return { rot: leg, dx: 0, dy: 0 };
-      if (kind === 'lowerLegL' || kind === 'lowerLegR') return { rot: leg * 0.35 + lowerLeg, dx: 0, dy: 0 };
-      if (kind === 'footL' || kind === 'footR') return { rot: foot, dx: 0, dy: 0 };
-      if (kind === 'upperArmL' || kind === 'upperArmR') return { rot: arm, dx: 0, dy: 0 };
-      if (kind === 'lowerArmL' || kind === 'lowerArmR') return { rot: arm * 0.42, dx: 0, dy: 0 };
-      if (kind === 'handL' || kind === 'handR') return { rot: arm * 0.15, dx: 0, dy: 0 };
-      if (kind === 'hair') return { rot: Math.sin(phase * TAU) * DEG * 8, dx: 0, dy: -bob * 0.25 };
-      return subtle;
+      // Proper alternating gait — legs 180° out of phase
+      // legL forward when sin>0, legR forward when sin<0
+      const legFwd  =  sin1(t) * 42 * DEG;
+      const legBck  = -sin1(t) * 42 * DEG;
+      const armFwd  = -sin1(t) * 34 * DEG;
+      const armBck  =  sin1(t) * 34 * DEG;
+      const bob     = abs1(t) * H * -0.028;
+      const hipRock = sin1(t) * 6 * DEG;
+      const lean    = 5 * DEG;
+      const hair    = sin1(t) * 10 * DEG;
+      // Lift only the swinging leg
+      const liftL   = Math.max(0,  sin1(t)) * H * -0.055;
+      const liftR   = Math.max(0, -sin1(t)) * H * -0.055;
+      const strdL   =  sin1(t) * H * 0.04;
+      const strdR   = -sin1(t) * H * 0.04;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','neck','head','hair'],
+        hair:  { rot: lean+hair,   dx:0,     dy: bob*0.4 },
+        head:  { rot: lean*0.5,    dx:0,     dy: bob*0.5 },
+        neck:  { rot: lean*0.4,    dx:0,     dy: bob*0.5 },
+        torso: { rot: lean,        dx:0,     dy: bob*0.5 },
+        armL:  { rot: armFwd,      dx:0,     dy: bob*0.3 },
+        armR:  { rot: armBck,      dx:0,     dy: bob*0.3 },
+        hips:  { rot: hipRock,     dx:0,     dy: bob*0.3 },
+        legL:  { rot: legFwd,      dx:strdL, dy: liftL   },
+        legR:  { rot: legBck,      dx:strdR, dy: liftR   },
+        globalDY: bob,
+      };
     }
 
     case 'run': {
-      const step = wave;
-      const leg = step * DEG * 55 * side;
-      const arm = -step * DEG * 48 * side;
-      const lowerLeg = Math.max(0, -step) * DEG * 24 * side;
-      const foot = Math.max(0, step) * DEG * 14 * side;
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: DEG * 10, dx: 0, dy: -bob * 0.3 };
-      if (kind === 'head') return { rot: DEG * 3, dx: 0, dy: -bob * 0.35 };
-      if (kind === 'neck') return { rot: DEG * 2, dx: 0, dy: -bob * 0.2 };
-      if (kind === 'upperLegL' || kind === 'upperLegR') return { rot: leg, dx: 0, dy: 0 };
-      if (kind === 'lowerLegL' || kind === 'lowerLegR') return { rot: leg * 0.25 + lowerLeg, dx: 0, dy: 0 };
-      if (kind === 'footL' || kind === 'footR') return { rot: foot, dx: 0, dy: 0 };
-      if (kind === 'upperArmL' || kind === 'upperArmR') return { rot: arm, dx: 0, dy: 0 };
-      if (kind === 'lowerArmL' || kind === 'lowerArmR') return { rot: arm * 0.35, dx: 0, dy: 0 };
-      if (kind === 'handL' || kind === 'handR') return { rot: arm * 0.15, dx: 0, dy: 0 };
-      if (kind === 'hair') return { rot: step * DEG * 14 * side, dx: 0, dy: -bob * 0.3 };
-      return subtle;
+      const legFwd  =  sin1(t) * 60 * DEG;
+      const legBck  = -sin1(t) * 60 * DEG;
+      const armFwd  = -sin1(t) * 54 * DEG;
+      const armBck  =  sin1(t) * 54 * DEG;
+      const bob     = abs1(t) * H * -0.044;
+      const hipRock = sin1(t) * 10 * DEG;
+      const lean    = 13 * DEG;
+      const hair    = sin1(t) * 18 * DEG + lean;
+      const liftL   = Math.max(0,  sin1(t)) * H * -0.10;
+      const liftR   = Math.max(0, -sin1(t)) * H * -0.10;
+      const strdL   =  sin1(t) * H * 0.07;
+      const strdR   = -sin1(t) * H * 0.07;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','neck','head','hair'],
+        hair:  { rot: hair,        dx:0,     dy: bob*0.5 },
+        head:  { rot: lean*0.5,    dx:0,     dy: bob*0.6 },
+        neck:  { rot: lean*0.5,    dx:0,     dy: bob*0.5 },
+        torso: { rot: lean,        dx:0,     dy: bob*0.5 },
+        armL:  { rot: armFwd,      dx:0,     dy: bob*0.4 },
+        armR:  { rot: armBck,      dx:0,     dy: bob*0.4 },
+        hips:  { rot: hipRock,     dx:0,     dy: bob*0.3 },
+        legL:  { rot: legFwd,      dx:strdL, dy: liftL   },
+        legR:  { rot: legBck,      dx:strdR, dy: liftR   },
+        globalDY: bob,
+      };
     }
 
     case 'jump': {
-      const arc = Math.sin(phase * Math.PI);
-      const tuck = arc * DEG * 38;
-      const armsUp = arc * DEG * -56;
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: -arc * DEG * 10, dx: 0, dy: -5 };
-      if (kind === 'head') return { rot: -arc * DEG * 6, dx: 0, dy: -7 };
-      if (kind === 'neck') return { rot: -arc * DEG * 4, dx: 0, dy: -5 };
-      if (kind === 'upperArmL' || kind === 'upperArmR') return { rot: armsUp, dx: 0, dy: 0 };
-      if (kind === 'lowerArmL' || kind === 'lowerArmR') return { rot: armsUp * 0.5, dx: 0, dy: 0 };
-      if (kind === 'handL' || kind === 'handR') return { rot: armsUp * 0.15, dx: 0, dy: 0 };
-      if (kind === 'upperLegL' || kind === 'upperLegR') return { rot: tuck * (kind.endsWith('L') ? 1 : -1), dx: 0, dy: 0 };
-      if (kind === 'lowerLegL' || kind === 'lowerLegR') return { rot: tuck * 0.35 * (kind.endsWith('L') ? 1 : -1), dx: 0, dy: 0 };
-      if (kind === 'footL' || kind === 'footR') return { rot: tuck * 0.1, dx: 0, dy: 0 };
-      return { rot: 0, dx: 0, dy: -arc * 12 };
+      const arc    = -Math.sin(t * Math.PI);
+      const tuck   =  arc * 36 * DEG;
+      const armUp  = -arc * 58 * DEG;
+      const lean   =  arc * 9 * DEG;
+      const rise   =  arc * H * 0.18;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','neck','head','hair'],
+        hair:  { rot: lean*-0.7,       dx:0,         dy:-arc*H*0.05 },
+        head:  { rot: lean*-0.3,       dx:0,         dy:0 },
+        neck:  { rot: lean*-0.2,       dx:0,         dy:0 },
+        torso: { rot: lean,            dx:0,         dy:0 },
+        armL:  { rot: armUp-10*DEG,    dx:-H*0.01,   dy:0 },
+        armR:  { rot:-armUp+10*DEG,    dx: H*0.01,   dy:0 },
+        hips:  { rot:0,                dx:0,         dy:0 },
+        legL:  { rot: tuck+10*DEG,     dx: H*0.01,   dy:0 },
+        legR:  { rot:-tuck-10*DEG,     dx:-H*0.01,   dy:0 },
+        globalDY: rise,
+      };
     }
 
     case 'attack': {
-      const wind = phase < 0.34 ? phase / 0.34 : (1 - (phase - 0.34) / 0.66);
-      const swing = Math.sin(clamp(wind, 0, 1) * Math.PI);
-      const power = swing * DEG * 92;
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: DEG * 14 * clamp(wind, 0, 1), dx: 0, dy: -2 };
-      if (kind === 'head') return { rot: DEG * 8 * clamp(wind, 0, 1), dx: 0, dy: 0 };
-      if (kind === 'neck') return { rot: DEG * 6 * clamp(wind, 0, 1), dx: 0, dy: 0 };
-      if (kind === 'upperArmR' || kind === 'upperArmL') return { rot: power * (kind.endsWith('R') ? 1 : -0.35), dx: 0, dy: 0 };
-      if (kind === 'lowerArmR' || kind === 'lowerArmL') return { rot: power * 0.45 * (kind.endsWith('R') ? 1 : -0.2), dx: 0, dy: 0 };
-      if (kind === 'handR' || kind === 'handL') return { rot: power * 0.12, dx: 0, dy: 0 };
-      if (kind === 'upperLegL' || kind === 'upperLegR') return { rot: DEG * -6, dx: 0, dy: 0 };
-      if (kind === 'lowerLegL' || kind === 'lowerLegR') return { rot: DEG * 10, dx: 0, dy: 0 };
-      return subtle;
+      const sl    = t < 0.3 ? -(t/0.3) : (t-0.3)/0.7;
+      const aR    = (sl*115-50) * DEG;
+      const twist = sl * 20 * DEG;
+      const bob   = -Math.abs(sl) * H * 0.01;
+      return {
+        order: ['legL','legR','hips','armL','torso','armR','neck','head','hair'],
+        hair:  { rot: twist*0.55,  dx:0, dy:bob*0.5 },
+        head:  { rot: twist*0.3,   dx:0, dy:0 },
+        neck:  { rot: twist*0.25,  dx:0, dy:0 },
+        torso: { rot: twist,       dx:0, dy:bob },
+        armL:  { rot:-20*DEG,      dx:0, dy:0 },
+        armR:  { rot: aR,          dx:0, dy:0 },
+        hips:  { rot: twist*0.4,   dx:0, dy:bob*0.5 },
+        legL:  { rot:-10*DEG,      dx:0, dy:0 },
+        legR:  { rot: 14*DEG,      dx:0, dy:0 },
+        globalDY: bob,
+      };
     }
 
     case 'hurt': {
-      const shake = Math.sin(phase * TAU * 12) * DEG * 2.5;
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: -DEG * 10, dx: 0, dy: 0 };
-      if (kind === 'head') return { rot: -DEG * 5 + shake, dx: 0, dy: -3 };
-      if (kind === 'neck') return { rot: -DEG * 4 + shake * 0.6, dx: 0, dy: 0 };
-      if (kind === 'hair') return { rot: shake * 1.2, dx: 0, dy: 0 };
-      if (kind === 'upperArmL' || kind === 'upperArmR') return { rot: DEG * 28 * (kind.endsWith('L') ? -1 : 1), dx: 0, dy: 0 };
-      if (kind === 'lowerArmL' || kind === 'lowerArmR') return { rot: DEG * 16 * (kind.endsWith('L') ? -1 : 1), dx: 0, dy: 0 };
-      if (kind === 'upperLegL' || kind === 'upperLegR') return { rot: DEG * 4, dx: 0, dy: 0 };
-      return { rot: shake * 0.5, dx: 0, dy: 0 };
-    }
-
-    case 'crouch': {
-      const d = ease(clamp(phase * 1.7, 0, 1), 2);
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: DEG * 18 * d, dx: 0, dy: 2 * d };
-      if (kind === 'head') return { rot: DEG * 8 * d, dx: 0, dy: 2 * d };
-      if (kind === 'neck') return { rot: DEG * 6 * d, dx: 0, dy: 0 };
-      if (kind === 'upperArmL' || kind === 'upperArmR') return { rot: DEG * 26 * (kind.endsWith('L') ? 1 : -1), dx: 0, dy: 0 };
-      if (kind === 'lowerArmL' || kind === 'lowerArmR') return { rot: DEG * 14 * (kind.endsWith('L') ? 1 : -1), dx: 0, dy: 0 };
-      if (kind === 'upperLegL' || kind === 'upperLegR') return { rot: DEG * 26 * (kind.endsWith('L') ? -1 : 1), dx: 0, dy: 0 };
-      if (kind === 'lowerLegL' || kind === 'lowerLegR') return { rot: DEG * 18 * (kind.endsWith('L') ? 1 : -1), dx: 0, dy: 0 };
-      return subtle;
-    }
-
-    case 'cast': {
-      const sway2 = sin1(phase * 0.8);
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: DEG * 4 * sway2, dx: 0, dy: 0 };
-      if (kind === 'head') return { rot: DEG * 3 * sway2, dx: 0, dy: 0 };
-      if (kind === 'neck') return { rot: DEG * 2 * sway2, dx: 0, dy: 0 };
-      if (kind === 'upperArmR' || kind === 'upperArmL') return { rot: DEG * -68 + DEG * 10 * sway2, dx: 0, dy: 0 };
-      if (kind === 'lowerArmR' || kind === 'lowerArmL') return { rot: DEG * -18 + DEG * 8 * sway2, dx: 0, dy: 0 };
-      if (kind === 'handR' || kind === 'handL') return { rot: DEG * 5 * sway2, dx: 0, dy: 0 };
-      if (kind === 'hair') return { rot: DEG * 8 * sway2, dx: 0, dy: 0 };
-      return subtle;
+      const rc  = Math.sin(t*Math.PI) * -24 * DEG;
+      const shk = sin2(t) * 4 * DEG;
+      const ry  = Math.sin(t*Math.PI) * H * -0.024;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','neck','head','hair'],
+        hair:  { rot: rc*-0.7+shk,  dx:0, dy:ry*0.4 },
+        head:  { rot: rc*-0.4,      dx:0, dy:ry*0.3 },
+        neck:  { rot: rc*-0.3,      dx:0, dy:ry*0.3 },
+        torso: { rot: rc,           dx:0, dy:ry },
+        armL:  { rot: rc+26*DEG,    dx:0, dy:0 },
+        armR:  { rot: rc-26*DEG,    dx:0, dy:0 },
+        hips:  { rot: rc*0.4,       dx:0, dy:ry*0.4 },
+        legL:  { rot: rc*0.3,       dx:0, dy:0 },
+        legR:  { rot: rc*0.3,       dx:0, dy:0 },
+        globalDY: ry,
+        alpha: 0.5 + 0.5 * clamp01(1 - Math.sin(t*PI2*6)*0.5),
+      };
     }
 
     case 'die': {
-      const d = ease(phase, 2.6);
-      const lean = d * DEG * 92;
-      const fade = phase > 0.6 ? clamp(1 - (phase - 0.6) / 0.4, 0, 1) : 1;
-      if (kind === 'torso' || kind === 'hips' || kind === 'pelvis') return { rot: lean * 0.85, dx: 0, dy: 3 * d };
-      if (kind === 'head') return { rot: lean * 0.9, dx: 0, dy: 3 * d };
-      if (kind === 'neck') return { rot: lean * 0.85, dx: 0, dy: 3 * d };
-      if (kind === 'upperArmL' || kind === 'upperArmR') return { rot: lean * 0.7 * (kind.endsWith('L') ? 1 : -1), dx: 0, dy: 0 };
-      if (kind === 'lowerArmL' || kind === 'lowerArmR') return { rot: lean * 0.4 * (kind.endsWith('L') ? 1 : -1), dx: 0, dy: 0 };
-      if (kind === 'upperLegL' || kind === 'upperLegR') return { rot: lean * 0.45, dx: 0, dy: 0 };
-      if (kind === 'lowerLegL' || kind === 'lowerLegR') return { rot: lean * 0.3, dx: 0, dy: 0 };
-      return { rot: lean * 0.2, dx: 0, dy: 0, alpha: fade };
+      const f    = clamp01(ease(t, 2.5));
+      const lean = f * 90 * DEG;
+      const drop = f * H * 0.08;
+      const fade = t > 0.65 ? clamp01(1-(t-0.65)/0.35) : 1;
+      return {
+        order: ['hair','head','neck','armL','armR','torso','hips','legL','legR'],
+        hair:  { rot: lean*0.9,   dx:0, dy:drop },
+        head:  { rot: lean*0.8,   dx:0, dy:drop*0.8 },
+        neck:  { rot: lean*0.85,  dx:0, dy:drop*0.7 },
+        torso: { rot: lean*0.85,  dx:0, dy:drop*0.5 },
+        armL:  { rot: lean*1.1,   dx:0, dy:drop*0.4 },
+        armR:  { rot:-lean*0.4,   dx:0, dy:drop*0.4 },
+        hips:  { rot: lean*0.8,   dx:0, dy:drop*0.2 },
+        legL:  { rot: lean*0.6,   dx:0, dy:0 },
+        legR:  { rot: lean*0.5,   dx:0, dy:0 },
+        globalDY: drop*0.5, alpha: fade,
+      };
     }
 
-    default:
-      return base;
+    case 'crouch': {
+      const d   = clamp01(ease(clamp01(t*2), 2));
+      const sp  = d * 27 * DEG;
+      const sq  = d * H * 0.072;
+      const la  = d * 9 * DEG;
+      return {
+        order: ['legL','legR','hips','torso','armL','armR','neck','head','hair'],
+        hair:  { rot:0,          dx:0,         dy:sq },
+        head:  { rot:la,         dx:0,         dy:sq*0.8 },
+        neck:  { rot:la,         dx:0,         dy:sq*0.7 },
+        torso: { rot:la,         dx:0,         dy:sq*0.6 },
+        armL:  { rot:32*DEG,     dx:0,         dy:sq*0.4 },
+        armR:  { rot:-32*DEG,    dx:0,         dy:sq*0.4 },
+        hips:  { rot:0,          dx:0,         dy:sq*0.2 },
+        legL:  { rot:sp,         dx: H*0.012,  dy:0 },
+        legR:  { rot:-sp,        dx:-H*0.012,  dy:0 },
+        globalDY: sq*0.8,
+      };
+    }
+
+    case 'cast': {
+      const raise  = Math.abs(cos1(t)) * -70 * DEG;
+      const sway   = sin1(t) * 6 * DEG;
+      const ripple = sin2(t) * 3 * DEG;
+      return {
+        order: ['legL','legR','hips','torso','armR','neck','head','armL','hair'],
+        hair:  { rot: sway*1.7+ripple, dx:0, dy:0 },
+        head:  { rot: sway*0.4,        dx:0, dy:Math.abs(cos1(t))*H*-0.005 },
+        neck:  { rot: sway*0.3,        dx:0, dy:0 },
+        torso: { rot: sway*0.2,        dx:0, dy:0 },
+        armL:  { rot: raise-12*DEG,    dx:0, dy:0 },
+        armR:  { rot: sway,            dx:0, dy:0 },
+        hips:  { rot:-sway*0.1,        dx:0, dy:0 },
+        legL:  { rot: sway*0.5,        dx:0, dy:0 },
+        legR:  { rot:-sway*0.5,        dx:0, dy:0 },
+        globalDY: 0,
+        effect: 'cast',
+      };
+    }
+
+    default: return getPoseTransforms('idle', t, H);
   }
 }
 
-function drawShadow(ctx, centerX, centerY, scale, phase, dir) {
-  const wobble = 0.5 + 0.5 * Math.sin(phase * TAU * 2);
-  const rx = scale * lerp(0.18, 0.26, wobble);
-  const ry = scale * 0.045;
-  ctx.save();
-  ctx.globalAlpha = 0.22;
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.ellipse(centerX, centerY, rx, ry, 0, 0, TAU);
-  ctx.fill();
-  ctx.restore();
-}
+// ── Main render ───────────────────────────────────────────────────────────────
+export function renderFrame(ctx, puppet, pose, t, dir) {
+  const { parts, joints, bb, groundY } = puppet;
+  const DW = ctx.canvas.width, DH = ctx.canvas.height;
+  ctx.clearRect(0, 0, DW, DH);
 
-function renderPart(ctx, part, pose, phase, dir, scale, worldX, worldY, worldAngle, depth = 0) {
-  const m = motionFor(part, pose, phase, scale, depth);
-  const kind = kindOf(part);
-  const pivot = part.pivotLocal || { x: part.canvas.width * 0.5, y: part.canvas.height * 0.5 };
-  const local = part.localOffset || { x: 0, y: 0 };
-  const offset = rot((local.x + (m.dx || 0)) * scale, (local.y + (m.dy || 0)) * scale, worldAngle);
-  const px = worldX + offset.x;
-  const py = worldY + offset.y;
-  const ang = worldAngle + (m.rot || 0);
-  const alpha = m.alpha == null ? 1 : m.alpha;
+  // Scale so character body fills ~80% of canvas height, feet at 92% DH
+  const scale    = Math.min((DW*0.80)/bb.w, (DH*0.82)/bb.h);
+  const groundDH = DH * 0.92;
+  const H        = bb.h * scale;
+
+  const T       = getPoseTransforms(pose, t, H);
+  const gAlpha  = T.alpha ?? 1;
+  const gDY     = T.globalDY ?? 0;
+
+  // originX centres on the torso joint (not the bbox edge)
+  // This keeps the body centred even when weapons extend to one side
+  const torsoPivotX = joints.torso ? joints.torso.x : bb.x + bb.w * 0.5;
+  const originX     = DW * 0.5 - torsoPivotX * scale;
+  const originY     = groundDH - groundY * scale + gDY;
 
   ctx.save();
-  ctx.translate(px, py);
-  ctx.rotate(ang);
-  ctx.globalAlpha = alpha;
-  if (part.visible !== false && part.canvas) {
+  if (dir === 'left') { ctx.translate(DW,0); ctx.scale(-1,1); }
+  ctx.globalAlpha = gAlpha;
+
+  const order = T.order || Object.keys(parts);
+  for (const pid of order) {
+    const part = parts[pid];
+    const xf   = T[pid];
+    if (!part || !part.canvas || !xf) continue;
+
+    // World position of this part's joint/anchor in dest canvas
+    const wx = originX + part.srcX * scale + part.anchorX * scale + (xf.dx||0);
+    const wy = originY + part.srcY * scale + part.anchorY * scale + (xf.dy||0);
+
+    ctx.save();
+    ctx.translate(wx, wy);
+    ctx.rotate(xf.rot || 0);
     ctx.drawImage(
       part.canvas,
-      -pivot.x * scale,
-      -pivot.y * scale,
-      part.canvas.width * scale,
+      -part.anchorX * scale,
+      -part.anchorY * scale,
+      part.canvas.width  * scale,
       part.canvas.height * scale,
     );
-  }
-  ctx.restore();
-
-  return { x: px, y: py, angle: ang, kind, alpha };
-}
-
-export function renderFrame(ctx, rig, pose, phase, dir = 'right', options = {}) {
-  const canvas = ctx.canvas;
-  const DW = canvas.width;
-  const DH = canvas.height;
-  ctx.clearRect(0, 0, DW, DH);
-  if (!rig?.parts?.length) return;
-
-  const bb = rig.bb || { x: 0, y: 0, w: 100, h: 100 };
-  const scale = Math.min((DW * 0.78) / Math.max(1, bb.w), (DH * 0.78) / Math.max(1, bb.h));
-  const originX = DW * 0.5 - (rig.anchor?.x ?? bb.x + bb.w * 0.5) * scale;
-  const originY = DH * 0.88 - (rig.anchor?.y ?? bb.y + bb.h * 0.5) * scale;
-
-  // background shadow / ground touch point
-  drawShadow(ctx, DW * 0.5, DH * 0.90, DW, phase, dir);
-
-  ctx.save();
-  if (dir === 'left') {
-    ctx.translate(DW, 0);
-    ctx.scale(-1, 1);
-  }
-
-  const byId = rig.byId || new Map(rig.parts.map(p => [p.id, p]));
-  const children = new Map();
-  for (const p of rig.parts) {
-    const parentId = p.parentId && byId.has(p.parentId) ? p.parentId : null;
-    if (parentId) {
-      if (!children.has(parentId)) children.set(parentId, []);
-      children.get(parentId).push(p);
-    }
-  }
-  for (const arr of children.values()) arr.sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
-  const roots = rig.roots?.length ? rig.roots : rig.parts.filter(p => !p.parentId || !byId.has(p.parentId));
-  roots.sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
-
-  const recurse = (part, parentWorld, parentAngle, depth = 0) => {
-    const drawn = renderPart(ctx, part, pose, phase, dir, scale, parentWorld.x, parentWorld.y, parentAngle, depth);
-    const kids = children.get(part.id) || [];
-    for (const child of kids) recurse(child, { x: drawn.x, y: drawn.y }, drawn.angle, depth + 1);
-  };
-
-  for (const root of roots) {
-    // draw roots at the rig origin; root localOffset is ignored for the first layer
-    const rootPose = motionFor(root, pose, phase, scale, 0);
-    const pivot = root.pivotLocal || { x: root.canvas.width * 0.5, y: root.canvas.height * 0.5 };
-    const rootX = originX + (rootPose.dx || 0) * scale;
-    const rootY = originY + (rootPose.dy || 0) * scale;
-    const rootAngle = (rootPose.rot || 0);
-    ctx.save();
-    ctx.translate(rootX, rootY);
-    ctx.rotate(rootAngle);
-    ctx.globalAlpha = rootPose.alpha == null ? 1 : rootPose.alpha;
-    if (root.visible !== false && root.canvas) {
-      ctx.drawImage(root.canvas, -pivot.x * scale, -pivot.y * scale, root.canvas.width * scale, root.canvas.height * scale);
-    }
     ctx.restore();
-    const drawn = { x: rootX, y: rootY, angle: rootAngle };
-    const kids = children.get(root.id) || [];
-    for (const child of kids) recurse(child, drawn, drawn.angle, 1);
   }
 
   ctx.restore();
 
-  if (options.showBounds && bb) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.12)';
-    ctx.strokeRect(originX + bb.x * scale, originY + bb.y * scale, bb.w * scale, bb.h * scale);
-    ctx.restore();
-  }
+  if (T.effect === 'cast') _castGlow(ctx, DW, DH, t);
+  if (pose === 'hurt')     _hurtFlash(ctx, DW, DH, t);
 }
 
-export function bakeSpriteSheet(rig, pose, frameCount, size, layout = 'horizontal', dir = 'right') {
-  const cols = layout === 'grid' ? Math.ceil(Math.sqrt(frameCount)) : frameCount;
-  const rows = layout === 'grid' ? Math.ceil(frameCount / cols) : 1;
-  const sheet = document.createElement('canvas');
-  sheet.width = cols * size;
-  sheet.height = rows * size;
-  const sctx = sheet.getContext('2d');
-  for (let i = 0; i < frameCount; i++) {
-    const c = document.createElement('canvas');
-    c.width = size;
-    c.height = size;
-    const ctx = c.getContext('2d');
-    renderFrame(ctx, rig, pose, i / frameCount, dir);
-    const x = (i % cols) * size;
-    const y = Math.floor(i / cols) * size;
-    sctx.drawImage(c, x, y);
-  }
-  return sheet;
+function _castGlow(ctx, DW, DH, t) {
+  const g  = (1+Math.sin(t*Math.PI*4))*0.5;
+  const ex = DW*0.62, ey = DH*0.35, r = 18+g*28;
+  const gr = ctx.createRadialGradient(ex,ey,0,ex,ey,r);
+  gr.addColorStop(0,  `rgba(200,140,255,${0.7*g})`);
+  gr.addColorStop(.5, `rgba(130,80,255,${0.28*g})`);
+  gr.addColorStop(1,  'rgba(80,40,200,0)');
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(ex,ey,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function _hurtFlash(ctx, DW, DH, t) {
+  const f = t<0.2?1:Math.max(0,1-(t-0.2)*5);
+  if(f<0.01)return;
+  ctx.save(); ctx.globalCompositeOperation='source-atop';
+  ctx.fillStyle=`rgba(255,50,50,${f*0.48})`; ctx.fillRect(0,0,DW,DH); ctx.restore();
 }

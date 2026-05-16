@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>SpriteSmith Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,7 +22,7 @@
     </svg>
     <div class="logo-text">
       <span class="logo-name">SpriteSmith</span>
-      <span class="logo-tag">MANUAL PUPPET RIG · NO AUTO-SLICER</span>
+      <span class="logo-tag">STUDIO v6 · PUPPET ENGINE</span>
     </div>
   </div>
   <div class="header-actions">
@@ -31,8 +33,11 @@
 </header>
 
 <div id="layout">
+
+  <!-- SIDEBAR -->
   <aside id="sidebar">
 
+    <!-- 01 UPLOAD -->
     <section class="panel">
       <div class="panel-hdr"><span class="panel-num">01</span><span class="panel-ttl">UPLOAD CHARACTER</span></div>
       <div class="upload-zone" id="uploadZone">
@@ -40,7 +45,7 @@
         <div class="upload-inner" id="uploadTrigger">
           <div class="upload-ico">⬆</div>
           <p class="upload-msg">Drop image here or <u>browse</u></p>
-          <p class="upload-sub">PNG · JPG · WebP — transparent BG or green screen works best</p>
+          <p class="upload-sub">PNG · JPG · WebP — green/solid BG recommended</p>
         </div>
         <div class="upload-prev hidden" id="uploadPreview">
           <img id="uploadThumb" alt="Character">
@@ -53,48 +58,39 @@
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-hdr"><span class="panel-num">02</span><span class="panel-ttl">PARTS &amp; RIGGING</span></div>
-      <p class="panel-note">Parts are optional. Add only the pieces you want and place each one manually.</p>
+    <!-- 02 SKELETON EDITOR -->
+    <section class="panel" id="skelPanel">
+      <div class="panel-hdr"><span class="panel-num">02</span><span class="panel-ttl">SKELETON EDITOR</span></div>
+      <p class="panel-note" id="skelNote">Upload a character to begin skeleton setup.</p>
 
-      <div class="part-controls">
-        <select id="newPartType" class="sel"></select>
-        <button id="addPartBtn" class="btn btn-primary btn-w100">＋ Add Part</button>
-        <button id="starterRigBtn" class="btn btn-ghost btn-w100">✨ Add Starter Rig</button>
-      </div>
-
-      <div id="partList" class="part-list"></div>
-
-      <div class="part-tools">
-        <div class="ctl-row stack">
-          <span class="ctl-lbl">PARENT</span>
-          <select id="parentSelect" class="sel"></select>
-        </div>
-        <div class="tool-row">
-          <button id="dupPartBtn" class="btn btn-ghost btn-half">Duplicate</button>
-          <button id="delPartBtn" class="btn btn-ghost btn-half">Delete</button>
-        </div>
-        <div class="tool-row">
-          <button id="upPartBtn" class="btn btn-ghost btn-half">▲ Layer Up</button>
-          <button id="downPartBtn" class="btn btn-ghost btn-half">▼ Layer Down</button>
-        </div>
-        <div class="toggle-row compact">
+      <div id="skelControls" class="hidden">
+        <!-- View toggles -->
+        <div class="toggle-row">
           <label class="toggle-label">
-            <input type="checkbox" id="showSource" checked>
+            <input type="checkbox" id="showRegions" checked>
             <span class="toggle-track"></span>
-            <span class="toggle-text">Show Source Image</span>
+            <span class="toggle-text">Show Regions</span>
           </label>
           <label class="toggle-label">
-            <input type="checkbox" id="showGuides" checked>
+            <input type="checkbox" id="showSkeleton" checked>
             <span class="toggle-track"></span>
-            <span class="toggle-text">Show Guides</span>
+            <span class="toggle-text">Show Skeleton</span>
           </label>
         </div>
-      </div>
 
-      <p class="panel-note">Drag a box to move it. Grab corners to resize. Drag the pivot dot to change the joint.</p>
+        <!-- Region legend -->
+        <div id="regionLegend" class="region-legend"></div>
+
+        <p class="panel-note">Drag the <strong>joints</strong> on the left panel to fit your character. Regions update live.</p>
+
+        <div class="btn-row">
+          <button id="resetJointsBtn" class="btn btn-ghost btn-half">↺ Reset</button>
+          <button id="applyBtn"       class="btn btn-primary btn-half" disabled>✓ Apply</button>
+        </div>
+      </div>
     </section>
 
+    <!-- 03 POSE -->
     <section class="panel">
       <div class="panel-hdr"><span class="panel-num">03</span><span class="panel-ttl">POSE &amp; ANIMATION</span></div>
       <div id="poseGrid" class="pose-grid"></div>
@@ -102,7 +98,7 @@
         <span class="ctl-lbl">DIRECTION</span>
         <div class="tog-grp" id="dirGroup">
           <button class="tog active" data-val="right">→ RIGHT</button>
-          <button class="tog" data-val="left">← LEFT</button>
+          <button class="tog"        data-val="left">← LEFT</button>
         </div>
       </div>
       <div class="ctl-row">
@@ -111,6 +107,7 @@
       </div>
     </section>
 
+    <!-- 04 SPRITE SHEET -->
     <section class="panel">
       <div class="panel-hdr"><span class="panel-num">04</span><span class="panel-ttl">SPRITE SHEET</span></div>
       <div class="ctl-row">
@@ -137,31 +134,38 @@
       <button id="bakeBtn" class="btn btn-primary btn-w100" disabled>⚡ BAKE SPRITE SHEET</button>
     </section>
 
+    <!-- 05 EXPORT -->
     <section class="panel">
       <div class="panel-hdr"><span class="panel-num">05</span><span class="panel-ttl">EXPORT</span></div>
       <div class="export-col">
-        <button id="exportPNG" class="btn btn-amber btn-w100" disabled>↓ Export PNG</button>
+        <button id="exportPNG"  class="btn btn-amber btn-w100" disabled>↓ Export PNG</button>
         <button id="exportJSON" class="btn btn-amber btn-w100" disabled>↓ Export JSON</button>
       </div>
     </section>
+
   </aside>
 
+  <!-- WORKSPACE: skeleton editor LEFT, previews RIGHT -->
   <main id="workspace">
+
+    <!-- LEFT: Skeleton Editor -->
     <div id="skelEditorPane" class="ws-pane">
       <div class="ws-lbl">
-        <span>RIG EDITOR</span>
-        <span id="skelBadge" class="ws-badge">select a part and place it manually</span>
+        <span>SKELETON EDITOR</span>
+        <span id="skelBadge" class="ws-badge">drag joints to fit your character</span>
       </div>
       <div class="cw cw-skel" id="skelWrap">
         <canvas id="skelCanvas" width="500" height="500"></canvas>
         <div class="cw-placeholder" id="skelPlaceholder">
           <div class="ph-ico">🦴</div>
-          <p>Upload an image<br>to build the rig</p>
+          <p>Upload a character to<br>open the skeleton editor</p>
         </div>
       </div>
     </div>
 
+    <!-- RIGHT: Animation Preview + Sheet Preview -->
     <div id="previewPane" class="ws-pane ws-pane-right">
+
       <div class="ws-col">
         <div class="ws-lbl">
           <span>ANIMATION PREVIEW</span>
@@ -171,7 +175,7 @@
           <canvas id="previewCanvas" width="320" height="320"></canvas>
           <div class="cw-placeholder" id="previewPlaceholder">
             <div class="ph-ico">🎮</div>
-            <p>Build a rig to<br>start previewing</p>
+            <p>Apply skeleton to<br>start animating</p>
           </div>
         </div>
       </div>
@@ -189,7 +193,9 @@
           </div>
         </div>
       </div>
+
     </div>
+
   </main>
 </div>
 

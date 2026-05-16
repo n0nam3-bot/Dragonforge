@@ -1,567 +1,416 @@
-// app.js — SpriteSmith Studio manual puppet rig
+// app.js — SpriteSmith Studio v6.1
 
-import { removeBackground } from './bgremove.js';
-import {
-  PART_LIBRARY, createBlankPart, createStarterRig, duplicatePart,
-  computeBB, buildRig, humanLabel, normalizeKind, partColor
-} from './bodyDetect.js';
-import { SkelEditor } from './skelEditor.js';
-import { POSES, renderFrame, bakeSpriteSheet } from './animator.js';
+import { removeBackground }                              from './bgremove.js';
+import { JOINT_DEFS, computeBB, autoPlaceJoints,
+         buildPuppet }                                   from './bodyDetect.js';
+import { SkelEditor }                                    from './skelEditor.js';
+import { POSES, renderFrame }                            from './animator.js';
 
-const $ = id => document.getElementById(id);
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = {
+  cleanCanvas:   null,
+  bb:            null,
+  defaultJoints: null,
+  joints:        null,
+  puppet:        null,
+  editor:        null,
+  pose:          'idle',
+  direction:     'right',
+  speed:         1.0,
+  frameCount:    8,
+  frameSize:     128,
+  layout:        'horizontal',
+  sheetCanvas:   null,
+};
+let animPhase=0, lastTime=null, rafId=null;
 
-const uploadZone = $('uploadZone');
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const $             = id => document.getElementById(id);
+const uploadZone    = $('uploadZone');
 const uploadTrigger = $('uploadTrigger');
 const uploadPreview = $('uploadPreview');
-const uploadThumb = $('uploadThumb');
-const fileInput = $('fileInput');
-const clearBtn = $('clearBtn');
-const bgBar = $('bgBar');
-const progFill = $('progFill');
-const progLabel = $('progLabel');
-const partList = $('partList');
-const newPartType = $('newPartType');
-const addPartBtn = $('addPartBtn');
-const starterRigBtn = $('starterRigBtn');
-const parentSelect = $('parentSelect');
-const dupPartBtn = $('dupPartBtn');
-const delPartBtn = $('delPartBtn');
-const upPartBtn = $('upPartBtn');
-const downPartBtn = $('downPartBtn');
-const showSource = $('showSource');
-const showGuides = $('showGuides');
-const poseGrid = $('poseGrid');
-const dirGroup = $('dirGroup');
-const speedSlider = $('speedSlider');
-const speedVal = $('speedVal');
-const framesSlider = $('framesSlider');
-const framesVal = $('framesVal');
-const sizeSelect = $('sizeSelect');
-const layoutSelect = $('layoutSelect');
-const bakeBtn = $('bakeBtn');
-const exportPNGBtn = $('exportPNG');
+const uploadThumb   = $('uploadThumb');
+const fileInput     = $('fileInput');
+const clearBtn      = $('clearBtn');
+const bgBar         = $('bgBar');
+const progFill      = $('progFill');
+const progLabel     = $('progLabel');
+const skelNote      = $('skelNote');
+const skelControls  = $('skelControls');
+const showRegionsCb = $('showRegions');
+const showSkelCb    = $('showSkeleton');
+const regionLegend  = $('regionLegend');
+const resetJoinsBtn = $('resetJointsBtn');
+const applyBtn      = $('applyBtn');
+const poseGrid      = $('poseGrid');
+const dirGroup      = $('dirGroup');
+const speedSlider   = $('speedSlider');
+const speedVal      = $('speedVal');
+const framesSlider  = $('framesSlider');
+const framesVal     = $('framesVal');
+const sizeSelect    = $('sizeSelect');
+const layoutSelect  = $('layoutSelect');
+const bakeBtn       = $('bakeBtn');
+const exportPNGBtn  = $('exportPNG');
 const exportJSONBtn = $('exportJSON');
-const saveBtn = $('saveBtn');
-const loadBtn = $('loadBtn');
-const saveStatus = $('saveStatus');
-const toastEl = $('toast');
-const skelNote = $('skelBadge');
-const poseBadge = $('poseBadge');
-const sheetBadge = $('sheetBadge');
-const skelCanvas = $('skelCanvas');
-const skelPlhdr = $('skelPlaceholder');
+const skelCanvas    = $('skelCanvas');
+const skelPlhdr     = $('skelPlaceholder');
 const previewCanvas = $('previewCanvas');
-const previewPlhdr = $('previewPlaceholder');
-const sheetCanvas = $('sheetCanvas');
-const sheetPlhdr = $('sheetPlaceholder');
+const previewPlhdr  = $('previewPlaceholder');
+const sheetCanvas   = $('sheetCanvas');
+const sheetPlhdr    = $('sheetPlaceholder');
+const poseBadge     = $('poseBadge');
+const sheetBadge    = $('sheetBadge');
+const saveBtn       = $('saveBtn');
+const loadBtn       = $('loadBtn');
+const saveStatus    = $('saveStatus');
+const toastEl       = $('toast');
+
 const previewCtx = previewCanvas.getContext('2d');
-const sheetCtx = sheetCanvas.getContext('2d');
+const sheetCtx   = sheetCanvas.getContext('2d');
 
-const partTypeSelect = newPartType;
-const state = {
-  sourceCanvas: null,
-  sourceUrl: null,
-  bb: null,
-  parts: [],
-  editor: null,
-  rig: null,
-  selectedPartId: null,
-  pose: 'idle',
-  direction: 'right',
-  speed: 1,
-  frameCount: 8,
-  frameSize: 128,
-  layout: 'horizontal',
-  animPhase: 0,
-  lastTime: null,
-  rafId: 0,
-  sheetCanvasOut: null,
-  loaded: false,
-};
+// ── Region legend ─────────────────────────────────────────────────────────────
+JOINT_DEFS.forEach(def => {
+  const chip = document.createElement('div');
+  chip.className = 'legend-chip';
+  chip.innerHTML = `<span class="legend-dot" style="background:${def.color}"></span>${def.label}`;
+  regionLegend.appendChild(chip);
+});
 
-function populatePartTypeMenu() {
-  partTypeSelect.innerHTML = '';
-  for (const item of PART_LIBRARY) {
-    const opt = document.createElement('option');
-    opt.value = item.kind;
-    opt.textContent = item.label;
-    partTypeSelect.appendChild(opt);
-  }
-  partTypeSelect.value = 'torso';
-}
+// ── Pose grid ─────────────────────────────────────────────────────────────────
+POSES.forEach(p => {
+  const btn = document.createElement('button');
+  btn.className  = 'pose-btn'+(p.id===S.pose?' active':'');
+  btn.dataset.id = p.id;
+  btn.innerHTML  = `<span class="pose-ico">${p.ico}</span><span class="pose-lbl">${p.label}</span>`;
+  btn.addEventListener('click', () => {
+    S.pose = p.id; animPhase = 0;
+    poseGrid.querySelectorAll('.pose-btn').forEach(b=>b.classList.toggle('active',b.dataset.id===p.id));
+  });
+  poseGrid.appendChild(btn);
+});
 
-function toast(msg, type = 'ok') {
-  toastEl.textContent = msg;
-  toastEl.className = `toast ${type}`;
-  toastEl.classList.add('show');
-  clearTimeout(toastEl._timer);
-  toastEl._timer = setTimeout(() => toastEl.classList.remove('show'), 2200);
-}
+// ── Controls ──────────────────────────────────────────────────────────────────
+dirGroup.querySelectorAll('.tog').forEach(btn =>
+  btn.addEventListener('click', () => {
+    dirGroup.querySelectorAll('.tog').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); S.direction = btn.dataset.val;
+  })
+);
+speedSlider.addEventListener('input', () => {
+  S.speed = parseFloat(speedSlider.value);
+  speedVal.textContent = S.speed.toFixed(2)+'×';
+});
+framesSlider.addEventListener('input', () => {
+  S.frameCount = parseInt(framesSlider.value);
+  framesVal.textContent = S.frameCount;
+});
+sizeSelect.addEventListener('change',   () => { S.frameSize = parseInt(sizeSelect.value); });
+layoutSelect.addEventListener('change', () => { S.layout = layoutSelect.value; });
 
-function setProgress(p, label) {
-  progFill.style.width = `${Math.max(0, Math.min(1, p)) * 100}%`;
-  if (label) progLabel.textContent = label;
-}
+// ── Skeleton editor toggles ───────────────────────────────────────────────────
+showRegionsCb.addEventListener('change', () => S.editor?.setShowRegions(showRegionsCb.checked));
+showSkelCb.addEventListener('change',   () => S.editor?.setShowSkeleton(showSkelCb.checked));
+resetJoinsBtn.addEventListener('click', () => {
+  if (S.editor && S.defaultJoints) S.editor.resetJoints(S.defaultJoints);
+});
+applyBtn.addEventListener('click', applyJoints);
 
-function bgLabel(p) {
-  if (p < 0.2) return 'Scanning edges…';
-  if (p < 0.7) return 'Removing background…';
-  if (p < 0.95) return 'Cleaning fringe pixels…';
-  return 'Almost done…';
-}
+// ── Upload ────────────────────────────────────────────────────────────────────
+uploadTrigger.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { if(fileInput.files[0]) handleFile(fileInput.files[0]); });
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) handleFile(f);
+});
+clearBtn.addEventListener('click', resetAll);
 
-function tick() { return new Promise(r => requestAnimationFrame(() => r())); }
-
-function resetProject(keepImage = false) {
-  state.bb = null;
-  state.parts = [];
-  state.editor?.destroy();
-  state.editor = null;
-  state.rig = null;
-  state.selectedPartId = null;
-  state.loaded = false;
-  state.animPhase = 0;
-  state.lastTime = null;
+function resetAll() {
+  S.cleanCanvas=S.bb=S.defaultJoints=S.joints=S.puppet=null;
+  if (S.editor) { S.editor.destroy(); S.editor=null; }
   stopAnimation();
+  uploadTrigger.classList.remove('hidden');
+  uploadPreview.classList.add('hidden');
+  bgBar.classList.add('hidden');
   skelPlhdr.classList.remove('hidden');
   previewPlhdr.classList.remove('hidden');
   sheetPlhdr.classList.remove('hidden');
-  bakeBtn.disabled = true;
-  exportPNGBtn.disabled = true;
-  exportJSONBtn.disabled = true;
-  skelNote.textContent = 'select a part and place it manually';
-  partList.innerHTML = '';
-  parentSelect.innerHTML = '';
-  previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-  sheetCtx.clearRect(0, 0, sheetCanvas.width, sheetCanvas.height);
-  if (!keepImage) {
-    state.sourceCanvas = null;
-    if (state.sourceUrl) URL.revokeObjectURL(state.sourceUrl);
-    state.sourceUrl = null;
-    uploadTrigger.classList.remove('hidden');
-    uploadPreview.classList.add('hidden');
-  }
-  renderPartPanel();
-}
-
-function refreshEditor() {
-  if (!state.editor) return;
-  state.editor.setParts(state.parts);
-  state.editor.setSelectedPart(state.selectedPartId);
-  state.editor.setShowSource(showSource.checked);
-  state.editor.setShowGuides(showGuides.checked);
-  renderPartPanel();
-  rebuildRig();
-}
-
-function rebuildRig() {
-  if (!state.sourceCanvas) return;
-  state.rig = buildRig(state.sourceCanvas, state.parts);
-  if (!state.rig?.parts?.length) {
-    previewPlhdr.classList.remove('hidden');
-    bakeBtn.disabled = true;
-    exportPNGBtn.disabled = true;
-    exportJSONBtn.disabled = true;
-    return;
-  }
-  previewPlhdr.classList.add('hidden');
-  bakeBtn.disabled = false;
-  exportPNGBtn.disabled = false;
-  exportJSONBtn.disabled = false;
-  renderPreview();
-}
-
-function renderPreview() {
-  if (!state.rig) return;
-  const wrap = previewCanvas.parentElement;
-  const sz = Math.min(wrap.clientWidth || 320, wrap.clientHeight || 320, 560);
-  if (previewCanvas.width !== sz || previewCanvas.height !== sz) previewCanvas.width = previewCanvas.height = sz;
-  renderFrame(previewCtx, state.rig, state.pose, state.animPhase, state.direction);
-}
-
-function renderPartPanel() {
-  partList.innerHTML = '';
-  if (!state.parts.length) {
-    const empty = document.createElement('div');
-    empty.className = 'panel-note';
-    empty.textContent = 'No parts yet. Add a torso, head, arms, legs, or any custom piece.';
-    partList.appendChild(empty);
-  }
-
-  state.parts.forEach((p, idx) => {
-    const item = document.createElement('div');
-    item.className = `part-item ${p.id === state.selectedPartId ? 'active' : ''}`;
-    item.dataset.id = p.id;
-    item.innerHTML = `
-      <div class="part-dot" style="background:${p.color || partColor(p.kind)}"></div>
-      <div class="meta">
-        <div class="lbl">${p.label || humanLabel(p.kind)}</div>
-        <div class="sub">${normalizeKind(p.kind)} · ${p.parentId ? 'linked' : 'root'} · layer ${idx + 1}</div>
-      </div>
-    `;
-    item.addEventListener('click', () => selectPart(p.id));
-    partList.appendChild(item);
-  });
-
-  const options = ['<option value="">No Parent</option>'];
-  for (const p of state.parts) options.push(`<option value="${p.id}">${p.label || humanLabel(p.kind)}</option>`);
-  parentSelect.innerHTML = options.join('');
-  const selected = state.parts.find(p => p.id === state.selectedPartId);
-  if (selected) parentSelect.value = selected.parentId || '';
-
-  const root = state.parts.find(p => !p.parentId) || state.parts[0] || null;
-  skelNote.textContent = selected ? `editing ${selected.label} — drag the box, handles, or pivot` : 'select a part and place it manually';
-  if (root) skelNote.textContent += ` · root: ${root.label}`;
-}
-
-function selectPart(id) {
-  state.selectedPartId = id;
-  if (state.editor) state.editor.setSelectedPart(id);
-  renderPartPanel();
-}
-
-function syncFromEditor(parts) {
-  state.parts = parts.map(p => ({ ...structuredClone(p) }));
-  if (!state.parts.find(p => p.id === state.selectedPartId)) state.selectedPartId = state.parts[0]?.id ?? null;
-  if (state.editor) {
-    state.editor.setParts(state.parts);
-    state.editor.setSelectedPart(state.selectedPartId);
-  }
-  renderPartPanel();
-  rebuildRig();
-}
-
-function initEditor() {
-  state.editor?.destroy();
-  state.editor = new SkelEditor(skelCanvas, state.sourceCanvas, state.parts, syncFromEditor);
-  state.editor.setShowSource(showSource.checked);
-  state.editor.setShowGuides(showGuides.checked);
-  if (state.selectedPartId) state.editor.setSelectedPart(state.selectedPartId);
-  skelPlhdr.classList.add('hidden');
-}
-
-function updateParentForSelected(parentId) {
-  const p = state.parts.find(x => x.id === state.selectedPartId);
-  if (!p) return;
-  p.parentId = parentId || null;
-  syncFromEditor(state.parts);
-}
-
-function addNewPart(kind) {
-  if (!state.sourceCanvas) {
-    toast('Upload a character first.', 'warn');
-    return;
-  }
-  const part = createBlankPart(kind, state.sourceCanvas.width, state.sourceCanvas.height);
-  state.parts.push(part);
-  state.selectedPartId = part.id;
-  syncFromEditor(state.parts);
-  toast(`${part.label} added.`, 'ok');
-}
-
-function addStarterRig() {
-  if (!state.bb || !state.sourceCanvas) {
-    toast('Upload a character first.', 'warn');
-    return;
-  }
-  state.parts = createStarterRig(state.bb, state.sourceCanvas.width, state.sourceCanvas.height);
-  state.selectedPartId = state.parts[0]?.id ?? null;
-  syncFromEditor(state.parts);
-  toast('Starter rig added. Adjust each part manually.', 'ok');
-}
-
-function duplicateSelected() {
-  const p = state.parts.find(x => x.id === state.selectedPartId);
-  if (!p) return;
-  const copy = duplicatePart(p);
-  state.parts.push(copy);
-  state.selectedPartId = copy.id;
-  syncFromEditor(state.parts);
-  toast('Part duplicated.', 'ok');
-}
-
-function deleteSelected() {
-  const id = state.selectedPartId;
-  if (!id) return;
-  const children = new Set(state.parts.filter(p => p.parentId === id).map(p => p.id));
-  state.parts = state.parts.filter(p => p.id !== id && !children.has(p.id));
-  state.selectedPartId = state.parts[0]?.id ?? null;
-  syncFromEditor(state.parts);
-  toast('Part removed.', 'ok');
-}
-
-function layerMove(delta) {
-  const idx = state.parts.findIndex(p => p.id === state.selectedPartId);
-  if (idx < 0) return;
-  const next = idx + delta;
-  if (next < 0 || next >= state.parts.length) return;
-  const [item] = state.parts.splice(idx, 1);
-  state.parts.splice(next, 0, item);
-  syncFromEditor(state.parts);
+  skelNote.textContent = 'Upload a character to begin skeleton setup.';
+  skelControls.classList.add('hidden');
+  bakeBtn.disabled = exportPNGBtn.disabled = exportJSONBtn.disabled = applyBtn.disabled = true;
+  previewCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  sheetCtx.clearRect(0,0,sheetCanvas.width,sheetCanvas.height);
 }
 
 async function handleFile(file) {
   const objURL = URL.createObjectURL(file);
-  state.sourceUrl = objURL;
-  const img = new Image();
-  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = objURL; });
+  const img    = new Image();
+  await new Promise((res,rej) => { img.onload=res; img.onerror=rej; img.src=objURL; });
 
   uploadThumb.src = objURL;
   uploadTrigger.classList.add('hidden');
   uploadPreview.classList.remove('hidden');
   bgBar.classList.remove('hidden');
-  setProgress(0, 'Loading image…');
+  setProgress(0,'Removing background…');
 
-  let cleaned = null;
+  let cleaned;
   try {
-    cleaned = await removeBackground(img, p => setProgress(p, bgLabel(p)));
-  } catch (e) {
-    console.error(e);
-    cleaned = document.createElement('canvas');
-    cleaned.width = img.naturalWidth;
-    cleaned.height = img.naturalHeight;
-    cleaned.getContext('2d').drawImage(img, 0, 0);
-    toast('Background remover failed. Loaded source image as-is.', 'warn');
+    cleaned = await removeBackground(img, p => setProgress(p*0.80, bgLabel(p)));
+    URL.revokeObjectURL(objURL);
+    uploadThumb.src = cleaned.toDataURL();
+  } catch(e) {
+    console.error(e); showToast('Background removal failed.','err');
+    bgBar.classList.add('hidden'); return;
   }
 
-  state.sourceCanvas = cleaned;
-  state.bb = computeBB(cleaned) || { x: 0, y: 0, w: cleaned.width, h: cleaned.height };
-  setProgress(1, 'Ready');
+  setProgress(0.85,'Analysing character…'); await tick();
+  const bb = computeBB(cleaned);
+  if (!bb) { showToast('No character detected.','warn'); bgBar.classList.add('hidden'); return; }
+
+  S.cleanCanvas   = cleaned;
+  S.bb            = bb;
+  S.defaultJoints = autoPlaceJoints(cleaned, bb);
+  S.joints        = JSON.parse(JSON.stringify(S.defaultJoints));
+
+  setProgress(1,'Done!'); await tick();
   bgBar.classList.add('hidden');
 
-  state.parts = [];
-  state.selectedPartId = null;
-  initEditor();
-  rebuildRig();
-  showSource.checked = true;
-  showGuides.checked = true;
-  state.editor?.setShowSource(true);
-  state.editor?.setShowGuides(true);
-  toast('Image loaded. Add a part or start with the starter rig.', 'ok');
+  initSkelEditor();
+  skelNote.textContent = 'Drag joints onto your character, then click Apply.';
+  skelControls.classList.remove('hidden');
+  applyBtn.disabled = false;
+  showToast('Character loaded — adjust skeleton then click Apply ✓','ok');
 }
 
+// ── Skeleton editor ───────────────────────────────────────────────────────────
+function initSkelEditor() {
+  if (S.editor) { S.editor.destroy(); S.editor=null; }
+  skelPlhdr.classList.add('hidden');
+  fitSkelCanvas();
+  S.editor = new SkelEditor(
+    skelCanvas, S.cleanCanvas, S.joints,
+    updatedJoints => { S.joints = updatedJoints; }
+  );
+  S.editor.setShowRegions(showRegionsCb.checked);
+  S.editor.setShowSkeleton(showSkelCb.checked);
+}
+
+function fitSkelCanvas() {
+  const wrap = skelCanvas.parentElement;
+  skelCanvas.width  = Math.max(200, wrap.clientWidth  || 500);
+  skelCanvas.height = Math.max(200, wrap.clientHeight || 500);
+}
+
+// ── Apply joints → build puppet → start animation ────────────────────────────
+function applyJoints() {
+  if (!S.cleanCanvas || !S.joints) return;
+  applyBtn.textContent = '⏳ Building…';
+  applyBtn.disabled    = true;
+
+  setTimeout(() => {
+    try {
+      const puppet = buildPuppet(S.cleanCanvas, S.editor ? S.editor.getJoints() : S.joints);
+      if (!puppet) { showToast('Puppet build failed.','err'); return; }
+      S.puppet = puppet;
+      previewPlhdr.classList.add('hidden');
+      bakeBtn.disabled = false;
+      startAnimation();
+      const partCount = Object.values(puppet.parts).filter(Boolean).length;
+      showToast(`Puppet built — ${partCount} regions ✓`,'ok');
+    } catch(e) {
+      console.error(e); showToast('Error building puppet.','err');
+    } finally {
+      applyBtn.textContent = '✓ Apply';
+      applyBtn.disabled    = false;
+    }
+  }, 30);
+}
+
+// ── Animation loop ────────────────────────────────────────────────────────────
 function startAnimation() {
-  stopAnimation();
-  state.lastTime = null;
-  state.rafId = requestAnimationFrame(loop);
+  stopAnimation(); lastTime=null; animPhase=0;
+  rafId = requestAnimationFrame(loop);
 }
-
-function stopAnimation() {
-  if (state.rafId) cancelAnimationFrame(state.rafId);
-  state.rafId = 0;
-}
+function stopAnimation() { if(rafId){cancelAnimationFrame(rafId);rafId=null;} }
 
 function loop(now) {
-  state.rafId = requestAnimationFrame(loop);
-  if (!state.rig) return;
-  const dt = state.lastTime ? (now - state.lastTime) / 1000 : 0;
-  state.lastTime = now;
-  state.animPhase = (state.animPhase + dt * state.speed * 0.72) % 1;
-  renderPreview();
+  rafId = requestAnimationFrame(loop);
+  if (!S.puppet) return;
+  const dt  = lastTime ? (now-lastTime)/1000 : 0;
+  lastTime  = now;
+  const oneShot = ['die','crouch'];
+  if (oneShot.includes(S.pose)) animPhase = Math.min(animPhase+dt*S.speed*0.55, 0.999);
+  else                          animPhase = (animPhase+dt*S.speed*0.72) % 1;
+
+  const wrap = previewCanvas.parentElement;
+  const sz   = Math.min(wrap.clientWidth||320, wrap.clientHeight||320, 480);
+  if (previewCanvas.width!==sz||previewCanvas.height!==sz)
+    previewCanvas.width = previewCanvas.height = sz;
+
+  renderFrame(previewCtx, S.puppet, S.pose, animPhase, S.direction);
+  poseBadge.textContent = `${S.pose.toUpperCase()} · ${S.direction.toUpperCase()}`;
 }
 
-function updatePoseSelection(pose) {
-  state.pose = pose;
-  state.animPhase = 0;
-  poseBadge.textContent = pose;
-  poseGrid.querySelectorAll('.pose-btn').forEach(b => b.classList.toggle('active', b.dataset.id === pose));
-  renderPreview();
-}
+// ── Bake ──────────────────────────────────────────────────────────────────────
+bakeBtn.addEventListener('click', () => {
+  if (!S.puppet) return;
+  bakeBtn.textContent='⏳ Baking…'; bakeBtn.disabled=true;
+  setTimeout(() => {
+    try {
+      const fs=S.frameSize, count=S.frameCount;
+      const cols=S.layout==='grid'?Math.ceil(Math.sqrt(count)):count;
+      const rows=S.layout==='grid'?Math.ceil(count/cols):1;
+      const sheet=document.createElement('canvas');
+      sheet.width=cols*fs; sheet.height=rows*fs;
+      const sCtx=sheet.getContext('2d');
+      sCtx.clearRect(0,0,sheet.width,sheet.height);
+      const tmp=document.createElement('canvas');
+      tmp.width=tmp.height=fs;
+      const tCtx=tmp.getContext('2d');
+      for(let f=0;f<count;f++){
+        tCtx.clearRect(0,0,fs,fs);
+        renderFrame(tCtx,S.puppet,S.pose,f/count,S.direction);
+        sCtx.drawImage(tmp,(f%cols)*fs,Math.floor(f/cols)*fs);
+      }
+      S.sheetCanvas=sheet;
+      sheetCanvas.width=sheet.width; sheetCanvas.height=sheet.height;
+      sheetCtx.clearRect(0,0,sheetCanvas.width,sheetCanvas.height);
+      sheetCtx.drawImage(sheet,0,0);
+      sheetPlhdr.classList.add('hidden');
+      sheetBadge.textContent=`${count} frames · ${sheet.width}×${sheet.height}px`;
+      exportPNGBtn.disabled=exportJSONBtn.disabled=false;
+      showToast(`Sprite sheet baked (${count} frames) ✓`,'ok');
+    } catch(e){ console.error(e); showToast('Bake failed.','err'); }
+    finally{ bakeBtn.textContent='⚡ BAKE SPRITE SHEET'; bakeBtn.disabled=false; }
+  }, 30);
+});
 
-async function bakeSheet() {
-  if (!state.rig) return;
-  bakeBtn.disabled = true;
-  bakeBtn.textContent = '⏳ Baking…';
-  await tick();
+// ── Export ────────────────────────────────────────────────────────────────────
+exportPNGBtn.addEventListener('click', () => {
+  if (!S.sheetCanvas) return;
+  S.sheetCanvas.toBlob(blob => {
+    Object.assign(document.createElement('a'),{
+      href:URL.createObjectURL(blob),
+      download:`spritesmith_${S.pose}_${S.direction}.png`,
+    }).click();
+  },'image/png');
+  showToast('PNG exported ↓','ok');
+});
+
+exportJSONBtn.addEventListener('click', () => {
+  if (!S.sheetCanvas) return;
+  const fs=S.frameSize, count=S.frameCount;
+  const cols=S.layout==='grid'?Math.ceil(Math.sqrt(count)):count;
+  const fname=`spritesmith_${S.pose}_${S.direction}`;
+  const frames=Array.from({length:count},(_,i)=>({
+    filename:`${fname}_${String(i).padStart(3,'0')}`,
+    frame:{x:(i%cols)*fs,y:Math.floor(i/cols)*fs,w:fs,h:fs},
+    rotated:false,trimmed:false,
+    spriteSourceSize:{x:0,y:0,w:fs,h:fs},
+    sourceSize:{w:fs,h:fs},duration:100,
+  }));
+  const json=JSON.stringify({frames,meta:{
+    app:'SpriteSmith Studio',version:'6.1',image:`${fname}.png`,
+    format:'RGBA8888',size:{w:S.sheetCanvas.width,h:S.sheetCanvas.height},
+    pose:S.pose,direction:S.direction,frameCount:count,frameSize:fs,
+    layout:S.layout,date:new Date().toISOString(),
+  }},null,2);
+  Object.assign(document.createElement('a'),{
+    href:URL.createObjectURL(new Blob([json],{type:'application/json'})),
+    download:`${fname}.json`,
+  }).click();
+  exportPNGBtn.click();
+  showToast('JSON + PNG exported ↓','ok');
+});
+
+// ── Save / Load ───────────────────────────────────────────────────────────────
+const KEY='spritesmithStudio_v6';
+saveBtn.addEventListener('click', () => {
+  if (!S.cleanCanvas) { showToast('Upload a character first.','warn'); return; }
   try {
-    const sheet = bakeSpriteSheet(state.rig, state.pose, state.frameCount, state.frameSize, state.layout, state.direction);
-    state.sheetCanvasOut = sheet;
-    sheetCanvas.width = sheet.width;
-    sheetCanvas.height = sheet.height;
-    sheetCtx.clearRect(0, 0, sheet.width, sheet.height);
-    sheetCtx.drawImage(sheet, 0, 0);
-    sheetPlhdr.classList.add('hidden');
-    sheetBadge.textContent = `${sheet.width}×${sheet.height}`;
-    toast('Sprite sheet baked.', 'ok');
-  } catch (e) {
-    console.error(e);
-    toast('Failed to bake sprite sheet.', 'err');
-  } finally {
-    bakeBtn.textContent = '⚡ BAKE SPRITE SHEET';
-    bakeBtn.disabled = false;
-  }
-}
+    const j = S.editor ? S.editor.getJoints() : S.joints;
+    localStorage.setItem(KEY, JSON.stringify({
+      charDataURL: S.cleanCanvas.toDataURL('image/png'),
+      joints: j,
+      pose:S.pose, direction:S.direction, speed:S.speed,
+      frameCount:S.frameCount, frameSize:S.frameSize, layout:S.layout,
+      savedAt:new Date().toISOString(),
+    }));
+    saveStatus.textContent='Saved ✓'; saveStatus.classList.add('visible');
+    setTimeout(()=>saveStatus.classList.remove('visible'),2500);
+    showToast('Project saved ✓','ok');
+  } catch(e){ showToast('Save failed (storage full?)','err'); }
+});
 
-function downloadBlob(blob, name) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function exportPNG() {
-  const canvas = state.sheetCanvasOut || sheetCanvas;
-  canvas.toBlob(blob => {
-    if (blob) downloadBlob(blob, 'spritesmith-sheet.png');
-  }, 'image/png');
-}
-
-function exportJSON() {
-  const data = {
-    version: 1,
-    pose: state.pose,
-    direction: state.direction,
-    speed: state.speed,
-    frameCount: state.frameCount,
-    frameSize: state.frameSize,
-    layout: state.layout,
-    parts: state.parts,
-    source: state.sourceCanvas ? { width: state.sourceCanvas.width, height: state.sourceCanvas.height, dataURL: state.sourceCanvas.toDataURL('image/png') } : null,
-  };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  downloadBlob(blob, 'spritesmith-project.json');
-}
-
-async function saveProject() {
-  if (!state.sourceCanvas) return toast('Nothing to save yet.', 'warn');
-  const data = {
-    version: 1,
-    pose: state.pose,
-    direction: state.direction,
-    speed: state.speed,
-    frameCount: state.frameCount,
-    frameSize: state.frameSize,
-    layout: state.layout,
-    parts: state.parts,
-    sourceDataURL: state.sourceCanvas.toDataURL('image/png'),
-  };
-  localStorage.setItem('spritesmith_project_v1', JSON.stringify(data));
-  saveStatus.textContent = 'Saved';
-  saveStatus.classList.add('visible');
-  setTimeout(() => saveStatus.classList.remove('visible'), 1200);
-  toast('Project saved to this browser.', 'ok');
-}
-
-async function loadProject() {
-  const raw = localStorage.getItem('spritesmith_project_v1');
-  if (!raw) return toast('No saved project found.', 'warn');
+loadBtn.addEventListener('click', async () => {
+  const raw=localStorage.getItem(KEY);
+  if (!raw) { showToast('No saved project found.','warn'); return; }
   try {
-    const data = JSON.parse(raw);
-    if (!data.sourceDataURL) return toast('Saved project has no source image.', 'warn');
-    await loadFromDataURL(data.sourceDataURL, data);
-    toast('Project restored.', 'ok');
-  } catch (e) {
-    console.error(e);
-    toast('Failed to load saved project.', 'err');
-  }
+    const p=JSON.parse(raw);
+    // restore settings
+    S.pose=p.pose||'idle'; S.direction=p.direction||'right';
+    S.speed=p.speed||1; S.frameCount=p.frameCount||8;
+    S.frameSize=p.frameSize||128; S.layout=p.layout||'horizontal';
+    S.joints=p.joints;
+
+    speedSlider.value=S.speed; speedVal.textContent=S.speed.toFixed(2)+'×';
+    framesSlider.value=S.frameCount; framesVal.textContent=S.frameCount;
+    sizeSelect.value=S.frameSize; layoutSelect.value=S.layout;
+    poseGrid.querySelectorAll('.pose-btn').forEach(b=>b.classList.toggle('active',b.dataset.id===S.pose));
+    dirGroup.querySelectorAll('.tog').forEach(b=>b.classList.toggle('active',b.dataset.val===S.direction));
+
+    showToast('Loading…','ok');
+    const img=new Image();
+    await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=p.charDataURL;});
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth; c.height=img.naturalHeight;
+    c.getContext('2d').drawImage(img,0,0);
+
+    uploadThumb.src=p.charDataURL;
+    uploadTrigger.classList.add('hidden'); uploadPreview.classList.remove('hidden');
+
+    S.cleanCanvas=c;
+    S.bb=computeBB(c);
+    S.defaultJoints=autoPlaceJoints(c, S.bb);
+
+    initSkelEditor();
+    if (S.editor && S.joints) S.editor.resetJoints(S.joints);
+
+    skelNote.textContent='Skeleton loaded. Adjust then click Apply.';
+    skelControls.classList.remove('hidden');
+    applyBtn.disabled=false;
+    showToast(`Loaded (saved ${timeAgo(p.savedAt)}) ✓`,'ok');
+  } catch(e){ console.error(e); showToast('Load failed.','err'); }
+});
+
+// ── Resize observers ──────────────────────────────────────────────────────────
+new ResizeObserver(() => { fitSkelCanvas(); S.editor?.draw(); })
+  .observe(skelCanvas.parentElement);
+
+new ResizeObserver(() => {
+  const wrap=previewCanvas.parentElement;
+  const sz=Math.min(wrap.clientWidth||320,480);
+  previewCanvas.width=previewCanvas.height=sz;
+  if(S.puppet) renderFrame(previewCtx,S.puppet,S.pose,animPhase,S.direction);
+}).observe(previewCanvas.parentElement);
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function setProgress(pct,label) {
+  progFill.style.width=(Math.min(pct,1)*100)+'%';
+  if(label) progLabel.textContent=label;
 }
-
-async function loadFromDataURL(dataURL, meta = null) {
-  const img = new Image();
-  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataURL; });
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  canvas.getContext('2d').drawImage(img, 0, 0);
-  state.sourceCanvas = canvas;
-  state.bb = computeBB(canvas) || { x: 0, y: 0, w: canvas.width, h: canvas.height };
-  state.parts = meta?.parts ? meta.parts : [];
-  state.pose = meta?.pose || 'idle';
-  state.direction = meta?.direction || 'right';
-  state.speed = meta?.speed || 1;
-  state.frameCount = meta?.frameCount || 8;
-  state.frameSize = meta?.frameSize || 128;
-  state.layout = meta?.layout || 'horizontal';
-  speedSlider.value = String(state.speed);
-  speedVal.textContent = `${state.speed.toFixed(2)}×`;
-  framesSlider.value = String(state.frameCount);
-  framesVal.textContent = String(state.frameCount);
-  sizeSelect.value = String(state.frameSize);
-  layoutSelect.value = state.layout;
-  dirGroup.querySelectorAll('.tog').forEach(b => b.classList.toggle('active', b.dataset.val === state.direction));
-  poseGrid.querySelectorAll('.pose-btn').forEach(b => b.classList.toggle('active', b.dataset.id === state.pose));
-  uploadTrigger.classList.add('hidden');
-  uploadPreview.classList.remove('hidden');
-  uploadThumb.src = dataURL;
-  initEditor();
-  rebuildRig();
-  state.loaded = true;
-  startAnimation();
+const bgLabel=p=>p<0.15?'Sampling edges…':p<0.55?'Removing background…':p<0.85?'Smoothing edges…':'Done!';
+let toastTimer=null;
+function showToast(msg,type='ok') {
+  toastEl.textContent=msg; toastEl.className=`toast ${type} show`;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastEl.classList.remove('show'),3500);
 }
-
-// UI wiring
-populatePartTypeMenu();
-PART_LIBRARY.forEach(p => {
-  const chip = document.createElement('option');
-  chip.value = p.kind;
-  chip.textContent = p.label;
-});
-POSES.forEach(p => {
-  const btn = document.createElement('button');
-  btn.className = `pose-btn${p.id === state.pose ? ' active' : ''}`;
-  btn.dataset.id = p.id;
-  btn.innerHTML = `<span class="pose-ico">${p.ico}</span><span class="pose-lbl">${p.label}</span>`;
-  btn.addEventListener('click', () => updatePoseSelection(p.id));
-  poseGrid.appendChild(btn);
-});
-
-// Select initial pose badge
-poseBadge.textContent = state.pose;
-sheetBadge.textContent = '—';
-
-// upload events
-uploadTrigger.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-uploadZone.addEventListener('drop', e => {
-  e.preventDefault();
-  uploadZone.classList.remove('drag-over');
-  const f = e.dataTransfer.files[0];
-  if (f && f.type.startsWith('image/')) handleFile(f);
-});
-clearBtn.addEventListener('click', () => resetProject(false));
-
-// part controls
-addPartBtn.addEventListener('click', () => addNewPart(partTypeSelect.value));
-starterRigBtn.addEventListener('click', addStarterRig);
-parentSelect.addEventListener('change', () => updateParentForSelected(parentSelect.value));
-dupPartBtn.addEventListener('click', duplicateSelected);
-delPartBtn.addEventListener('click', deleteSelected);
-upPartBtn.addEventListener('click', () => layerMove(1));
-downPartBtn.addEventListener('click', () => layerMove(-1));
-showSource.addEventListener('change', () => state.editor?.setShowSource(showSource.checked));
-showGuides.addEventListener('change', () => state.editor?.setShowGuides(showGuides.checked));
-
-// animation controls
-dirGroup.querySelectorAll('.tog').forEach(btn => btn.addEventListener('click', () => {
-  dirGroup.querySelectorAll('.tog').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  state.direction = btn.dataset.val;
-  renderPreview();
-}));
-speedSlider.addEventListener('input', () => {
-  state.speed = parseFloat(speedSlider.value);
-  speedVal.textContent = state.speed.toFixed(2) + '×';
-});
-framesSlider.addEventListener('input', () => {
-  state.frameCount = parseInt(framesSlider.value, 10);
-  framesVal.textContent = String(state.frameCount);
-});
-sizeSelect.addEventListener('change', () => { state.frameSize = parseInt(sizeSelect.value, 10); });
-layoutSelect.addEventListener('change', () => { state.layout = layoutSelect.value; });
-
-bakeBtn.addEventListener('click', bakeSheet);
-exportPNGBtn.addEventListener('click', exportPNG);
-exportJSONBtn.addEventListener('click', exportJSON);
-saveBtn.addEventListener('click', saveProject);
-loadBtn.addEventListener('click', loadProject);
-
-window.addEventListener('resize', () => { renderPreview(); state.editor?.requestRender(); });
-
-// initial state
-resetProject(true);
-startAnimation();
-
+function timeAgo(iso) {
+  const m=Math.floor((Date.now()-new Date(iso))/60000);
+  if(m<1)return'just now';if(m<60)return`${m}m ago`;
+  const h=Math.floor(m/60);return h<24?`${h}h ago`:`${Math.floor(h/24)}d ago`;
+}
+function tick(){return new Promise(r=>setTimeout(r,0));}
