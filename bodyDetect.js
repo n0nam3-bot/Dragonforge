@@ -1,578 +1,266 @@
-// bodyDetect.js — skeleton-aware puppet segmentation
-// Replaces raw screen-space Voronoi with a tilt-aware body frame + capsule scoring.
-// The goal is to keep side-view / 3⁄4-view sprites segmented by actual anatomy,
-// not just by nearest on-screen point.
+// bodyDetect.js — rig helpers for a manual puppet workflow
 
-const ALPHA = 18;
-const EPS   = 1e-6;
-
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-
-function dot(ax, ay, bx, by) { return ax * bx + ay * by; }
-
-function normalize(x, y) {
-  const len = Math.hypot(x, y) || 1;
-  return { x: x / len, y: y / len };
-}
-
-function projectPoint(pt, origin, axis, perp) {
-  const dx = pt.x - origin.x;
-  const dy = pt.y - origin.y;
-  return {
-    u: dot(dx, dy, axis.x, axis.y),
-    v: dot(dx, dy, perp.x, perp.y),
-  };
-}
-
-function pointToSegmentScore(px, py, ax, ay, bx, by, radius, endPenalty = 2.0) {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const len2 = dx * dx + dy * dy || 1;
-
-  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
-  const clampedT = clamp(t, 0, 1);
-  const qx = ax + dx * clampedT;
-  const qy = ay + dy * clampedT;
-
-  const dist2 = (px - qx) * (px - qx) + (py - qy) * (py - qy);
-  let score = dist2 / Math.max(radius * radius, EPS);
-
-  if (t < 0) score += (-t) * (-t) * endPenalty;
-  else if (t > 1) score += (t - 1) * (t - 1) * endPenalty;
-
-  return score;
-}
-
-function bandPenalty(u, minU, maxU, softness) {
-  if (u < minU) return ((minU - u) / Math.max(softness, EPS)) ** 2;
-  if (u > maxU) return ((u - maxU) / Math.max(softness, EPS)) ** 2;
-  return 0;
-}
-
-function alphaStats(charCanvas, bb = null) {
-  const W = charCanvas.width, H = charCanvas.height;
-  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const data = ctx.getImageData(0, 0, W, H).data;
-
-  let sumX = 0, sumY = 0, sum = 0;
-  let minX = W, minY = H, maxX = -1, maxY = -1;
-
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const a = data[(y * W + x) * 4 + 3];
-      if (a <= ALPHA) continue;
-      sumX += x * a;
-      sumY += y * a;
-      sum  += a;
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-    }
-  }
-
-  if (!sum) {
-    const fallback = bb || { x: 0, y: 0, w: W, h: H };
-    return {
-      cx: fallback.x + fallback.w * 0.5,
-      cy: fallback.y + fallback.h * 0.5,
-      axisX: 0,
-      axisY: 1,
-      perpX: 1,
-      perpY: 0,
-      angle: Math.PI / 2,
-      w: fallback.w,
-      h: fallback.h,
-      hasData: false,
-    };
-  }
-
-  const cx = sumX / sum;
-  const cy = sumY / sum;
-
-  let cxx = 0, cxy = 0, cyy = 0;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const a = data[(y * W + x) * 4 + 3];
-      if (a <= ALPHA) continue;
-      const dx = x - cx;
-      const dy = y - cy;
-      cxx += a * dx * dx;
-      cxy += a * dx * dy;
-      cyy += a * dy * dy;
-    }
-  }
-
-  const trace = cxx + cyy;
-  const det   = cxx * cyy - cxy * cxy;
-  const root  = Math.sqrt(Math.max(0, trace * trace * 0.25 - det));
-  const l1    = trace * 0.5 + root;
-  let ax = cxy;
-  let ay = l1 - cxx;
-
-  if (Math.abs(ax) + Math.abs(ay) < EPS) {
-    // Fallback to the tall axis of the bbox.
-    ax = 0;
-    ay = 1;
-  } else {
-    const n = normalize(ax, ay);
-    ax = n.x;
-    ay = n.y;
-  }
-
-  // Make the axis point downward for a stable body frame.
-  if (ay < 0) {
-    ax = -ax;
-    ay = -ay;
-  }
-
-  const px = -ay;
-  const py = ax;
-
-  return {
-    cx,
-    cy,
-    axisX: ax,
-    axisY: ay,
-    perpX: px,
-    perpY: py,
-    angle: Math.atan2(ay, ax),
-    w: (bb ? bb.w : (maxX >= minX ? (maxX - minX + 1) : W)),
-    h: (bb ? bb.h : (maxY >= minY ? (maxY - minY + 1) : H)),
-    hasData: true,
-  };
-}
-
-function deriveBodyFrame(charCanvas, joints = null, bb = null) {
-  const stats = alphaStats(charCanvas, bb);
-
-  let origin = { x: stats.cx, y: stats.cy };
-  let axis   = { x: stats.axisX, y: stats.axisY };
-  let perp   = { x: stats.perpX, y: stats.perpY };
-
-  // If joints are available, they are usually more stable than raw alpha PCA.
-  const has = (id) => joints && joints[id] && Number.isFinite(joints[id].x) && Number.isFinite(joints[id].y);
-  if (has('head') && has('hips')) {
-    const d = normalize(joints.hips.x - joints.head.x, joints.hips.y - joints.head.y);
-    axis = d;
-    if (axis.y < 0) axis = { x: -axis.x, y: -axis.y };
-    perp = { x: -axis.y, y: axis.x };
-    origin = { x: joints.torso?.x ?? stats.cx, y: joints.torso?.y ?? stats.cy };
-  } else if (has('neck') && has('hips')) {
-    const d = normalize(joints.hips.x - joints.neck.x, joints.hips.y - joints.neck.y);
-    axis = d;
-    if (axis.y < 0) axis = { x: -axis.x, y: -axis.y };
-    perp = { x: -axis.y, y: axis.x };
-    origin = { x: joints.torso?.x ?? stats.cx, y: joints.torso?.y ?? stats.cy };
-  } else if (has('torso') && has('hips')) {
-    const d = normalize(joints.hips.x - joints.torso.x, joints.hips.y - joints.torso.y);
-    axis = d;
-    if (axis.y < 0) axis = { x: -axis.x, y: -axis.y };
-    perp = { x: -axis.y, y: axis.x };
-    origin = { x: joints.torso.x, y: joints.torso.y };
-  }
-
-  return { origin, axis, perp, stats };
-}
-
-
-// Body-part definitions. The core rig stays stable for animation, while the
-// optional parts are used as region labels / segmentation targets.
-export const CORE_PART_IDS = ['head','hair','neck','torso','hips','armL','armR','legL','legR'];
-
-export const BODY_PART_LIBRARY = [
-  { id:'head',      label:'Head',      color:'#60d4f0', parent:'neck',  aliasOf:'head', required:true  },
-  { id:'hair',      label:'Hair',      color:'#a78bfa', parent:'head',  aliasOf:'hair', required:false },
-  { id:'neck',      label:'Neck',      color:'#f0e060', parent:'torso', aliasOf:'neck', required:true  },
-  { id:'torso',     label:'Torso',     color:'#4ade80', parent:'hips',  aliasOf:'torso', required:true  },
-  { id:'hips',      label:'Hips',      color:'#60a5fa', parent:null,    aliasOf:'hips',  required:true  },
-  { id:'shoulderL', label:'Shoulder L', color:'#34d399', parent:'torso', aliasOf:'armL',  required:false },
-  { id:'shoulderR', label:'Shoulder R', color:'#f97316', parent:'torso', aliasOf:'armR',  required:false },
-  { id:'armL',      label:'Arm L',     color:'#f59e0b', parent:'torso', aliasOf:'armL',   required:true  },
-  { id:'armR',      label:'Arm R',     color:'#fb923c', parent:'torso', aliasOf:'armR',   required:true  },
-  { id:'elbowL',    label:'Elbow L',   color:'#fbbf24', parent:'armL',  aliasOf:'armL',   required:false },
-  { id:'elbowR',    label:'Elbow R',    color:'#fdba74', parent:'armR',  aliasOf:'armR',   required:false },
-  { id:'handL',     label:'Hand L',    color:'#fde68a', parent:'armL',  aliasOf:'armL',   required:false },
-  { id:'handR',     label:'Hand R',    color:'#fed7aa', parent:'armR',  aliasOf:'armR',   required:false },
-  { id:'legL',      label:'Leg L',     color:'#f87171', parent:'hips',  aliasOf:'legL',   required:true  },
-  { id:'legR',      label:'Leg R',     color:'#c084fc', parent:'hips',  aliasOf:'legR',   required:true  },
-  { id:'kneeL',     label:'Knee L',    color:'#fb7185', parent:'legL',  aliasOf:'legL',   required:false },
-  { id:'kneeR',     label:'Knee R',    color:'#e879f9', parent:'legR',  aliasOf:'legR',   required:false },
-  { id:'footL',     label:'Foot L',    color:'#fca5a5', parent:'legL',  aliasOf:'legL',   required:false },
-  { id:'footR',     label:'Foot R',    color:'#d8b4fe', parent:'legR',  aliasOf:'legR',   required:false },
-  { id:'weapon',    label:'Weapon',    color:'#cbd5e1', parent:'handR', aliasOf:'armR',   required:false },
-  { id:'shield',    label:'Shield',    color:'#94a3b8', parent:'handL', aliasOf:'armL',   required:false },
-  { id:'cape',      label:'Cape',      color:'#f472b6', parent:'torso', aliasOf:'torso',  required:false },
-  { id:'tail',      label:'Tail',      color:'#22c55e', parent:'hips',  aliasOf:'hips',   required:false },
-  { id:'accessory', label:'Accessory', color:'#facc15', parent:'head',  aliasOf:'hair',   required:false },
+export const PART_LIBRARY = [
+  { kind: 'torso',      label: 'Torso' },
+  { kind: 'hips',       label: 'Hips' },
+  { kind: 'pelvis',     label: 'Pelvis' },
+  { kind: 'head',       label: 'Head' },
+  { kind: 'neck',       label: 'Neck' },
+  { kind: 'hair',       label: 'Hair' },
+  { kind: 'upperArmL',  label: 'Upper Arm L' },
+  { kind: 'lowerArmL',  label: 'Forearm L' },
+  { kind: 'handL',      label: 'Hand L' },
+  { kind: 'upperArmR',  label: 'Upper Arm R' },
+  { kind: 'lowerArmR',  label: 'Forearm R' },
+  { kind: 'handR',      label: 'Hand R' },
+  { kind: 'upperLegL',  label: 'Thigh L' },
+  { kind: 'lowerLegL',  label: 'Shin L' },
+  { kind: 'footL',      label: 'Foot L' },
+  { kind: 'upperLegR',  label: 'Thigh R' },
+  { kind: 'lowerLegR',  label: 'Shin R' },
+  { kind: 'footR',      label: 'Foot R' },
+  { kind: 'weapon',     label: 'Weapon' },
+  { kind: 'shield',     label: 'Shield' },
+  { kind: 'cape',       label: 'Cape' },
+  { kind: 'accessory',  label: 'Accessory' },
 ];
 
-export const JOINT_DEFS = BODY_PART_LIBRARY.filter(p => CORE_PART_IDS.includes(p.id));
+export const PART_COLORS = {
+  torso: '#8a6dff', hips: '#61d5ff', pelvis: '#61d5ff', head: '#ffbf52', neck: '#ffd86b', hair: '#ff7ab8',
+  upperArmL: '#5de38d', lowerArmL: '#7adf9b', handL: '#9eeab8', upperArmR: '#5de38d', lowerArmR: '#7adf9b', handR: '#9eeab8',
+  upperLegL: '#ff8f6b', lowerLegL: '#ffb08f', footL: '#ffd0bb', upperLegR: '#ff8f6b', lowerLegR: '#ffb08f', footR: '#ffd0bb',
+  weapon: '#d9d9ff', shield: '#d9d9ff', cape: '#b28cff', accessory: '#c1c7db',
+};
 
-export function getPartDefs(ids = CORE_PART_IDS, config = {}) {
-  const wanted = new Set(ids);
-  const out = BODY_PART_LIBRARY.filter(p => wanted.has(p.id)).map(def => {
-    const overrides = config[def.id] || {};
-    return { ...def, ...overrides };
-  });
-  for (const id of CORE_PART_IDS) {
-    if (!out.some(p => p.id === id)) {
-      const def = BODY_PART_LIBRARY.find(p => p.id === id);
-      const overrides = config[id] || {};
-      out.push({ ...def, ...overrides });
+export function normalizeKind(kind = '') {
+  const k = String(kind).trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (k === 'upperarml' || k === 'armupperl' || k === 'bicepl') return 'upperArmL';
+  if (k === 'lowerarml' || k === 'forearml' || k === 'armlowerl' || k === 'elbowl') return 'lowerArmL';
+  if (k === 'handl' || k === 'palml') return 'handL';
+  if (k === 'upperarmr' || k === 'armupperr' || k === 'bicepr') return 'upperArmR';
+  if (k === 'lowerarmr' || k === 'forearmr' || k === 'armlowerr' || k === 'elbowr') return 'lowerArmR';
+  if (k === 'handr' || k === 'palmr') return 'handR';
+  if (k === 'upperlegl' || k === 'thighl' || k === 'legupperl') return 'upperLegL';
+  if (k === 'lowerlegl' || k === 'shinl' || k === 'calfl' || k === 'leglowerl') return 'lowerLegL';
+  if (k === 'footl' || k === 'bootl' || k === 'shoel') return 'footL';
+  if (k === 'upperlegr' || k === 'thighr' || k === 'legupperr') return 'upperLegR';
+  if (k === 'lowerlegr' || k === 'shinr' || k === 'calfr' || k === 'leglowerr') return 'lowerLegR';
+  if (k === 'footr' || k === 'bootr' || k === 'shoer') return 'footR';
+  if (k === 'torso' || k === 'chest' || k === 'body' || k === 'spine' || k === 'core') return 'torso';
+  if (k === 'hips' || k === 'hip') return 'hips';
+  if (k === 'pelvis') return 'pelvis';
+  if (k === 'neck') return 'neck';
+  if (k === 'head') return 'head';
+  if (k === 'hair') return 'hair';
+  if (k === 'weapon') return 'weapon';
+  if (k === 'shield') return 'shield';
+  if (k === 'cape') return 'cape';
+  return 'accessory';
+}
+
+export function partColor(kind) {
+  return PART_COLORS[normalizeKind(kind)] || PART_COLORS.accessory;
+}
+
+export function humanLabel(kind) {
+  const k = normalizeKind(kind);
+  const found = PART_LIBRARY.find(p => p.kind === k);
+  return found ? found.label : kind || 'Part';
+}
+
+export function computeBB(canvas) {
+  if (!canvas) return null;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const { width: W, height: H } = canvas;
+  if (!W || !H) return null;
+  const img = ctx.getImageData(0, 0, W, H).data;
+  let minX = W, minY = H, maxX = -1, maxY = -1;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const a = img[(y * W + x) * 4 + 3];
+      if (a > 20) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
     }
   }
+  if (maxX < minX || maxY < minY) return null;
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+export function clampRect(rect, W, H) {
+  const out = { ...rect };
+  const minSize = 8;
+  out.w = Math.max(minSize, Math.min(out.w, W));
+  out.h = Math.max(minSize, Math.min(out.h, H));
+  out.x = Math.max(0, Math.min(out.x, W - out.w));
+  out.y = Math.max(0, Math.min(out.y, H - out.h));
   return out;
 }
 
-function toWorld(origin, axis, perp, along, side) {
+export function createBlankPart(kind, sourceW, sourceH) {
+  const k = normalizeKind(kind);
+  const cx = sourceW * 0.5;
+  const cy = sourceH * 0.5;
+  const w = Math.max(28, Math.round(sourceW * 0.22));
+  const h = Math.max(28, Math.round(sourceH * 0.22));
   return {
-    x: origin.x + axis.x * along + perp.x * side,
-    y: origin.y + axis.y * along + perp.y * side,
+    id: crypto.randomUUID(),
+    kind: k,
+    label: humanLabel(k),
+    color: partColor(k),
+    parentId: null,
+    z: 0,
+    visible: true,
+    srcRect: { x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w, h },
+    pivotLocal: { x: Math.round(w * 0.5), y: Math.round(h * 0.5) },
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Auto-place joints given the visible body frame.
-// This is tilt-aware, so side-view / 3⁄4 sprites get better defaults.
-// Returns { id → {x,y} } in source canvas pixel space.
-// ─────────────────────────────────────────────────────────────────────────────
-export function autoPlaceJoints(bb, charCanvas = null) {
-  const frame = charCanvas ? deriveBodyFrame(charCanvas, null, bb) : null;
-  const origin = frame?.origin || { x: bb.x + bb.w * 0.5, y: bb.y + bb.h * 0.48 };
-  const axis   = frame?.axis   || { x: 0, y: 1 };
-  const perp   = frame?.perp   || { x: 1, y: 0 };
+export function createStarterRig(bb, sourceW, sourceH) {
+  if (!bb) return [];
+  const cx = bb.x + bb.w * 0.5;
+  const top = bb.y;
+  const bottom = bb.y + bb.h;
+  const left = bb.x;
+  const right = bb.x + bb.w;
+  const midY = bb.y + bb.h * 0.46;
+  const shoulderY = bb.y + bb.h * 0.30;
+  const hipY = bb.y + bb.h * 0.58;
+  const headH = Math.max(18, bb.h * 0.22);
+  const torsoW = Math.max(30, bb.w * 0.42);
+  const torsoH = Math.max(38, bb.h * 0.30);
+  const armW = Math.max(14, bb.w * 0.16);
+  const armH = Math.max(24, bb.h * 0.24);
+  const legW = Math.max(16, bb.w * 0.18);
+  const legH = Math.max(34, bb.h * 0.30);
+  const footW = Math.max(16, bb.w * 0.15);
+  const footH = Math.max(12, bb.h * 0.10);
 
-  const H = bb.h;
-  const W = bb.w;
-
-  return {
-    hair:  toWorld(origin, axis, perp, -H * 0.39, 0),
-    head:  toWorld(origin, axis, perp, -H * 0.28, 0),
-    neck:  toWorld(origin, axis, perp, -H * 0.15, 0),
-    torso: toWorld(origin, axis, perp, -H * 0.01, 0),
-    hips:  toWorld(origin, axis, perp,  H * 0.15, 0),
-    armL:  toWorld(origin, axis, perp, -H * 0.02, -W * 0.24),
-    armR:  toWorld(origin, axis, perp, -H * 0.02,  W * 0.24),
-    legL:  toWorld(origin, axis, perp,  H * 0.30, -W * 0.11),
-    legR:  toWorld(origin, axis, perp,  H * 0.30,  W * 0.11),
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Compute bounding box of visible pixels
-// ─────────────────────────────────────────────────────────────────────────────
-export function computeBB(charCanvas) {
-  const W = charCanvas.width, H = charCanvas.height;
-  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const d   = ctx.getImageData(0, 0, W, H).data;
-  let x0=W, x1=-1, y0=H, y1=-1;
-  for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
-    if (d[(y*W+x)*4+3] > ALPHA) {
-      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
-    }
-  }
-  if (x0>x1) return null;
-  return { x:x0, y:y0, w:x1-x0+1, h:y1-y0+1 };
-}
-
-function buildRegionProfiles(joints, frame, bb, partDefs = JOINT_DEFS) {
-  const { origin, axis, perp } = frame;
-  const projected = (j) => projectPoint(j, origin, axis, perp);
-  const H = Math.max(1, bb.h);
-  const W = Math.max(1, bb.w);
-
-  const jp = {};
-  for (const id of Object.keys(joints)) {
-    if (joints[id]) jp[id] = projected(joints[id]);
-  }
-  const defById = Object.fromEntries(partDefs.map(d => [d.id, d]));
-
-  const profiles = {};
-  const make = (id, data) => { profiles[id] = { id, ...data }; };
-
-  make('hair', {
-    segA: joints.head || origin,
-    segB: joints.hair || joints.head || origin,
-    radius: Math.max(6, W * 0.18),
-    endPenalty: 2.3,
-    bandMin: (jp.head?.u ?? 0) - H * 0.36,
-    bandMax: (jp.head?.u ?? 0) + H * 0.08,
-    bandSoft: H * 0.10,
-    centerBias: 0.25,
-    bias: -0.08,
-    sideBias: 0,
+  const make = (kind, x, y, w, h, pivotX = w * 0.5, pivotY = h * 0.5) => ({
+    id: crypto.randomUUID(),
+    kind,
+    label: humanLabel(kind),
+    color: partColor(kind),
+    parentId: null,
+    z: 0,
+    visible: true,
+    srcRect: clampRect({ x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) }, sourceW, sourceH),
+    pivotLocal: { x: Math.round(pivotX), y: Math.round(pivotY) },
   });
 
-  make('head', {
-    segA: joints.neck || origin,
-    segB: joints.head || origin,
-    radius: Math.max(6, W * 0.16),
-    endPenalty: 2.0,
-    bandMin: (jp.neck?.u ?? 0) - H * 0.14,
-    bandMax: (jp.head?.u ?? 0) + H * 0.18,
-    bandSoft: H * 0.08,
-    centerBias: 0.18,
-    bias: 0,
-    sideBias: 0,
-  });
+  const torso = make('torso', cx - torsoW / 2, midY - torsoH * 0.2, torsoW, torsoH, torsoW * 0.5, torsoH * 0.35);
+  const hips = make('hips', cx - torsoW * 0.25, hipY, torsoW * 0.5, Math.max(18, torsoH * 0.35), torsoW * 0.5, torsoH * 0.2);
+  const head = make('head', cx - torsoW * 0.32, top - headH * 0.45, torsoW * 0.64, headH, torsoW * 0.5, headH * 0.55);
+  const neck = make('neck', cx - torsoW * 0.10, top + headH * 0.45, torsoW * 0.20, Math.max(12, bb.h * 0.05), torsoW * 0.5, 2);
+  const upperArmL = make('upperArmL', left - armW * 0.2, shoulderY, armW, armH, armW * 0.5, armW * 0.15);
+  const lowerArmL = make('lowerArmL', left - armW * 0.15, shoulderY + armH * 0.80, armW, armH, armW * 0.5, 2);
+  const handL = make('handL', left - armW * 0.10, shoulderY + armH * 1.55, armW * 0.9, Math.max(10, armH * 0.30), armW * 0.45, 2);
+  const upperArmR = make('upperArmR', right - armW * 0.8, shoulderY, armW, armH, armW * 0.5, armW * 0.15);
+  const lowerArmR = make('lowerArmR', right - armW * 0.85, shoulderY + armH * 0.80, armW, armH, armW * 0.5, 2);
+  const handR = make('handR', right - armW * 0.80, shoulderY + armH * 1.55, armW * 0.9, Math.max(10, armH * 0.30), armW * 0.45, 2);
+  const upperLegL = make('upperLegL', cx - legW * 1.05, hipY + 3, legW, legH, legW * 0.5, 4);
+  const lowerLegL = make('lowerLegL', cx - legW * 1.08, hipY + legH * 0.84, legW, legH, legW * 0.5, 4);
+  const footL = make('footL', cx - legW * 1.08, bottom - footH * 1.2, footW, footH, footW * 0.20, footH * 0.5);
+  const upperLegR = make('upperLegR', cx + legW * 0.10, hipY + 3, legW, legH, legW * 0.5, 4);
+  const lowerLegR = make('lowerLegR', cx + legW * 0.08, hipY + legH * 0.84, legW, legH, legW * 0.5, 4);
+  const footR = make('footR', cx + legW * 0.06, bottom - footH * 1.2, footW, footH, footW * 0.75, footH * 0.5);
+  const hair = make('hair', cx - torsoW * 0.25, top - headH * 0.7, torsoW * 0.52, headH * 0.9, torsoW * 0.50, headH * 0.45);
 
-  make('neck', {
-    segA: joints.torso || origin,
-    segB: joints.neck || origin,
-    radius: Math.max(4, W * 0.08),
-    endPenalty: 3.2,
-    bandMin: (jp.head?.u ?? 0) - H * 0.05,
-    bandMax: (jp.torso?.u ?? 0) + H * 0.10,
-    bandSoft: H * 0.06,
-    centerBias: 0.10,
-    bias: 0,
-    sideBias: 0,
-  });
+  torso.parentId = null;
+  hips.parentId = torso.id;
+  neck.parentId = torso.id;
+  head.parentId = neck.id;
+  hair.parentId = head.id;
+  upperArmL.parentId = torso.id;
+  lowerArmL.parentId = upperArmL.id;
+  handL.parentId = lowerArmL.id;
+  upperArmR.parentId = torso.id;
+  lowerArmR.parentId = upperArmR.id;
+  handR.parentId = lowerArmR.id;
+  upperLegL.parentId = hips.id;
+  lowerLegL.parentId = upperLegL.id;
+  footL.parentId = lowerLegL.id;
+  upperLegR.parentId = hips.id;
+  lowerLegR.parentId = upperLegR.id;
+  footR.parentId = lowerLegR.id;
 
-  make('torso', {
-    segA: joints.neck || origin,
-    segB: joints.hips || joints.torso || origin,
-    radius: Math.max(10, W * 0.22),
-    endPenalty: 1.5,
-    bandMin: (jp.neck?.u ?? 0) - H * 0.06,
-    bandMax: (jp.hips?.u ?? 0) + H * 0.14,
-    bandSoft: H * 0.10,
-    centerBias: 0.55,
-    bias: 0,
-    sideBias: 0,
-  });
-
-  make('hips', {
-    segA: joints.torso || origin,
-    segB: joints.hips || origin,
-    radius: Math.max(8, W * 0.18),
-    endPenalty: 1.9,
-    bandMin: (jp.torso?.u ?? 0) - H * 0.02,
-    bandMax: (jp.hips?.u ?? 0) + H * 0.18,
-    bandSoft: H * 0.09,
-    centerBias: 0.30,
-    bias: 0,
-    sideBias: 0,
-  });
-
-  for (const id of ['armL', 'armR']) {
-    const joint = joints[id] || origin;
-    const jpHere = jp[id] || projected(joint);
-    const tp = jp.torso || projected(joints.torso || origin);
-    const lo = Math.min(tp.u, jpHere.u) - H * 0.12;
-    const hi = Math.max(tp.u, jpHere.u) + H * 0.12;
-    make(id, {
-      segA: joints.torso || origin,
-      segB: joint,
-      radius: Math.max(7, W * 0.11),
-      endPenalty: 2.8,
-      bandMin: lo,
-      bandMax: hi,
-      bandSoft: H * 0.10,
-      centerBias: 0.06,
-      bias: 0,
-      sideBias: Math.max(1.2, W * 0.10),
-      jointSide: Math.sign(jpHere.v),
-    });
-  }
-
-  for (const id of ['legL', 'legR']) {
-    const joint = joints[id] || origin;
-    const jpHere = jp[id] || projected(joint);
-    const hp = jp.hips || projected(joints.hips || origin);
-    const lo = Math.min(hp.u, jpHere.u) - H * 0.10;
-    const hi = Math.max(hp.u, jpHere.u) + H * 0.14;
-    make(id, {
-      segA: joints.hips || origin,
-      segB: joint,
-      radius: Math.max(7, W * 0.12),
-      endPenalty: 2.6,
-      bandMin: lo,
-      bandMax: hi,
-      bandSoft: H * 0.12,
-      centerBias: 0.05,
-      bias: 0,
-      sideBias: Math.max(1.0, W * 0.12),
-      jointSide: Math.sign(jpHere.v),
-    });
-  }
-
-  // Extra semantic regions reuse the nearest core joint profile so the user can
-  // label more body parts without breaking the rig.
-  for (const part of partDefs) {
-    if (profiles[part.id]) continue;
-    const alias = defById[part.aliasOf] || defById[part.parent] || defById.torso || defById.hips;
-    if (!alias) continue;
-    const jId = joints[part.aliasOf] ? part.aliasOf : (joints[part.id] ? part.id : (alias.aliasOf || alias.id));
-    const joint = joints[jId] || joints[alias.aliasOf] || joints[alias.id] || origin;
-    const parentId = alias.parent || 'torso';
-    const parentJoint = joints[parentId] || origin;
-    make(part.id, {
-      segA: parentJoint,
-      segB: joint,
-      radius: Math.max(6, W * 0.10),
-      endPenalty: 2.2,
-      bandMin: -H * 0.5,
-      bandMax:  H * 0.5,
-      bandSoft: H * 0.2,
-      centerBias: 0.03,
-      bias: 0,
-      sideBias: 0,
-    });
-  }
-
-  return { profiles, projected };
-}
-
-function regionScore(px, py, id, profile, joints, frame, bb) {
-  const pv = projectPoint({ x: px, y: py }, frame.origin, frame.axis, frame.perp);
-  let score = pointToSegmentScore(
-    px, py,
-    profile.segA.x, profile.segA.y,
-    profile.segB.x, profile.segB.y,
-    profile.radius,
-    profile.endPenalty,
-  );
-
-  score += bandPenalty(pv.u, profile.bandMin, profile.bandMax, profile.bandSoft);
-  score += Math.abs(pv.v) / Math.max(bb.w * 0.5, EPS) * (profile.centerBias || 0);
-
-  if (profile.sideBias > 0 && profile.jointSide) {
-    const pSide = Math.sign(pv.v);
-    if (pSide && pSide !== profile.jointSide) score += profile.sideBias;
-  }
-
-  score += profile.bias || 0;
-  return score;
-}
-
-function buildMaskAssignments(charCanvas, partDefs = JOINT_DEFS, partMasks = null) {
-  if (!partMasks) return null;
-  const W = charCanvas.width, H = charCanvas.height;
-  const map = new Array(W * H).fill(null);
-  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const src = ctx.getImageData(0, 0, W, H).data;
-  for (const def of partDefs) {
-    const maskCanvas = partMasks[def.id];
-    if (!maskCanvas) continue;
-    const mctx = maskCanvas.getContext('2d', { willReadFrequently: true });
-    const md = mctx.getImageData(0, 0, W, H).data;
-    for (let i = 0; i < W * H; i++) {
-      if (src[i * 4 + 3] <= ALPHA) continue;
-      if (md[i * 4 + 3] > ALPHA) map[i] = def.id;
-    }
-  }
-  return map;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Build skeleton-aware assignment map.
-//   pixelJoint[y*W+x] = joint id string (for fg pixels)
-// ─────────────────────────────────────────────────────────────────────────────
-export function buildVoronoi(charCanvas, joints, partDefs = JOINT_DEFS, partMasks = null) {
-  const W   = charCanvas.width, H = charCanvas.height;
-  const ctx = charCanvas.getContext('2d', { willReadFrequently: true });
-  const img = ctx.getImageData(0, 0, W, H);
-  const d   = img.data;
-  const map = new Array(W * H).fill(null);
-  const maskMap = buildMaskAssignments(charCanvas, partDefs, partMasks);
-  if (maskMap) {
-    for (let i = 0; i < map.length; i++) map[i] = maskMap[i];
-  }
-  const bb  = computeBB(charCanvas);
-  const frame = deriveBodyFrame(charCanvas, joints, bb);
-  const { profiles } = buildRegionProfiles(joints, frame, bb, partDefs);
-  const ids = partDefs.map(d => d.id);
-
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = (y * W + x) * 4;
-      if (d[i + 3] <= ALPHA) continue;
-      if (map[y * W + x]) continue;
-
-      let best = null;
-      let bestScore = Infinity;
-
-      for (const id of ids) {
-        const profile = profiles[id];
-        if (!profile) continue;
-        const score = regionScore(x, y, id, profile, joints, frame, bb);
-        if (score < bestScore) {
-          bestScore = score;
-          best = id;
-        }
-      }
-
-      map[y * W + x] = best;
-    }
-  }
-
-  return { map, maskMap, W, H, srcData: img, frame, bb };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Extract one joint's pixels into its own canvas + compute anchor
-// anchor = the joint position in the part-canvas's local pixel space
-// ─────────────────────────────────────────────────────────────────────────────
-export function extractParts(voronoi, joints, partDefs = JOINT_DEFS) {
-  const { map, maskMap, W, H, srcData } = voronoi;
-  const d = srcData.data;
-  const parts = {};
-
-  for (const def of partDefs) {
-    const id = def.id;
-    const hasMask = !!maskMap && maskMap.some(v => v === id);
-    // Find bounding box of this region
-    let rx0=W, rx1=-1, ry0=H, ry1=-1, cnt=0;
-    for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
-      const belongs = hasMask ? (maskMap[y*W+x] === id) : (map[y*W+x] === id);
-      if (!belongs) continue;
-      if(x<rx0)rx0=x; if(x>rx1)rx1=x; if(y<ry0)ry0=y; if(y>ry1)ry1=y; cnt++;
-    }
-    if (cnt < 4 || rx0 > rx1) { parts[id] = null; continue; }
-
-    const pw = rx1-rx0+1, ph = ry1-ry0+1;
-    const pc = document.createElement('canvas');
-    pc.width = pw; pc.height = ph;
-    const pCtx = pc.getContext('2d');
-    const pImg = pCtx.createImageData(pw, ph);
-    const pd   = pImg.data;
-
-    for (let y=ry0; y<=ry1; y++) for (let x=rx0; x<=rx1; x++) {
-      const belongs = hasMask ? (maskMap[y*W+x] === id) : (map[y*W+x] === id);
-      if (!belongs) continue;
-      const si = (y*W+x)*4, di = ((y-ry0)*pw+(x-rx0))*4;
-      pd[di]=d[si]; pd[di+1]=d[si+1]; pd[di+2]=d[si+2]; pd[di+3]=d[si+3];
-    }
-    pCtx.putImageData(pImg, 0, 0);
-
-    // Anchor = the chosen joint position in local canvas coords
-    const sourceId = joints[id] ? id : (def.aliasOf || id);
-    const srcJoint = joints[sourceId] || joints[def.parent] || null;
-    if (!srcJoint) { parts[id] = null; continue; }
-    const ax = srcJoint.x - rx0;
-    const ay = srcJoint.y - ry0;
-
-    parts[id] = {
-      canvas:  pc,
-      anchorX: Math.max(0, Math.min(pw-1, ax)),
-      anchorY: Math.max(0, Math.min(ph-1, ay)),
-      srcX: rx0, srcY: ry0,
-      w: pw, h: ph,
-    };
-  }
+  const parts = [torso, hips, neck, head, hair, upperArmL, lowerArmL, handL, upperArmR, lowerArmR, handR, upperLegL, lowerLegL, footL, upperLegR, lowerLegR, footR];
+  parts.forEach((p, i) => (p.z = i));
   return parts;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Build the final puppet object consumed by animator.js
-// ─────────────────────────────────────────────────────────────────────────────
-export function buildPuppet(charCanvas, joints, partDefs = JOINT_DEFS, partMasks = null) {
-  const bb      = computeBB(charCanvas);
-  if (!bb) return null;
-  const voronoi = buildVoronoi(charCanvas, joints, partDefs, partMasks);
-  const parts   = extractParts(voronoi, joints, partDefs);
-  const groundY = bb.y + bb.h - 1;
-  return { parts, joints, bb, groundY, voronoi, partMasks };
+export function duplicatePart(part) {
+  return {
+    ...structuredClone(part),
+    id: crypto.randomUUID(),
+    label: `${part.label} Copy`,
+    srcRect: structuredClone(part.srcRect),
+    pivotLocal: structuredClone(part.pivotLocal),
+  };
+}
+
+export function capturePartCanvas(sourceCanvas, part) {
+  const out = document.createElement('canvas');
+  const rect = clampRect(part.srcRect, sourceCanvas.width, sourceCanvas.height);
+  out.width = Math.max(1, Math.round(rect.w));
+  out.height = Math.max(1, Math.round(rect.h));
+  const ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(sourceCanvas, rect.x, rect.y, rect.w, rect.h, 0, 0, out.width, out.height);
+  return out;
+}
+
+export function enrichParts(sourceCanvas, parts) {
+  const byId = new Map();
+  const out = parts.map(p => {
+    const rect = clampRect(p.srcRect, sourceCanvas.width, sourceCanvas.height);
+    const pivotLocal = {
+      x: Math.max(0, Math.min(rect.w, p.pivotLocal?.x ?? rect.w * 0.5)),
+      y: Math.max(0, Math.min(rect.h, p.pivotLocal?.y ?? rect.h * 0.5)),
+    };
+    const item = {
+      ...structuredClone(p),
+      kind: normalizeKind(p.kind || p.label),
+      label: p.label || humanLabel(p.kind),
+      color: p.color || partColor(p.kind || p.label),
+      srcRect: rect,
+      pivotLocal,
+      canvas: capturePartCanvas(sourceCanvas, { ...p, srcRect: rect }),
+    };
+    item.pivotAbs = { x: rect.x + pivotLocal.x, y: rect.y + pivotLocal.y };
+    byId.set(item.id, item);
+    return item;
+  });
+
+  const roots = out.filter(p => !p.parentId || !byId.has(p.parentId));
+  out.forEach(p => {
+    const parent = p.parentId ? byId.get(p.parentId) : null;
+    p.localOffset = parent ? { x: p.pivotAbs.x - parent.pivotAbs.x, y: p.pivotAbs.y - parent.pivotAbs.y } : { x: 0, y: 0 };
+  });
+
+  return { parts: out, byId, roots };
+}
+
+export function computeRigAnchor(parts) {
+  if (!parts?.length) return { x: 0, y: 0 };
+  const torso = parts.find(p => normalizeKind(p.kind) === 'torso') || parts.find(p => normalizeKind(p.kind) === 'hips') || parts.find(p => !p.parentId) || parts[0];
+  return torso ? torso.pivotAbs || { x: torso.srcRect.x + torso.pivotLocal.x, y: torso.srcRect.y + torso.pivotLocal.y } : { x: 0, y: 0 };
+}
+
+export function buildRig(sourceCanvas, parts) {
+  if (!sourceCanvas) return null;
+  const bb = computeBB(sourceCanvas);
+  const enriched = enrichParts(sourceCanvas, parts || []);
+  const anchor = computeRigAnchor(enriched.parts);
+  return {
+    sourceCanvas,
+    bb,
+    parts: enriched.parts,
+    byId: enriched.byId,
+    roots: enriched.roots,
+    anchor,
+  };
 }
