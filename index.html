@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SideScroller Puppet Animator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="title">SideScroller Puppet Animator</div>
+        <div class="subtitle">Import a sprite, place the rig, and preview a natural walk cycle in the browser.</div>
+      </div>
+
+      <div class="controls">
+        <label class="control file">
+          <span>Import image</span>
+          <input id="fileInput" type="file" accept="image/*" />
+        </label>
+
+        <label class="control">
+          <span>Facing</span>
+          <select id="facingSelect">
+            <option value="1">Facing right</option>
+            <option value="-1">Facing left</option>
+          </select>
+        </label>
+
+        <button id="autoRigBtn" class="btn primary">Auto rig</button>
+        <button id="fitBtn" class="btn">Fit source</button>
+        <button id="resetBtn" class="btn warn">Reset rig</button>
+      </div>
+
+      <div class="controls right">
+        <label class="control">
+          <span>Speed</span>
+          <input id="speedRange" type="range" min="0.25" max="2.25" step="0.01" value="1" />
+        </label>
+        <label class="control">
+          <span>BG trim</span>
+          <input id="trimRange" type="range" min="0" max="90" step="1" value="28" />
+        </label>
+        <button id="playBtn" class="btn good">Pause</button>
+        <label class="pill"><input id="showRigChk" type="checkbox" checked /> Show rig</label>
+        <label class="pill"><input id="trimChk" type="checkbox" checked /> Auto trim</label>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="pane">
+        <div class="paneHead">
+          <div>
+            <div class="paneTitle">Source / rig editor</div>
+            <div class="paneHint">Drag joints. Wheel to zoom. Drag empty space to pan.</div>
+          </div>
+          <div class="paneMeta" id="sourceMeta">No image loaded.</div>
+        </div>
+        <div class="canvasWrap" id="sourceWrap">
+          <canvas id="sourceCanvas"></canvas>
+          <div class="overlayBox">
+            <strong>Editing:</strong> the source view is the control room. Adjust the rig until the bones match the character.
+          </div>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="paneHead">
+          <div>
+            <div class="paneTitle">Animated preview</div>
+            <div class="paneHint">Mesh-warped render with two-bone IK walk motion.</div>
+          </div>
+          <div class="paneMeta" id="previewMeta">Preview idle.</div>
+        </div>
+        <div class="canvasWrap">
+          <canvas id="previewCanvas"></canvas>
+          <div class="overlayBox">
+            <strong>Preview:</strong> the whole sprite deforms with a soft mesh so the motion stays connected and natural.
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
