@@ -1,0 +1,129 @@
+/* style.css — UI Styling */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #1a1a1a;
+  color: #eee;
+  height: 100vh;
+  padding: 20px;
+}
+
+.header {
+  width: 100%;
+  max-width: 800px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.control-group {
+  background: #333;
+  padding: 10px;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+input[type="file"] {
+  background: #444;
+  border: none;
+  padding: 5px;
+  border-radius: 4px;
+  color: #fff;
+}
+
+button {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:hover {
+  background: #0056b3;
+}
+
+button:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+/* Canvas Container Layout */
+.canvas-container {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.canvas-wrapper {
+  background: #000;
+  border: 2px solid #444;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  background: #222;
+}
+
+#sheetCanvas {
+  /* Aspect ratio handled by JS */
+  width: 100%;
+  height: auto;
+}
+
+/* Badges */
+.badge {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* Toast Notification */
+#toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  padding: 10px 20px;
+  border-radius: 20px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+#toast.show {
+  opacity: 1;
+}
+
+.toast-success { color: #4caf50; }
+.toast-error { color: #f44336; }
