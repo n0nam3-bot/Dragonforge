@@ -1,153 +1,290 @@
-// skelEditor.js — Manages skeleton drawing and interaction
+// skelEditor.js — Interactive skeleton editor
+// Renders the character with a Voronoi region colour overlay + draggable joint handles.
+// Calls onJointsChanged(joints) whenever any joint is moved.
+
+import { JOINT_DEFS, buildVoronoi } from './bodyDetect.js';
+
+const JOINT_RADIUS = 9;    // px hit radius for dragging
+const HANDLE_R     = 7;    // drawn handle radius
+
 export class SkelEditor {
-  constructor(canvas, charCanvas, initialJoints, onUpdate) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.bgCanvas = charCanvas;
-    this.joints = initialJoints || [];
-    this.onUpdate = onUpdate;
-    
-    this.editingIndex = null; // Index of joint currently being moved
-    this.offset = { x: 0, y: 0 }; // For drag compensation
-    
-    this.setupEvents();
+  /**
+   * @param {HTMLCanvasElement} canvas  — the editor canvas element
+   * @param {HTMLCanvasElement} charCanvas — bg-removed character
+   * @param {object} joints  — { id: {x,y} } in SOURCE (charCanvas) pixel space
+   * @param {function} onJointsChanged
+   */
+  constructor(canvas, charCanvas, joints, onJointsChanged) {
+    this.canvas         = canvas;
+    this.charCanvas     = charCanvas;
+    this.joints         = JSON.parse(JSON.stringify(joints)); // deep copy
+    this.onJointsChanged= onJointsChanged;
+    this.showRegions    = true;
+    this.showSkeleton   = true;
+
+    // Derived from charCanvas
+    this.srcW = charCanvas.width;
+    this.srcH = charCanvas.height;
+
+    // Cached voronoi overlay (ImageData at source resolution)
+    this._voronoiOverlay = null;
+    this._buildOverlay();
+
+    // Drag state
+    this._drag     = null;   // { id, offsetX, offsetY }
+    this._hoverId  = null;
+
+    // Event listeners
+    this._onDown   = this._pointerDown.bind(this);
+    this._onMove   = this._pointerMove.bind(this);
+    this._onUp     = this._pointerUp.bind(this);
+
+    canvas.addEventListener('mousedown',  this._onDown);
+    canvas.addEventListener('touchstart', this._onDown, { passive: false });
+    window.addEventListener('mousemove',  this._onMove);
+    window.addEventListener('touchmove',  this._onMove, { passive: false });
+    window.addEventListener('mouseup',    this._onUp);
+    window.addEventListener('touchend',   this._onUp);
+
     this.draw();
   }
 
-  // --- Drawing Logic ---
-  draw() {
-    if (!this.bgCanvas) return;
+  destroy() {
+    this.canvas.removeEventListener('mousedown',  this._onDown);
+    this.canvas.removeEventListener('touchstart', this._onDown);
+    window.removeEventListener('mousemove',  this._onMove);
+    window.removeEventListener('touchmove',  this._onMove);
+    window.removeEventListener('mouseup',    this._onUp);
+    window.removeEventListener('touchend',   this._onUp);
+  }
 
-    // 1. Clear canvas
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  setShowRegions(v)  { this.showRegions  = v; this.draw(); }
+  setShowSkeleton(v) { this.showSkeleton = v; this.draw(); }
 
-    // 2. Draw background image (from charCanvas)
-    // Assuming charCanvas matches size of skelCanvas
-    this.ctx.drawImage(this.bgCanvas, 0, 0, this.canvas.width, this.canvas.height);
+  // Rebuild the voronoi colour overlay at source resolution
+  _buildOverlay() {
+    const W = this.srcW, H = this.srcH;
+    const colorMap = {};
+    for (const def of JOINT_DEFS) colorMap[def.id] = _hexToRgb(def.color);
 
-    // 3. Draw Skeleton Lines
-    if (this.joints.length >= 2) {
-      this.ctx.strokeStyle = '#ff0000';
-      this.ctx.lineWidth = 3;
-      this.ctx.lineCap = 'round';
-      
-      this.ctx.beginPath();
-      this.ctx.moveTo(this.getJointPos(this.joints[0])) // First joint
-      for (let i = 1; i < this.joints.length; i++) {
-        this.ctx.lineTo(this.getJointPos(this.joints[i]));
+    // Build voronoi map
+    const voro = buildVoronoi(this.charCanvas, this.joints);
+    const { map } = voro;
+    const charData = this.charCanvas.getContext('2d', { willReadFrequently: true })
+                         .getImageData(0, 0, W, H);
+
+    // Build overlay ImageData
+    const ol   = new ImageData(W, H);
+    const od   = ol.data;
+    const cd   = charData.data;
+
+    for (let i = 0; i < W * H; i++) {
+      const a = cd[i*4+3];
+      if (a < 18) continue;
+      const id    = map[i];
+      const color = id ? colorMap[id] : { r:128,g:128,b:128 };
+      od[i*4]     = color.r;
+      od[i*4+1]   = color.g;
+      od[i*4+2]   = color.b;
+      od[i*4+3]   = 160;  // semi-transparent overlay
+    }
+
+    // Draw onto an offscreen canvas at source size
+    const oc  = document.createElement('canvas');
+    oc.width  = W; oc.height = H;
+    oc.getContext('2d').putImageData(ol, 0, 0);
+    this._voronoiOverlay = oc;
+  }
+
+  // Map canvas (display) coords → source image coords
+  _toSrc(cx, cy) {
+    const { width: dw, height: dh } = this.canvas;
+    // We draw source centred and fitted; compute the same transform
+    const fit   = this._fitTransform();
+    return {
+      x: (cx - fit.ox) / fit.scale,
+      y: (cy - fit.oy) / fit.scale,
+    };
+  }
+
+  // Map source coords → canvas display coords
+  _toDst(sx, sy) {
+    const fit = this._fitTransform();
+    return {
+      x: sx * fit.scale + fit.ox,
+      y: sy * fit.scale + fit.oy,
+    };
+  }
+
+  _fitTransform() {
+    const dw    = this.canvas.width, dh = this.canvas.height;
+    const scale = Math.min(dw / this.srcW, dh / this.srcH) * 0.96;
+    const ox    = (dw - this.srcW * scale) / 2;
+    const oy    = (dh - this.srcH * scale) / 2;
+    return { scale, ox, oy };
+  }
+
+  _getPointer(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const raw  = e.touches ? e.touches[0] : e;
+    // Scale for canvas CSS vs actual pixel size
+    const scaleX = this.canvas.width  / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    return {
+      x: (raw.clientX - rect.left) * scaleX,
+      y: (raw.clientY - rect.top)  * scaleY,
+    };
+  }
+
+  _hitTest(cx, cy) {
+    const fit = this._fitTransform();
+    let bestId = null, bestD = Infinity;
+    for (const [id, j] of Object.entries(this.joints)) {
+      const dx = cx - (j.x * fit.scale + fit.ox);
+      const dy = cy - (j.y * fit.scale + fit.oy);
+      const d  = Math.sqrt(dx*dx + dy*dy);
+      if (d < JOINT_RADIUS * 1.6 && d < bestD) { bestD = d; bestId = id; }
+    }
+    return bestId;
+  }
+
+  _pointerDown(e) {
+    e.preventDefault();
+    const p  = this._getPointer(e);
+    const id = this._hitTest(p.x, p.y);
+    if (!id) return;
+    const fit = this._fitTransform();
+    this._drag = {
+      id,
+      offX: p.x - (this.joints[id].x * fit.scale + fit.ox),
+      offY: p.y - (this.joints[id].y * fit.scale + fit.oy),
+    };
+    this.canvas.style.cursor = 'grabbing';
+  }
+
+  _pointerMove(e) {
+    if (e.touches) e.preventDefault();
+    const p = this._getPointer(e);
+
+    if (this._drag) {
+      const fit  = this._fitTransform();
+      const newX = (p.x - this._drag.offX - fit.ox) / fit.scale;
+      const newY = (p.y - this._drag.offY - fit.oy) / fit.scale;
+      // Clamp within source canvas
+      this.joints[this._drag.id].x = Math.max(0, Math.min(this.srcW - 1, newX));
+      this.joints[this._drag.id].y = Math.max(0, Math.min(this.srcH - 1, newY));
+      // Rebuild overlay live
+      this._buildOverlay();
+      this.draw();
+      this.onJointsChanged(this.joints);
+    } else {
+      const id = this._hitTest(p.x, p.y);
+      if (id !== this._hoverId) {
+        this._hoverId = id;
+        this.canvas.style.cursor = id ? 'grab' : 'crosshair';
+        this.draw();
       }
-      this.ctx.stroke();
-
-      // Draw Joints (Circles)
-      this.joints.forEach((joint, i) => {
-        const x = this.getJointPos(joint);
-        const y = this.getJointPos(joint);
-        
-        // Joint Body
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, 6, 0, Math.PI * 2);
-        this.ctx.fillStyle = (i === 0 || i === 1) ? '#ffff00' : '#00ffff'; // Highlight head/shoulders
-        this.ctx.fill();
-
-        // Editing Ring
-        if (this.editingIndex === i) {
-          this.ctx.beginPath();
-          this.ctx.arc(x, y, 10, 0, Math.PI * 2);
-          this.ctx.strokeStyle = 'white';
-          this.ctx.stroke();
-          
-          // Selection Handle (Cursor)
-          this.ctx.beginPath();
-          this.ctx.arc(x, y, 3, 0, Math.PI * 2);
-          this.ctx.fillStyle = '#000';
-          this.ctx.fill();
-        }
-      });
     }
   }
 
-  // --- Interaction Logic ---
-  setupEvents() {
-    const canvas = this.canvas;
-    
-    // Mouse Down (Start Dragging)
-    canvas.addEventListener('mousedown', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+  _pointerUp() {
+    this._drag = null;
+    this.canvas.style.cursor = this._hoverId ? 'grab' : 'crosshair';
+  }
 
-      this.findNearestJoint(mouseX, mouseY).then((index) => {
-        if (index !== null) {
-          this.editingIndex = index;
-          this.draw(); // Redraw with editing ring
-          this.canvas.style.cursor = 'move';
-        } else {
-          this.editingIndex = null;
-        }
-      });
-    });
+  draw() {
+    const c   = this.canvas;
+    const ctx = c.getContext('2d');
+    const W   = c.width, H = c.height;
+    const fit = this._fitTransform();
+    const { scale, ox, oy } = fit;
 
-    // Mouse Move (Drag Joint)
-    canvas.addEventListener('mousemove', (e) => {
-      if (this.editingIndex !== null) {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+    ctx.clearRect(0, 0, W, H);
 
-        // Update joint position in array
-        this.joints[this.editingIndex].x = x;
-        this.joints[this.editingIndex].y = y;
+    // 1. Character image
+    ctx.save();
+    ctx.globalAlpha = this.showRegions ? 0.55 : 1.0;
+    ctx.drawImage(this.charCanvas, ox, oy, this.srcW * scale, this.srcH * scale);
+    ctx.restore();
 
-        // Normalize if needed (e.g., keep head at top) - Optional logic here
-        this.draw();
+    // 2. Voronoi region overlay
+    if (this.showRegions && this._voronoiOverlay) {
+      ctx.save();
+      ctx.globalAlpha = 0.58;
+      ctx.drawImage(this._voronoiOverlay, ox, oy, this.srcW * scale, this.srcH * scale);
+      ctx.restore();
+    }
+
+    if (!this.showSkeleton) return;
+
+    // 3. Skeleton bones
+    const colorMap = {};
+    for (const def of JOINT_DEFS) colorMap[def.id] = def.color;
+
+    for (const def of JOINT_DEFS) {
+      if (!def.parent) continue;
+      const a = this.joints[def.id];
+      const b = this.joints[def.parent];
+      if (!a || !b) continue;
+      const ax = a.x * scale + ox, ay = a.y * scale + oy;
+      const bx = b.x * scale + ox, by = b.y * scale + oy;
+
+      ctx.save();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth   = 4;
+      ctx.lineCap     = 'round';
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth   = 2;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 4. Joint handles
+    for (const def of JOINT_DEFS) {
+      const j = this.joints[def.id];
+      if (!j) continue;
+      const jx = j.x * scale + ox;
+      const jy = j.y * scale + oy;
+      const isHover = def.id === this._hoverId;
+      const isDrag  = this._drag?.id === def.id;
+
+      // Outer ring
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(jx, jy, HANDLE_R + (isDrag ? 3 : isHover ? 2 : 0), 0, Math.PI * 2);
+      ctx.fillStyle   = '#111';
+      ctx.fill();
+      // Coloured fill
+      ctx.beginPath();
+      ctx.arc(jx, jy, HANDLE_R - 1 + (isDrag ? 2 : 0), 0, Math.PI * 2);
+      ctx.fillStyle = def.color;
+      ctx.fill();
+      // Label
+      if (isHover || isDrag) {
+        ctx.font      = 'bold 10px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
+        ctx.fillText(def.label, jx, jy - HANDLE_R - 4);
       }
-    });
-
-    // Mouse Up (Finish Dragging)
-    canvas.addEventListener('mouseup', () => {
-      if (this.editingIndex !== null) {
-        // Commit change to state
-        this.updateJoints();
-        this.editingIndex = null;
-        this.canvas.style.cursor = 'default';
-      }
-    });
+      ctx.restore();
+    }
   }
 
-  // Helper: Get coordinate of a joint
-  getJointPos(joint) {
-    // Convert normalized coordinates (0-1) to pixel coordinates based on canvas size
-    // If your `joints` object stores normalized x/y (0 to 1), multiply by canvas width/height
-    const x = joint.x * this.canvas.width;
-    const y = joint.y * this.canvas.height;
-    return { x, y };
+  getJoints() { return JSON.parse(JSON.stringify(this.joints)); }
+
+  resetJoints(defaultJoints) {
+    this.joints = JSON.parse(JSON.stringify(defaultJoints));
+    this._buildOverlay();
+    this.draw();
+    this.onJointsChanged(this.joints);
   }
+}
 
-  // Helper: Find joint under mouse
-  findNearestJoint(mouseX, mouseY) {
-    return new Promise((resolve) => {
-      if (!this.joints.length) return resolve(null);
-
-      const { width, height } = this.canvas;
-      let minDist = Infinity;
-      let index = null;
-
-      this.joints.forEach((joint, i) => {
-        const jx = joint.x * width;
-        const jy = joint.y * height;
-        const dist = Math.sqrt((jx - mouseX) ** 2 + (jy - mouseY) ** 2);
-        
-        if (dist < minDist && dist < 10) { // 10px radius hit box
-          minDist = dist;
-          index = i;
-        }
-      });
-      resolve(index);
-    });
-  }
-
-  // Method: Update state and notify parent
-  updateJoints() {
-    this.onUpdate(this.joints);
-  }
+function _hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return { r, g, b };
 }
