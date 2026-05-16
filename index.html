@@ -3,52 +3,181 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpriteSync Animator Demo (GH Pages)</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Browser Character Inverter</title>
+    <!-- Load Libraries from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/background-removal.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <!-- Load GIF Generation Library -->
+    <script src="https://cdn.jsdelivr.net/npm/gif.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gif-encoder@0.0.4/gif.worker.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #222; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        canvas { background: white; max-width: 100%; max-height: 80vh; border: 2px solid #444; margin-top: 10px; }
+        .controls { margin-bottom: 10px; }
+        button, select { padding: 10px; font-size: 16px; cursor: pointer; }
+    </style>
 </head>
 <body>
 
-    <header>
-        <h1>🎨 SpriteSync Animator Demo</h1>
-        <p>Client-Side Prototype - No server required! Upload an image to start the process.</p>
-    </header>
+    <h1>Browser Character Inverter</h1>
+    <div class="controls">
+        <input type="file" id="upload" accept="image/*">
+        <div style="margin-top:10px;">
+            <select id="actionSelect">
+                <option value="idle">Idle</option>
+                <option value="walk">Walk Cycle</option>
+                <option value="attack">Attack</option>
+            </select>
+            <button onclick="processImage()">Generate/GIF</button>
+        </div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <p id="status"></p>
 
-    <div class="container">
-        
-        <!-- STEP 1: UPLOAD AND CONTROLS -->
-        <div class="control-panel">
-            <h2>Step 1: Upload & Select Pose</h2>
-            <input type="file" id="imageUpload" accept="image/*">
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const uploadInput = document.getElementById('upload');
+        const statusText = document.getElementById('status');
 
-            <div class="controls">
-                <label for="poseSelect">Pose Type:</label>
-                <select id="poseSelect">
-                    <option value="idle">Idle</option>
-                    <option value="walk">Walk Cycle (Demo)</option>
-                    <option value="attack">Attack (Demo)</option>
-                </select>
+        let originalImage = null;
+        let skeleton = null;
+        const numKeyPoints = 33;
 
-                <label for="facingSelect">Facing Direction:</label>
-                <select id="facingSelect">
-                    <option value="right">Right (Facing Forward)</option>
-                    <option value="left">Left (Facing Backward)</option>
-                </select>
+        // 1. Handle Image Upload
+        uploadInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const img = new Image();
+                img.onload = async () => {
+                    originalImage = img;
+                    
+                    // 2. Step A: Remove Background
+                    const blob = await remove.background(
+                        { blob: new Blob([event.target.result], {type: 'image/jpeg'}) }
+                    );
+                    
+                    // Convert blob to Image for manipulation
+                    const bgRemovedImg = new Image();
+                    bgRemovedImg.src = URL.createObjectURL(blob);
+                    
+                    // Wait for bg removal to finish
+                    bgRemovedImg.onload = async () => {
+                        // Now we run the pose logic
+                        runPoseDetection(bgRemovedImg);
+                    };
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 3. Step B: Detect Pose (MediaPipe)
+        function runPoseDetection(img) {
+            const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
+            
+            // 4. Process the image to extract skeleton
+            pose.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            pose.onResults((results) => {
+                skeleton = results;
+                drawFrame(results, "idle"); // Draw the initial frame
+            });
+
+            pose.send({image: img});
+        }
+
+        // 5. Step C: Draw & Process Logic
+        function drawFrame(results, actionType) {
+            if (!originalImage) return;
+
+            canvas.width = originalImage.width;
+            canvas.height = originalImage.height;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // A. Draw Background (from removed image)
+            // Note: In this simple version, we paste the background removed image
+            // You might want to fillRect with a color if background removal fails
+            ctx.drawImage(originalImage, 0, 0);
+
+            // B. Logic to Manipulate Body Parts
+            // Here we create the "Walk Cycle" or "Attack" pose programmatically
+            if (actionType === 'walk') {
+                // Simple logic: Walk cycle implies arm swing
+                // We can use the skeleton coordinates to draw an inverted arm
+                const { landmarks } = results;
                 
-                <button id="generateBtn">▶️ Generate Animation</button>
-            </div>
-        </div>
-        
-        <!-- STEP 2: THE EDITOR AREA -->
-        <div class="editor-area">
-            <h2>Step 2: Character Rig Editor</h2>
-            <div class="canvas-container">
-                <!-- Canvas for drawing/displaying the character -->
-                <canvas id="characterCanvas" width="600" height="400"></canvas>
-            </div>
-        </div>
-    <!-- ===================================================== -->
-    <!-- 🟢 PASTE YOUR SCRIPT LINK HERE! -->
-    <!-- ===================================================== -->
-    <script src="script.js"></script>
-    </body>
+                // Example: Swap Left and Right arms to simulate walking
+                // Draw original body (already done in step A)
+                // Draw Left Arm (mapped from Right Hand)
+                // Draw Right Arm (mapped from Left Hand)
+                
+                // (Simplified for this demo - actual game-ready code requires complex morphing logic)
+                ctx.globalCompositeOperation = 'source-over';
+                
+                // 1. Draw Legs (Static, just walk in place here)
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                ctx.beginPath();
+                ctx.moveTo(landmarks[23].x, landmarks[23].y);
+                ctx.lineTo(landmarks[24].x, landmarks[24].y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(landmarks[25].x, landmarks[25].y);
+                ctx.lineTo(landmarks[26].x, landmarks[26].y);
+                ctx.stroke();
+
+                // 2. Draw Torso
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                ctx.beginPath();
+                ctx.moveTo(landmarks[11].x, landmarks[11].y); // Left Shoulder
+                ctx.lineTo(landmarks[12].x, landmarks[12].y); // Right Shoulder
+                ctx.stroke();
+
+            } else if (actionType === 'attack') {
+                // Logic to draw weapon arm extended
+                // ... (code omitted for brevity) ...
+                ctx.fillText("Attack Pose Logic Here", 20, 30);
+            }
+
+            statusText.innerText = `Action: ${actionType}`;
+            return canvas.toDataURL();
+        }
+
+        function processImage() {
+            if (!skeleton) { alert("Please upload an image first."); return; }
+            
+            // 1. Get current image data as a GIF
+            const frame = drawFrame(skeleton, document.getElementById('actionSelect').value);
+            
+            // 2. Prepare GIF Export
+            const encoder = new GIFEncoder();
+            encoder.setTransparent(0xFFFFFF);
+            encoder.ondataavailable = function(e) {
+                const blob = new Blob([encoder.stream().arraybuffer], {
+                    type: 'image/gif'
+                });
+                const url = URL.createObjectURL(blob);
+                statusText.innerText = `GIF Ready! URL: ${url}`;
+                // You can download this GIF to your PC/Mobile
+            };
+            encoder.addFrame(frame);
+            encoder.setRepeat(0);
+            encoder.setSize(canvas.width, canvas.height);
+            encoder.setDelay(200); // 200ms per frame (5fps)
+            encoder.render();
+        }
+    </script>
+</body>
 </html>
