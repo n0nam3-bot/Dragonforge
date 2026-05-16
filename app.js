@@ -38,6 +38,7 @@ const state = {
   pose: 'walk',
   speed: 1,
   tiltDeg: 0,
+  facing: 'auto',
   animStart: performance.now(),
   previewSheet: null,
   draggingJoint: null,
@@ -79,6 +80,7 @@ const els = {
   speedVal: document.getElementById('speedVal'),
   tiltSlider: document.getElementById('tiltSlider'),
   tiltVal: document.getElementById('tiltVal'),
+  facingSelect: document.getElementById('facingSelect'),
   zoomSlider: document.getElementById('zoomSlider'),
   zoomVal: document.getElementById('zoomVal'),
   fitViewBtn: document.getElementById('fitViewBtn'),
@@ -236,6 +238,10 @@ function wireEvents() {
     els.tiltVal.textContent = `${state.tiltDeg}°`;
     renderAll();
   });
+  els.facingSelect?.addEventListener('change', () => {
+    state.facing = els.facingSelect.value;
+    renderAll();
+  });
 
   // export/save
   els.saveBtn.addEventListener('click', saveProject);
@@ -379,6 +385,7 @@ function exportProjectData() {
       pose: state.pose,
       speed: state.speed,
       tiltDeg: state.tiltDeg,
+      facing: state.facing,
       viewZoom: state.viewZoom,
       viewPanX: state.viewPanX,
       viewPanY: state.viewPanY,
@@ -416,6 +423,7 @@ async function importProjectData(data) {
   state.pose = settings.pose || 'walk';
   state.speed = settings.speed ?? 1;
   state.tiltDeg = settings.tiltDeg ?? 0;
+  state.facing = settings.facing || 'auto';
   state.viewZoom = settings.viewZoom ?? 1;
   state.viewPanX = settings.viewPanX ?? 0;
   state.viewPanY = settings.viewPanY ?? 0;
@@ -428,6 +436,7 @@ async function importProjectData(data) {
   els.speedVal.textContent = `${state.speed.toFixed(2)}×`;
   els.tiltSlider.value = String(state.tiltDeg);
   els.tiltVal.textContent = `${state.tiltDeg}°`;
+  if (els.facingSelect) els.facingSelect.value = state.facing;
   if (els.zoomSlider) els.zoomSlider.value = String(state.viewZoom);
   if (els.zoomVal) els.zoomVal.textContent = `${Math.round(state.viewZoom * 100)}%`;
   els.toolButtons.forEach(b => b.classList.toggle('active', b.dataset.tool === state.tool));
@@ -729,7 +738,7 @@ function updatePartCutout(part) {
   const sctx = srcCanvas.getContext('2d', { willReadFrequently: true });
   const srcData = sctx.getImageData(0, 0, W, H).data;
 
-  const softMask = softenMaskCanvas(part.maskCanvas, 2 + Math.round(state.selectionSmooth * 4), 1 + Math.round(state.selectionSmooth * 2));
+  const softMask = softenMaskCanvas(part.maskCanvas, 3 + Math.round(state.selectionSmooth * 5), 2 + Math.round(state.selectionSmooth * 2));
   const mctx = softMask.getContext('2d', { willReadFrequently: true });
   const maskData = mctx.getImageData(0, 0, W, H).data;
 
@@ -875,6 +884,7 @@ function drawEditor() {
     ctx.restore();
   }
 }
+
 function drawPreview(ctx, now, exportMode) {
   const canvas = ctx.canvas;
   const W = canvas.width;
@@ -888,69 +898,232 @@ function drawPreview(ctx, now, exportMode) {
   if (!exportMode) els.previewPlaceholder.classList.add('hidden');
 
   const bbox = sourceBBox(state.cleanCanvas);
-  const scale = Math.min((W * 0.60) / Math.max(bbox.w, 1), (H * 0.72) / Math.max(bbox.h, 1), 4);
-  const root = chooseRootPart();
-  const rootSource = root?.joint || centerOfParts() || { x: state.sourceW / 2, y: state.sourceH / 2 };
-  const origin = {
-    x: W * 0.5 / scale,
-    y: H * 0.82 / scale,
-  };
+  const scale = Math.min((W * 0.60) / Math.max(bbox.w, 1), (H * 0.76) / Math.max(bbox.h, 1), 4);
+  const offsetX = (W - state.sourceW * scale) * 0.5;
+  const offsetY = H * 0.14;
 
-  const t = (((now - state.animStart) / 1000) * state.speed) % 1;
-  const order = topoOrder();
-  const transforms = new Map();
+  const pose = computeRigTransforms(now);
+  const drawOrder = topoOrder().slice().sort((a, b) => depthOf(a) - depthOf(b));
 
-  const rootAnim = rootMotion(state.pose, t, state.tiltDeg);
-  for (const part of order) {
-    const deltaRot = partMotion(part, state.pose, t);
-    const parent = part.parentId ? transforms.get(part.parentId) : null;
-    let pos, rot;
-    if (!parent) {
-      const dx = (part.joint?.x ?? rootSource.x) - rootSource.x;
-      const dy = (part.joint?.y ?? rootSource.y) - rootSource.y;
-      const off = rotateVec(dx, dy, rootAnim.rot);
-      pos = { x: origin.x + off.x + rootAnim.dx, y: origin.y + off.y + rootAnim.dy };
-      rot = rootAnim.rot + deltaRot;
-    } else {
-      const dx = (part.joint?.x ?? 0) - (findPart(part.parentId)?.joint?.x ?? 0);
-      const dy = (part.joint?.y ?? 0) - (findPart(part.parentId)?.joint?.y ?? 0);
-      const off = rotateVec(dx, dy, parent.rot);
-      pos = { x: parent.pos.x + off.x, y: parent.pos.y + off.y };
-      rot = parent.rot + deltaRot;
-    }
-    transforms.set(part.id, { pos, rot, part });
-  }
-
-  // order draw by list order but ensure parents are behind children
-  const drawOrder = order.slice().sort((a, b) => depthOf(a) - depthOf(b));
   for (const part of drawOrder) {
-    const tr = transforms.get(part.id);
+    const tr = pose.get(part.id);
     if (!tr || !part.visible || !part.canvas || !part.anchor) continue;
-    const px = tr.pos.x * scale;
-    const py = tr.pos.y * scale;
+    const px = tr.pos.x * scale + offsetX;
+    const py = tr.pos.y * scale + offsetY;
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(tr.rot);
     ctx.scale(scale, scale);
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(part.canvas, -part.anchor.x, -part.anchor.y);
     ctx.restore();
   }
 
-  // shadow / ground anchor
   ctx.save();
-  ctx.globalAlpha = 0.25;
+  ctx.globalAlpha = 0.22;
   ctx.fillStyle = '#000';
+  const root = chooseRootPart();
+  const rootPose = pose.get(root?.id || '')?.pos || centerOfParts() || { x: state.sourceW * 0.5, y: state.sourceH * 0.78 };
   ctx.beginPath();
-  ctx.ellipse(W * 0.5, H * 0.88, Math.max(60, bbox.w * scale * 0.18), 12, 0, 0, Math.PI * 2);
+  ctx.ellipse(rootPose.x * scale + offsetX, H * 0.90, Math.max(60, bbox.w * scale * 0.18), 12, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // status
   els.previewStatus.textContent = `${state.pose} • ${state.speed.toFixed(2)}×`;
 }
 
+function computeRigTransforms(now) {
+  const t = (((now - state.animStart) / 1000) * state.speed) % 1;
+  const rootAnim = rootMotion(state.pose, t, state.tiltDeg);
+
+  const source = getSourceJointMap();
+  const current = {};
+  const facing = getFacingSign();
+  const transforms = new Map();
+
+  const rootBase = {
+    x: state.sourceW * 0.50,
+    y: state.sourceH * 0.78,
+  };
+  current.pelvis = {
+    x: rootBase.x + rootAnim.dx,
+    y: rootBase.y + rootAnim.dy,
+  };
+
+  const spineWave = Math.sin(t * Math.PI * 2);
+  const spineLean = state.pose === 'run' ? 0.072 : state.pose === 'walk' ? 0.036 : 0.018;
+  const spineRot = rootAnim.rot + spineWave * spineLean;
+
+  current.torso = offsetFromSourceJoint(current.pelvis, source.pelvis, source.torso, spineRot * 0.55);
+  current.chest = offsetFromSourceJoint(current.torso, source.torso, source.chest, spineRot * 0.75);
+  current.neck = offsetFromSourceJoint(current.chest, source.chest, source.neck, spineRot * 0.90);
+  current.head = offsetFromSourceJoint(current.neck, source.neck, source.head, spineRot * 1.10);
+
+  const shoulderLean = spineRot * 0.35;
+  const hipLean = spineRot * 0.20;
+
+  current['upper arm L'] = offsetFromSourceJoint(current.chest, source.chest, source['upper arm L'], shoulderLean);
+  current['upper arm R'] = offsetFromSourceJoint(current.chest, source.chest, source['upper arm R'], shoulderLean);
+  current['thigh L'] = offsetFromSourceJoint(current.pelvis, source.pelvis, source['thigh L'], hipLean);
+  current['thigh R'] = offsetFromSourceJoint(current.pelvis, source.pelvis, source['thigh R'], hipLean);
+
+  const legUpperL = dist(source['thigh L'], source['shin L']) || state.sourceH * 0.19;
+  const legLowerL = dist(source['shin L'], source['foot L']) || state.sourceH * 0.18;
+  const legUpperR = dist(source['thigh R'], source['shin R']) || state.sourceH * 0.19;
+  const legLowerR = dist(source['shin R'], source['foot R']) || state.sourceH * 0.18;
+  const armUpperL = dist(source['upper arm L'], source['lower arm L']) || state.sourceH * 0.16;
+  const armLowerL = dist(source['lower arm L'], source['hand L']) || state.sourceH * 0.14;
+  const armUpperR = dist(source['upper arm R'], source['lower arm R']) || state.sourceH * 0.16;
+  const armLowerR = dist(source['lower arm R'], source['hand R']) || state.sourceH * 0.14;
+
+  const walkCycle = (side) => (side < 0 ? t : (t + 0.5) % 1);
+  const strideScale = state.pose === 'run' ? 1.55 : state.pose === 'walk' ? 1.0 : 0.55;
+  const liftScale = state.pose === 'run' ? 1.35 : state.pose === 'walk' ? 1.0 : 0.45;
+
+  for (const side of [-1, 1]) {
+    const suffix = side < 0 ? 'L' : 'R';
+    const phase = walkCycle(side);
+    const wave = Math.sin(phase * Math.PI * 2);
+    const waveAbs = Math.max(0, wave);
+    const waveOpp = Math.max(0, -wave);
+
+    const hipBase = current[`thigh ${suffix}`];
+    const shoulderBase = current[`upper arm ${suffix}`];
+
+    const footTarget = {
+      x: hipBase.x + side * facing * (state.sourceW * 0.06 + wave * state.sourceW * 0.09 * strideScale),
+      y: hipBase.y + state.sourceH * 0.20 - waveAbs * state.sourceH * 0.10 * liftScale + waveOpp * state.sourceH * 0.012,
+    };
+    const armTarget = {
+      x: shoulderBase.x - side * facing * (state.sourceW * 0.05 + wave * state.sourceW * 0.07 * strideScale),
+      y: shoulderBase.y + state.sourceH * 0.03 + waveOpp * state.sourceH * 0.05 * liftScale - waveAbs * state.sourceH * 0.012,
+    };
+
+    const legIK = solveTwoBoneIK(hipBase, footTarget, suffix === 'L' ? legUpperL : legUpperR, suffix === 'L' ? legLowerL : legLowerR, side);
+    const armIK = solveTwoBoneIK(shoulderBase, armTarget, suffix === 'L' ? armUpperL : armUpperR, suffix === 'L' ? armLowerL : armLowerR, -side);
+
+    current[`shin ${suffix}`] = legIK.mid;
+    current[`foot ${suffix}`] = legIK.end;
+    current[`lower arm ${suffix}`] = armIK.mid;
+    current[`hand ${suffix}`] = armIK.end;
+  }
+
+  for (const part of state.parts) {
+    const parent = findPart(part.parentId);
+    const srcPoint = sourcePointForPart(part);
+    const srcParent = parent ? sourcePointForPart(parent) : null;
+    const parentPos = parent ? current[parent.type] : null;
+    const partPos = current[part.type] || null;
+
+    let pos;
+    let rot = 0;
+
+    if (part.type === 'pelvis') {
+      pos = current.pelvis;
+      rot = rootAnim.rot;
+    } else if (partPos) {
+      pos = partPos;
+      if (parentPos && srcParent) {
+        const srcAngle = Math.atan2(srcPoint.y - srcParent.y, srcPoint.x - srcParent.x);
+        const curAngle = Math.atan2(pos.y - parentPos.y, pos.x - parentPos.x);
+        rot = curAngle - srcAngle;
+      } else {
+        rot = rootAnim.rot;
+      }
+    } else if (parentPos && srcParent) {
+      const parentRot = transforms.get(parent.id)?.rot ?? rootAnim.rot;
+      const delta = rotateVec(srcPoint.x - srcParent.x, srcPoint.y - srcParent.y, parentRot);
+      pos = { x: parentPos.x + delta.x, y: parentPos.y + delta.y };
+      const srcAngle = Math.atan2(srcPoint.y - srcParent.y, srcPoint.x - srcParent.x);
+      const curAngle = Math.atan2(pos.y - parentPos.y, pos.x - parentPos.x);
+      rot = curAngle - srcAngle;
+    } else {
+      pos = part.joint || sourcePointForPart(part);
+      rot = rootAnim.rot;
+    }
+
+    transforms.set(part.id, { pos, rot, part });
+  }
+
+  return transforms;
+}
+
+function solveTwoBoneIK(base, target, len1, len2, bendDir = 1) {
+  const dx = target.x - base.x;
+  const dy = target.y - base.y;
+  const distTarget = Math.max(0.001, Math.hypot(dx, dy));
+  const maxReach = Math.max(0.001, len1 + len2 - 0.001);
+  const reach = Math.min(distTarget, maxReach);
+  const baseAngle = Math.atan2(dy, dx);
+  const cosA = clamp((len1 * len1 + reach * reach - len2 * len2) / (2 * len1 * reach), -1, 1);
+  const shoulderAngle = baseAngle - bendDir * Math.acos(cosA);
+  const elbow = {
+    x: base.x + Math.cos(shoulderAngle) * len1,
+    y: base.y + Math.sin(shoulderAngle) * len1,
+  };
+  const end = distTarget > maxReach
+    ? { x: base.x + dx * (maxReach / distTarget), y: base.y + dy * (maxReach / distTarget) }
+    : { x: target.x, y: target.y };
+  return { mid: elbow, end };
+}
+
+function offsetFromSourceJoint(parentPos, parentSource, childSource, extraRot = 0) {
+  const dx = childSource.x - parentSource.x;
+  const dy = childSource.y - parentSource.y;
+  const rotated = rotateVec(dx, dy, extraRot);
+  return { x: parentPos.x + rotated.x, y: parentPos.y + rotated.y };
+}
+
+function getSourceJointMap() {
+  const get = (type) => sourcePointForType(type);
+  return {
+    pelvis: get('pelvis'),
+    torso: get('torso'),
+    chest: get('chest'),
+    neck: get('neck'),
+    head: get('head'),
+    'upper arm L': get('upper arm L'),
+    'lower arm L': get('lower arm L'),
+    'hand L': get('hand L'),
+    'upper arm R': get('upper arm R'),
+    'lower arm R': get('lower arm R'),
+    'hand R': get('hand R'),
+    'thigh L': get('thigh L'),
+    'shin L': get('shin L'),
+    'foot L': get('foot L'),
+    'thigh R': get('thigh R'),
+    'shin R': get('shin R'),
+    'foot R': get('foot R'),
+  };
+}
+
+function sourcePointForType(type) {
+  const part = state.parts.find(p => p.type === type);
+  return part?.joint || defaultJointForType(type);
+}
+
+function sourcePointForPart(part) {
+  return part?.joint || defaultJointForType(part?.type || 'torso');
+}
+
+function getFacingSign() {
+  if (state.facing === 'left') return -1;
+  if (state.facing === 'right') return 1;
+  return inferFacingSign();
+}
+
+function inferFacingSign() {
+  const left = state.parts.filter(p => /\b(l|left)\b/i.test(`${p.type} ${p.name}`) && p.joint);
+  const right = state.parts.filter(p => /\b(r|right)\b/i.test(`${p.type} ${p.name}`) && p.joint);
+  if (!left.length || !right.length) return 1;
+  const lx = left.reduce((a, p) => a + p.joint.x, 0) / left.length;
+  const rx = right.reduce((a, p) => a + p.joint.x, 0) / right.length;
+  return lx < rx ? 1 : -1;
+}
+
 // ------------------------------ Animation math ------------------------------
+
 
 
 function rootMotion(pose, t, tiltDeg) {
@@ -958,21 +1131,40 @@ function rootMotion(pose, t, tiltDeg) {
   const phase = (t % 1 + 1) % 1;
   const sway = Math.sin(phase * Math.PI * 2);
   const bob = Math.sin(phase * Math.PI * 2) ** 2;
+
   switch (pose) {
     case 'idle':
-      return { dx: Math.sin(phase * Math.PI * 2) * 1.4, dy: -bob * 6, rot: tilt + sway * 0.02 };
+      return {
+        dx: sway * 0.8,
+        dy: -bob * 3.5,
+        rot: tilt + sway * 0.015,
+      };
     case 'walk':
-      return { dx: sway * 3.0, dy: -bob * 11, rot: tilt + sway * 0.04 };
+      return {
+        dx: sway * 1.6,
+        dy: -bob * 7.0,
+        rot: tilt + sway * 0.032,
+      };
     case 'run':
-      return { dx: sway * 5.0, dy: -bob * 15, rot: tilt + sway * 0.08 };
+      return {
+        dx: sway * 2.8,
+        dy: -bob * 11.0,
+        rot: tilt + sway * 0.06,
+      };
     case 'jump': {
       const lift = t < 0.5 ? easeOut(t / 0.5) : 1 - easeIn((t - 0.5) / 0.5);
-      return { dx: 0, dy: -lift * 100, rot: tilt - lift * 0.05 };
+      return {
+        dx: 0,
+        dy: -lift * 70,
+        rot: tilt - lift * 0.05,
+      };
     }
     default:
       return { dx: 0, dy: 0, rot: tilt };
   }
 }
+
+function sampleCycle
 
 function sampleCycle(keys, phase) {
   const p = ((phase % 1) + 1) % 1;
@@ -1492,6 +1684,7 @@ els.wandToleranceVal.textContent = String(state.wandTolerance);
 els.selectionSmoothVal.textContent = state.selectionSmooth.toFixed(2);
 els.speedVal.textContent = `${state.speed.toFixed(2)}×`;
 els.tiltVal.textContent = `${state.tiltDeg}°`;
+if (els.facingSelect) els.facingSelect.value = state.facing;
 if (els.zoomVal) els.zoomVal.textContent = `${Math.round(state.viewZoom * 100)}%`;
 if (els.zoomSlider) els.zoomSlider.value = String(state.viewZoom);
 els.poseSelect.value = state.pose;
