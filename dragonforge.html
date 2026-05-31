@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>DragonForge — Skeletal Animation Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#0b0c0f;--p1:#111318;--p2:#161921;--brd:#1e2030;--brd2:#272d3e;
+  --t0:#3a4055;--t1:#6a7090;--t2:#a8b0c8;--t3:#d0d8ec;
+  --acc:#e87a20;--acc2:#cc5510;--sel:#00b8d9;--sel2:#007890;
+  --grn:#30c070;--red:#e04848;--yel:#f5c518;
+  --rh:42px;--lw:165px;--rw:196px;--tlh:158px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t2);
+  font-family:'IBM Plex Sans',sans-serif;font-size:11px;user-select:none;}
+body{display:flex;flex-direction:column;}
+
+/* ── TOOLBAR ──────────────────────────────────────────── */
+#toolbar{height:var(--rh);min-height:var(--rh);background:var(--p1);
+  border-bottom:1px solid var(--brd);display:flex;align-items:center;
+  padding:0 8px;gap:4px;flex-shrink:0;overflow-x:auto;}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;
+  color:var(--acc);letter-spacing:3px;margin-right:6px;white-space:nowrap;}
+.vsep{width:1px;height:24px;background:var(--brd2);flex-shrink:0;margin:0 2px;}
+.tb{width:30px;height:26px;background:transparent;border:1px solid var(--brd2);
+  border-radius:3px;color:var(--t1);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:13px;transition:all .1s;flex-shrink:0;}
+.tb:hover{border-color:var(--acc);color:var(--acc);}
+.tb.on{background:rgba(232,122,32,.12);border-color:var(--acc);color:var(--acc);}
+.btn{height:26px;padding:0 8px;background:transparent;border:1px solid var(--brd2);
+  border-radius:3px;color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;
+  font-size:9px;letter-spacing:.5px;white-space:nowrap;flex-shrink:0;transition:all .1s;}
+.btn:hover{border-color:var(--acc);color:var(--acc);}
+.btn.pri{background:rgba(232,122,32,.12);border-color:var(--acc);color:var(--acc);}
+.btn.sel{background:rgba(0,184,217,.1);border-color:var(--sel);color:var(--sel);}
+.btn.grn{background:rgba(48,192,112,.1);border-color:var(--grn);color:var(--grn);}
+.tbsel{height:26px;padding:0 6px;background:var(--p2);border:1px solid var(--brd2);
+  border-radius:3px;color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;
+  outline:none;cursor:pointer;flex-shrink:0;}
+.tbsel:hover{border-color:var(--acc);}
+.numf{width:34px;height:26px;background:var(--p2);border:1px solid var(--brd2);
+  border-radius:3px;color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;
+  text-align:center;outline:none;flex-shrink:0;padding:0 2px;}
+.numf:focus{border-color:var(--acc);}
+.lbl{font-size:8px;letter-spacing:1.5px;color:var(--t0);text-transform:uppercase;
+  white-space:nowrap;flex-shrink:0;}
+.frm{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t1);
+  min-width:54px;text-align:center;flex-shrink:0;}
+
+/* ── MAIN ─────────────────────────────────────────────── */
+#main{flex:1;display:flex;overflow:hidden;}
+
+/* ── LEFT PANEL ──────────────────────────────────────── */
+#lpanel{width:var(--lw);min-width:var(--lw);background:var(--p1);
+  border-right:1px solid var(--brd);display:flex;flex-direction:column;overflow:hidden;}
+.ph{height:26px;display:flex;align-items:center;padding:0 10px;justify-content:space-between;
+  font-size:8px;letter-spacing:2px;color:var(--t0);text-transform:uppercase;
+  border-bottom:1px solid var(--brd);flex-shrink:0;}
+.ph-btn{background:none;border:none;color:var(--t0);cursor:pointer;font-size:11px;padding:2px;}
+.ph-btn:hover{color:var(--acc);}
+.tabs{display:flex;border-bottom:1px solid var(--brd);flex-shrink:0;}
+.tab{flex:1;height:25px;background:transparent;border:none;border-bottom:2px solid transparent;
+  color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:8px;
+  letter-spacing:1px;text-transform:uppercase;transition:all .1s;}
+.tab:hover{color:var(--t2);}
+.tab.on{color:var(--acc);border-bottom-color:var(--acc);}
+.tab-pane{flex:1;overflow-y:auto;display:none;}
+.tab-pane.on{display:block;}
+
+/* Tree rows */
+.brow{display:flex;align-items:center;height:22px;cursor:pointer;
+  font-size:10px;color:var(--t1);transition:background .06s;padding-right:6px;}
+.brow:hover{background:var(--p2);}
+.brow.sel{background:rgba(0,184,217,.08);color:var(--sel);}
+.brow-ico{font-size:7px;flex-shrink:0;}
+.brow-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.brow-vis{background:none;border:none;color:var(--t0);cursor:pointer;font-size:9px;padding:2px 4px;}
+.brow-vis:hover{color:var(--t2);}
+
+/* Slot rows */
+.srow{display:flex;align-items:center;height:22px;cursor:pointer;
+  padding:0 8px;gap:4px;font-size:10px;color:var(--t1);transition:background .06s;}
+.srow:hover{background:var(--p2);}
+.srow.sel{background:rgba(0,184,217,.08);color:var(--sel);}
+.srow-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* ── VIEWPORT ────────────────────────────────────────── */
+#vpwrap{flex:1;position:relative;overflow:hidden;background:#060810;}
+#vp{width:100%;height:100%;display:block;touch-action:none;}
+#vpinfo{position:absolute;bottom:8px;left:10px;font-size:9px;color:var(--t0);
+  pointer-events:none;line-height:2;font-family:'IBM Plex Mono',monospace;}
+#vpmode{position:absolute;top:8px;left:10px;font-size:8px;letter-spacing:2px;
+  color:var(--acc);text-transform:uppercase;pointer-events:none;
+  font-family:'IBM Plex Mono',monospace;}
+#vpkeys{position:absolute;top:8px;right:10px;font-size:8px;color:var(--t0);
+  pointer-events:none;text-align:right;line-height:2;
+  font-family:'IBM Plex Mono',monospace;}
+#dropzone{position:absolute;inset:0;display:none;align-items:center;
+  justify-content:center;background:rgba(0,184,217,.06);
+  border:2px dashed var(--sel);pointer-events:none;}
+#dropzone span{color:var(--sel);font-size:14px;letter-spacing:2px;}
+
+/* ── RIGHT PANEL ─────────────────────────────────────── */
+#rpanel{width:var(--rw);min-width:var(--rw);background:var(--p1);
+  border-left:1px solid var(--brd);display:flex;flex-direction:column;overflow-y:auto;}
+.pr{display:flex;align-items:center;justify-content:space-between;
+  padding:4px 10px;border-bottom:1px solid rgba(30,32,48,.6);}
+.pl{font-size:8px;letter-spacing:1px;color:var(--t0);text-transform:uppercase;}
+.pv{font-size:10px;color:var(--t2);font-family:'IBM Plex Mono',monospace;}
+.pi{width:80px;background:var(--bg);border:1px solid var(--brd2);border-radius:2px;
+  color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;
+  padding:2px 5px;text-align:right;outline:none;}
+.pi:focus{border-color:var(--acc);}
+.pi2{width:38px;}
+.prow3{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px 8px;
+  border-bottom:1px solid rgba(30,32,48,.4);}
+.pb{width:100%;margin:3px 8px;height:22px;width:calc(100% - 16px);
+  background:transparent;border:1px solid var(--brd2);border-radius:3px;
+  color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;
+  font-size:8px;letter-spacing:.5px;transition:all .1s;}
+.pb:hover{border-color:var(--acc);color:var(--acc);}
+.pb.r:hover{border-color:var(--red);color:var(--red);}
+.pb.g:hover{border-color:var(--grn);color:var(--grn);}
+.swatch-row{display:flex;flex-wrap:wrap;gap:3px;padding:6px 8px;}
+.sw{width:20px;height:20px;border-radius:3px;cursor:pointer;
+  border:1.5px solid transparent;transition:border-color .1s;}
+.sw:hover{border-color:#fff;}
+.sw.on{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.3);}
+.sec-hdr{padding:6px 10px 3px;font-size:8px;letter-spacing:2px;
+  color:var(--t0);text-transform:uppercase;}
+
+/* ── TIMELINE ────────────────────────────────────────── */
+#tl{height:var(--tlh);min-height:var(--tlh);background:var(--p1);
+  border-top:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+#tlhdr{height:26px;display:flex;align-items:center;padding:0 8px;gap:5px;
+  border-bottom:1px solid var(--brd);flex-shrink:0;}
+#tlbody{flex:1;display:flex;overflow:hidden;}
+#tllabels{width:var(--lw);min-width:var(--lw);border-right:1px solid var(--brd);
+  overflow-y:auto;overflow-x:hidden;}
+.tll{height:20px;display:flex;align-items:center;padding:0 8px;
+  font-size:9px;color:var(--t0);border-bottom:1px solid rgba(30,32,48,.4);
+  cursor:pointer;gap:4px;}
+.tll:hover{color:var(--t1);}
+.tll.sel{color:var(--sel);}
+.tll-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+#tlscroll{flex:1;overflow:auto;position:relative;}
+#tlcanvas{display:block;cursor:crosshair;}
+
+/* ── MODAL ──────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;
+  display:none;align-items:center;justify-content:center;}
+.overlay.on{display:flex;}
+.mbox{background:var(--p1);border:1px solid var(--brd2);border-radius:6px;
+  padding:20px;min-width:320px;max-width:480px;width:90%;}
+.mbox h2{font-family:'Rajdhani',sans-serif;font-size:18px;color:var(--acc);
+  letter-spacing:2px;margin-bottom:12px;}
+.mbox p{font-size:10px;color:var(--t1);margin-bottom:12px;line-height:1.6;}
+.mbox input[type=file]{display:none;}
+.filedrop{border:1px dashed var(--brd2);border-radius:4px;padding:16px;
+  text-align:center;cursor:pointer;font-size:10px;color:var(--t1);
+  margin-bottom:8px;transition:all .1s;}
+.filedrop:hover{border-color:var(--acc);color:var(--acc);}
+.filedrop.ok{border-color:var(--grn);color:var(--grn);}
+.mbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
+#atlas-regions{max-height:120px;overflow-y:auto;margin:8px 0;font-size:9px;
+  font-family:'IBM Plex Mono',monospace;color:var(--t1);}
+
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--brd2);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<!-- ATLAS MODAL -->
+<div class="overlay" id="modal-atlas">
+<div class="mbox">
+  <h2>IMPORT TEXTURE ATLAS</h2>
+  <p>Drop or select a TexturePacker JSON Hash / DragonBones atlas JSON file and the matching PNG image.</p>
+  <div class="filedrop" id="drop-atlas-json" onclick="document.getElementById('fi-ajson').click()">
+    <span id="drop-atlas-json-lbl">📋 Drop atlas JSON here (or click)</span>
+  </div>
+  <input type="file" id="fi-ajson" accept=".json">
+  <div class="filedrop" id="drop-atlas-img" onclick="document.getElementById('fi-aimg').click()">
+    <span id="drop-atlas-img-lbl">🖼 Drop atlas PNG here (or click)</span>
+  </div>
+  <input type="file" id="fi-aimg" accept="image/*">
+  <div id="atlas-regions">No regions loaded</div>
+  <div class="mbtns">
+    <button class="btn" onclick="closeModal('modal-atlas')">CANCEL</button>
+    <button class="btn grn" id="btn-atlas-ok" onclick="confirmAtlas()">APPLY</button>
+  </div>
+</div>
+</div>
+
+<!-- ATTACH IMAGE MODAL -->
+<div class="overlay" id="modal-attach">
+<div class="mbox">
+  <h2>ATTACH IMAGE TO BONE</h2>
+  <p>Drop or select an image to attach directly to the selected bone as a slot. If you have a texture atlas loaded, you can also select a region below.</p>
+  <div class="filedrop" id="drop-single-img" onclick="document.getElementById('fi-simg').click()">
+    <span id="drop-single-img-lbl">🖼 Drop image here (or click)</span>
+  </div>
+  <input type="file" id="fi-simg" accept="image/*">
+  <div id="atlas-region-list" style="max-height:140px;overflow-y:auto;margin:8px 0;"></div>
+  <div class="mbtns">
+    <button class="btn" onclick="closeModal('modal-attach')">CANCEL</button>
+    <button class="btn grn" id="btn-attach-ok" onclick="confirmAttach()">ATTACH</button>
+  </div>
+</div>
+</div>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <span class="logo">DRAGONFORGE</span>
+  <div class="vsep"></div>
+  <span class="lbl">TOOL</span>
+  <button class="tb on" id="tb-sel" title="Select & Rotate (S)" onclick="setTool('select')">
+    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M2 1v9l2.5-2.8 2 4 1.3-.6-2-4H9z"/>
+    </svg>
+  </button>
+  <button class="tb" id="tb-add" title="Add Bone (A)" onclick="setTool('add')">
+    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" fill="none" stroke-width="1.5">
+      <circle cx="6" cy="6" r="4.5"/><line x1="6" y1="3" x2="6" y2="9"/><line x1="3" y1="6" x2="9" y2="6"/>
+    </svg>
+  </button>
+  <button class="tb" id="tb-pan" title="Pan (Space)" onclick="setTool('pan')">
+    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" fill="none" stroke-width="1.4">
+      <path d="M5 2.5C5 1.7 5.6 1 6.5 1 7.4 1 8 1.7 8 2.5v4"/><path d="M5 5.5V4c0-.8-.6-1.5-1.5-1.5S2 3.2 2 4v4c0 2.2 1.8 4 4 4h2"/>
+      <path d="M8 4.5c0-.8.6-1.5 1.5-1.5S11 3.7 11 4.5v1"/><path d="M9.5 5v-.5c0-.8.6-1.5 1.5-1.5"/>
+    </svg>
+  </button>
+  <div class="vsep"></div>
+  <span class="lbl">ANIM</span>
+  <select class="tbsel" id="anim-sel" onchange="switchAnim(this.value)">
+    <option value="idle">idle</option>
+  </select>
+  <button class="btn" onclick="newAnim()">+ ANIM</button>
+  <button class="btn pri" onclick="recordKF()" title="Record keyframe [K]">● KEY</button>
+  <div class="vsep"></div>
+  <button class="btn" onclick="seekFrame(0)">⏮</button>
+  <button class="btn" onclick="stepF(-1)">◀</button>
+  <button class="btn pri" id="playbtn" onclick="togglePlay()">▶ PLAY</button>
+  <button class="btn" onclick="stepF(1)">▶</button>
+  <button class="btn" onclick="stopAnim()">⏹</button>
+  <span class="frm" id="fdisp">0 / 30</span>
+  <div class="vsep"></div>
+  <span class="lbl">FPS</span>
+  <input class="numf" id="fps-inp" type="number" value="24" min="1" max="60" title="Frames per second">
+  <span class="lbl">LEN</span>
+  <input class="numf" id="tf-inp" type="number" value="30" min="4" max="960" onchange="setTotalF(+this.value)" title="Total frames">
+  <div style="flex:1"></div>
+  <button class="btn" onclick="openModal('modal-atlas')">ATLAS…</button>
+  <button class="btn sel" onclick="openAttachModal()">ATTACH IMG</button>
+  <button class="btn" onclick="loadHumanoid()">LOAD CHAR</button>
+  <button class="btn grn" onclick="exportAll()">EXPORT DB5</button>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- LEFT PANEL -->
+  <div id="lpanel">
+    <div class="tabs">
+      <button class="tab on" id="tab-bones" onclick="switchTab('bones')">BONES</button>
+      <button class="tab" id="tab-slots" onclick="switchTab('slots')">SLOTS</button>
+    </div>
+    <div class="tab-pane on" id="pane-bones" id="bone-tree"></div>
+    <div class="tab-pane" id="pane-slots" id="slot-list"></div>
+  </div>
+
+  <!-- VIEWPORT -->
+  <div id="vpwrap">
+    <canvas id="vp"></canvas>
+    <div id="dropzone"><span>DROP ATLAS / IMAGE</span></div>
+    <div id="vpmode">SELECT</div>
+    <div id="vpinfo">x: 0  y: 0<br>scroll: zoom · alt+drag: pan</div>
+    <div id="vpkeys">S — select  A — add bone<br>K — keyframe  Del — delete<br>↑↓ — rotate bone  F — frame fit</div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div id="rpanel">
+    <div class="ph" style="border-bottom:1px solid var(--brd)">
+      <span>PROPERTIES</span>
+    </div>
+    <div class="sec-hdr">BONE</div>
+    <div class="pr"><span class="pl">Name</span><span class="pv" id="p-name" style="font-size:10px;max-width:110px;overflow:hidden;text-overflow:ellipsis">—</span></div>
+    <div class="pr"><span class="pl">Parent</span><span class="pv" id="p-parent" style="font-size:10px">—</span></div>
+    <div class="pr"><span class="pl">Local Rot</span><input class="pi" id="p-rot" type="number" step="0.5" onchange="setPropRot(+this.value)" placeholder="°"></div>
+    <div class="prow3">
+      <div><div class="pl" style="margin-bottom:3px">LOCAL X</div><input class="pi pi2" id="p-x" type="number" step="1" onchange="setPropX(+this.value)"></div>
+      <div><div class="pl" style="margin-bottom:3px">LOCAL Y</div><input class="pi pi2" id="p-y" type="number" step="1" onchange="setPropY(+this.value)"></div>
+    </div>
+    <div class="pr"><span class="pl">Length</span><input class="pi pi2" id="p-len" type="number" step="1" onchange="setPropLen(+this.value)"></div>
+    <div class="pr"><span class="pl">World Rot</span><span class="pv" id="p-wrot">—</span></div>
+    <div class="pr"><span class="pl">World X</span><span class="pv" id="p-wx">—</span></div>
+    <div class="pr"><span class="pl">World Y</span><span class="pv" id="p-wy">—</span></div>
+    <div class="sec-hdr">COLOR</div>
+    <div class="swatch-row" id="swatches"></div>
+    <div class="sec-hdr">ACTIONS</div>
+    <button class="pb g" onclick="recordKF()">● RECORD KEYFRAME</button>
+    <button class="pb" onclick="setRestPose()">⊙ SET AS REST POSE</button>
+    <button class="pb" onclick="openAttachModal()">⊞ ATTACH IMAGE</button>
+    <button class="pb" onclick="renameBone()">✎ RENAME</button>
+    <button class="pb r" onclick="deleteSel()">⊗ DELETE BONE</button>
+    <div class="sec-hdr" style="margin-top:4px">SHORTCUTS</div>
+    <div style="padding:4px 10px 10px;font-size:8px;color:var(--t0);line-height:2.2;font-family:'IBM Plex Mono',monospace;">
+      S — select  A — add bone<br>
+      K — record keyframe<br>
+      ↑↓ — rotate ±2°<br>
+      Del — delete selected<br>
+      F — fit to viewport<br>
+      Space — pan tool
+    </div>
+  </div>
+</div>
+
+<!-- TIMELINE -->
+<div id="tl">
+  <div id="tlhdr">
+    <span class="lbl">TIMELINE</span>
+    <div class="vsep" style="height:16px"></div>
+    <button class="btn" onclick="seekFrame(0)">⏮</button>
+    <button class="btn pri" id="playbtn2" onclick="togglePlay()">▶</button>
+    <button class="btn" onclick="stopAnim()">⏹</button>
+    <div class="vsep" style="height:16px"></div>
+    <span class="lbl">AUTO-KEY</span>
+    <input type="checkbox" id="autokey" style="margin-left:3px;cursor:pointer;" title="Auto-record keyframe on bone change">
+    <div style="flex:1"></div>
+    <span style="font-size:8px;color:var(--t0);font-family:IBM Plex Mono,monospace">
+      Click/drag = seek · ◆ = keyframe · right-click kf = delete
+    </span>
+  </div>
+  <div id="tlbody">
+    <div id="tllabels"></div>
+    <div id="tlscroll"><canvas id="tlcanvas"></canvas></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════
+// DRAGONFORGE  —  DragonBones 5.5 compatible animation studio
+// Single HTML file, zero dependencies, works on GitHub Pages
+// Exports: *_ske.json (skeleton+animation) + *_tex.json + *_tex.png
+// ═══════════════════════════════════════════════════════════════════
+
+// ── 1. STATE ────────────────────────────────────────────────────────
+const PI = Math.PI, D2R = PI/180, R2D = 180/PI;
+let bones = {}, boneOrder = [];  // boneOrder = depth-first traversal order
+let slots = {}, slotOrder = [];  // slotOrder sorted by z
+let skin = {name:'default', slotDisplays:{}};
+let atlas = {regions:{}, img:null, imgB64:null, w:0, h:0, name:'atlas'};
+let anims = {}, curAnim = 'idle', curFrame = 0, totalF = 30;
+let playing = false, rafId = null, lastTs = 0, accMs = 0;
+let selBone = null, selSlot = null, hovBone = null;
+let tool = 'select';
+let panX = 0, panY = 0, zoom = 1.0;
+let uidCnt = 0;
+const genId = () => 'b' + (++uidCnt);
+
+// Pending atlas import (modal state)
+let pendAtlasJson = null, pendAtlasImg = null, pendAtlasImgB64 = null;
+let pendSingleImg = null, pendSingleImgB64 = null, pendRegionName = null;
+
+const BONE_COLORS = ['#e87a20','#e84040','#20c060','#2080e8','#c040c0','#20c8d0','#e0c020','#e06080'];
+
+// ── 2. MATRIX MATH ──────────────────────────────────────────────────
+// Matrix: {a,b,c,d,tx,ty}  transforms point [x,y] → [a*x+c*y+tx, b*x+d*y+ty]
+const IDM = {a:1,b:0,c:0,d:1,tx:0,ty:0};
+
+function localM({x,y,rot,sx,sy}) {
+  const r = rot*D2R, cs=Math.cos(r), sn=Math.sin(r);
+  return {a:cs*(sx||1), b:sn*(sx||1), c:-sn*(sy||1), d:cs*(sy||1), tx:x, ty:y};
+}
+function mulM(p,m) {
+  return {
+    a:  p.a*m.a + p.c*m.b,   b:  p.b*m.a + p.d*m.b,
+    c:  p.a*m.c + p.c*m.d,   d:  p.b*m.c + p.d*m.d,
+    tx: p.a*m.tx+ p.c*m.ty+p.tx,  ty: p.b*m.tx+p.d*m.ty+p.ty
+  };
+}
+function applyM(m,x,y) { return {x:m.a*x+m.c*y+m.tx, y:m.b*x+m.d*y+m.ty}; }
+function invM(m) {
+  const d=m.a*m.d-m.b*m.c, inv={a:m.d/d,b:-m.b/d,c:-m.c/d,d:m.a/d,tx:0,ty:0};
+  inv.tx=-(inv.a*m.tx+inv.c*m.ty); inv.ty=-(inv.b*m.tx+inv.d*m.ty); return inv;
+}
+function mAngle(m) { return Math.atan2(m.b, m.a)*R2D; }
+
+// ── 3. BONE SYSTEM ─────────────────────────────────────────────────
+function makeBone(id,name,pid,rx,ry,rr,len,col) {
+  return {
+    id, name, parentId:pid||null, children:[],
+    rest:{x:rx,y:ry,rot:rr,sx:1,sy:1},
+    local:{x:rx,y:ry,rot:rr,sx:1,sy:1},
+    world:{...IDM}, tipX:0, tipY:0,
+    len:len||60, col:col||BONE_COLORS[0],
+    visible:true
+  };
+}
+
+function addBone(b) {
+  bones[b.id] = b;
+  if (b.parentId && bones[b.parentId]) {
+    bones[b.parentId].children.push(b.id);
+  }
+  rebuildOrder();
+}
+
+function delBone(id) {
+  const b = bones[id]; if(!b)return;
+  if(b.parentId&&bones[b.parentId])
+    bones[b.parentId].children = bones[b.parentId].children.filter(x=>x!==id);
+  [...b.children].forEach(delBone);
+  // Remove slots on this bone
+  const toRemSlots = Object.values(slots).filter(s=>s.boneId===id);
+  toRemSlots.forEach(s=>{delSlot(s.id);});
+  // Remove from animation tracks
+  Object.values(anims).forEach(a=>{delete a.boneTracks[id];});
+  delete bones[id]; rebuildOrder();
+}
+
+function rebuildOrder() {
+  boneOrder = [];
+  function dfs(id){boneOrder.push(id);bones[id]?.children.forEach(dfs);}
+  Object.keys(bones).filter(id=>!bones[id].parentId).forEach(dfs);
+}
+
+function recalcAll() {
+  function proc(id) {
+    const b = bones[id]; if(!b)return;
+    const lm = localM(b.local);
+    b.world = b.parentId && bones[b.parentId] ? mulM(bones[b.parentId].world, lm) : lm;
+    const tip = applyM(b.world, b.len, 0);
+    b.tipX = tip.x; b.tipY = tip.y;
+    b.children.forEach(proc);
+  }
+  Object.keys(bones).filter(id=>!bones[id].parentId).forEach(proc);
+}
+
+// ── 4. SLOT / SKIN SYSTEM ──────────────────────────────────────────
+let slotUid = 0;
+function addSlot(boneId, name, imgName, transform) {
+  const id = 'slot_' + (++slotUid);
+  const z = slotOrder.length;
+  slots[id] = {id, name:name||id, boneId, z, displayIdx:0, alpha:1, visible:true};
+  slotOrder.push(id);
+  skin.slotDisplays[id] = [{
+    type:'image', name:imgName||'', transform:transform||{x:0,y:0,rot:0,sx:1,sy:1}
+  }];
+  return id;
+}
+
+function delSlot(id) {
+  delete slots[id]; delete skin.slotDisplays[id];
+  slotOrder = slotOrder.filter(x=>x!==id);
+}
+
+// ── 5. TEXTURE ATLAS ───────────────────────────────────────────────
+function loadAtlasJSON(jsonStr) {
+  let j; try{j=JSON.parse(jsonStr);}catch(e){return false;}
+  atlas.regions = {};
+  // DragonBones format
+  if (j.SubTexture) {
+    atlas.w = j.width||0; atlas.h = j.height||0; atlas.name = j.name||'atlas';
+    j.SubTexture.forEach(r=>{
+      atlas.regions[r.name]={x:r.x,y:r.y,w:r.width,h:r.height,
+        ox:r.frameX||0,oy:r.frameY||0,ow:r.frameWidth||r.width,oh:r.frameHeight||r.height};
+    });
+    return true;
+  }
+  // TexturePacker JSON Hash
+  if (j.frames && j.meta) {
+    atlas.name = (j.meta.image||'atlas').replace(/\.(png|jpg)$/i,'');
+    atlas.w = j.meta.size?.w||0; atlas.h = j.meta.size?.h||0;
+    Object.entries(j.frames).forEach(([k,v])=>{
+      const name = k.replace(/\.(png|jpg|webp)$/i,'');
+      const f=v.frame, ss=v.spriteSourceSize||{x:0,y:0}, src=v.sourceSize||{w:f.w,h:f.h};
+      atlas.regions[name]={x:f.x,y:f.y,w:f.w,h:f.h,
+        ox:-ss.x,oy:-ss.y,ow:src.w,oh:src.h};
+    });
+    return true;
+  }
+  return false;
+}
+
+// Build a synthetic single-image atlas region
+function addSingleImageRegion(name, img, b64) {
+  atlas.regions[name] = {x:0,y:0,w:img.width,h:img.height,ox:0,oy:0,ow:img.width,oh:img.height};
+  if (!atlas.img) { atlas.img = img; atlas.imgB64 = b64; atlas.w = img.width; atlas.h = img.height; atlas.name = name; }
+  // Composite onto existing atlas if one exists (simple row pack)
+  else { packRegionIntoAtlas(name, img, b64); }
+}
+
+function packRegionIntoAtlas(name, newImg, newB64) {
+  const oc = document.createElement('canvas');
+  oc.width = Math.max(atlas.w, newImg.width);
+  oc.height = atlas.h + newImg.height + 2;
+  const ox = oc.getContext('2d');
+  if (atlas.img) ox.drawImage(atlas.img, 0, 0);
+  const ny = atlas.h + 1;
+  ox.drawImage(newImg, 0, ny);
+  atlas.regions[name] = {x:0,y:ny,w:newImg.width,h:newImg.height,ox:0,oy:0,ow:newImg.width,oh:newImg.height};
+  atlas.w = oc.width; atlas.h = oc.height;
+  atlas.imgB64 = oc.toDataURL('image/png');
+  const img2 = new Image(); img2.src = atlas.imgB64;
+  img2.onload = ()=>{atlas.img=img2;renderVp();};
+}
+
+// ── 6. ANIMATION SYSTEM ────────────────────────────────────────────
+function ensureAnim(name) {
+  if (!anims[name]) anims[name] = {name, totalF, boneTracks:{}};
+  return anims[name];
+}
+
+function recordKeyframe(animName, boneId, frame) {
+  const a = ensureAnim(animName), b = bones[boneId]; if(!b)return;
+  if (!a.boneTracks[boneId]) a.boneTracks[boneId] = {rKFs:[], tKFs:[]};
+  const t = a.boneTracks[boneId];
+  // Update or insert rotation KF
+  const ri = t.rKFs.findIndex(k=>k.f===frame);
+  if(ri>=0) t.rKFs[ri].rot=b.local.rot; else t.rKFs.push({f:frame,rot:b.local.rot});
+  // Update or insert translate KF
+  const ti = t.tKFs.findIndex(k=>k.f===frame);
+  if(ti>=0){t.tKFs[ti].x=b.local.x;t.tKFs[ti].y=b.local.y;}
+  else t.tKFs.push({f:frame,x:b.local.x,y:b.local.y});
+}
+
+function interpKFs(kfs, frame, prop, restVal, tf) {
+  if (!kfs||!kfs.length) return restVal;
+  const sorted = [...kfs].sort((a,b)=>a.f-b.f);
+  const first=sorted[0], last=sorted[sorted.length-1];
+  if (frame <= first.f) return first[prop];
+  if (frame >= last.f) {
+    // Interpolate to first frame for looping
+    if (tf > last.f && frame < tf) {
+      const t = (frame-last.f)/(tf-last.f);
+      return last[prop]+(first[prop]-last[prop])*t;
+    }
+    return last[prop];
+  }
+  let b0=first, b1=last;
+  for (let i=0;i<sorted.length-1;i++) {
+    if (sorted[i].f<=frame&&sorted[i+1].f>frame){b0=sorted[i];b1=sorted[i+1];break;}
+  }
+  const t = (frame-b0.f)/(b1.f-b0.f);
+  return b0[prop]+(b1[prop]-b0[prop])*t;
+}
+
+function applyAnimToFrame(animName, frame) {
+  const a = anims[animName]; if(!a)return;
+  boneOrder.forEach(id=>{
+    const b=bones[id]; if(!b)return;
+    const trk = a.boneTracks[id];
+    b.local.rot = trk ? interpKFs(trk.rKFs,frame,'rot',b.rest.rot,a.totalF) : b.rest.rot;
+    if(trk){
+      b.local.x = interpKFs(trk.tKFs,frame,'x',b.rest.x,a.totalF);
+      b.local.y = interpKFs(trk.tKFs,frame,'y',b.rest.y,a.totalF);
+    } else {
+      b.local.x=b.rest.x; b.local.y=b.rest.y;
+    }
+    b.local.sx=b.rest.sx; b.local.sy=b.rest.sy;
+  });
+}
+
+// ── 7. DRAGONBONES 5.5 EXPORT ──────────────────────────────────────
+function buildDragonBonesJSON() {
+  const fps = parseInt(document.getElementById('fps-inp').value)||24;
+  const armName = 'Armature';
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  boneOrder.forEach(id=>{
+    const b=bones[id];
+    [b.world.tx,b.tipX].forEach(x=>{minX=Math.min(minX,x);maxX=Math.max(maxX,x);});
+    [b.world.ty,b.tipY].forEach(y=>{minY=Math.min(minY,y);maxY=Math.max(maxY,y);});
+  });
+  if(!boneOrder.length){minX=minY=-100;maxX=maxY=100;}
+  const pad=20;
+  const aabb={x:minX-pad,y:minY-pad,width:maxX-minX+pad*2,height:maxY-minY+pad*2};
+
+  // Bones array
+  const dbBones = boneOrder.map(id=>{
+    const b=bones[id];
+    const r={name:b.name,length:b.len};
+    if(b.parentId&&bones[b.parentId]) r.parent=bones[b.parentId].name;
+    const t=b.rest, tr={};
+    if(Math.abs(t.x)>.001) tr.x=+t.x.toFixed(4);
+    if(Math.abs(t.y)>.001) tr.y=+t.y.toFixed(4);
+    if(Math.abs(t.rot)>.001){tr.skX=+t.rot.toFixed(4);tr.skY=+t.rot.toFixed(4);}
+    if(Math.abs(t.sx-1)>.001) tr.scX=+t.sx.toFixed(4);
+    if(Math.abs(t.sy-1)>.001) tr.scY=+t.sy.toFixed(4);
+    if(Object.keys(tr).length) r.transform=tr;
+    return r;
+  });
+
+  // Slots array
+  const dbSlots = slotOrder.map((id,i)=>{
+    const s=slots[id];
+    return {name:s.name, parent:bones[s.boneId]?.name||'root', z:i};
+  });
+
+  // Skin
+  const dbSkinSlots = [];
+  slotOrder.forEach(id=>{
+    const s=slots[id]; const disps=skin.slotDisplays[id]||[];
+    if(!disps.length)return;
+    const dbDisps = disps.map(d=>{
+      const r={name:d.name};
+      const t=d.transform, tr={};
+      if(Math.abs(t.x)>.001) tr.x=+t.x.toFixed(4);
+      if(Math.abs(t.y)>.001) tr.y=+t.y.toFixed(4);
+      if(Math.abs(t.rot)>.001){tr.skX=+t.rot.toFixed(4);tr.skY=+t.rot.toFixed(4);}
+      if(Math.abs(t.sx-1)>.001) tr.scX=+t.sx.toFixed(4);
+      if(Math.abs(t.sy-1)>.001) tr.scY=+t.sy.toFixed(4);
+      if(Object.keys(tr).length) r.transform=tr;
+      return r;
+    });
+    dbSkinSlots.push({name:s.name, display:dbDisps});
+  });
+
+  // Animations
+  const dbAnims = Object.values(anims).map(anim=>{
+    const da = {duration:anim.totalF, playTimes:0, name:anim.name, bone:[]};
+    boneOrder.forEach(id=>{
+      const b=bones[id]; const trk=anim.boneTracks[id]; if(!trk)return;
+      const dbt = {name:b.name};
+      // Rotation frames → delta from rest
+      if(trk.rKFs&&trk.rKFs.length){
+        const kfs=[...trk.rKFs].sort((a,bb)=>a.f-bb.f);
+        const frames=[];
+        for(let i=0;i<kfs.length;i++){
+          const kf=kfs[i], nf=i<kfs.length-1?kfs[i+1].f:anim.totalF;
+          frames.push({duration:nf-kf.f,tweenEasing:0,rotate:+(kf.rot-b.rest.rot).toFixed(4)});
+        }
+        frames.push({duration:0}); dbt.rotateFrame=frames;
+      }
+      // Translate frames → delta from rest
+      if(trk.tKFs&&trk.tKFs.length){
+        const hasMovement = trk.tKFs.some(k=>Math.abs(k.x-b.rest.x)>.01||Math.abs(k.y-b.rest.y)>.01);
+        if(hasMovement){
+          const kfs=[...trk.tKFs].sort((a,bb)=>a.f-bb.f);
+          const frames=[];
+          for(let i=0;i<kfs.length;i++){
+            const kf=kfs[i], nf=i<kfs.length-1?kfs[i+1].f:anim.totalF;
+            frames.push({duration:nf-kf.f,tweenEasing:0,
+              x:+(kf.x-b.rest.x).toFixed(4), y:+(kf.y-b.rest.y).toFixed(4)});
+          }
+          frames.push({duration:0}); dbt.translateFrame=frames;
+        }
+      }
+      if(dbt.rotateFrame||dbt.translateFrame) da.bone.push(dbt);
+    });
+    return da;
+  });
+
+  const firstAnim = dbAnims[0]?.name||'idle';
+  return {
+    frameRate:fps, name:'dragonforge_export', version:'5.5', compatibleVersion:'5.5',
+    armature:[{
+      type:'Armature', frameRate:fps, name:armName, aabb,
+      bone:dbBones, slot:dbSlots,
+      skin:[{name:'default', slot:dbSkinSlots}],
+      animation:dbAnims,
+      defaultActions:[{gotoAndPlay:firstAnim}]
+    }]
+  };
+}
+
+function buildAtlasJSON() {
+  const subTex = Object.entries(atlas.regions).map(([name,r])=>({
+    name, x:r.x, y:r.y, width:r.w, height:r.h,
+    frameX:r.ox||0, frameY:r.oy||0,
+    frameWidth:r.ow||r.w, frameHeight:r.oh||r.h
+  }));
+  return {
+    name: atlas.name+'_tex',
+    imagePath: atlas.name+'_tex.png',
+    width: atlas.w, height: atlas.h,
+    SubTexture: subTex
+  };
+}
+
+function dl(filename, content) {
+  const a=document.createElement('a'); a.href=content; a.download=filename; a.click();
+}
+
+function exportAll() {
+  const skeJSON = JSON.stringify(buildDragonBonesJSON(), null, 2);
+  const skeName = (anims[curAnim]?.name||'character')+'_ske.json';
+  dl(skeName, 'data:application/json;charset=utf-8,'+encodeURIComponent(skeJSON));
+  if(Object.keys(atlas.regions).length) {
+    const texJSON = JSON.stringify(buildAtlasJSON(), null, 2);
+    const texName = atlas.name+'_tex.json';
+    setTimeout(()=>{dl(texName,'data:application/json;charset=utf-8,'+encodeURIComponent(texJSON));},300);
+    if(atlas.imgB64){
+      setTimeout(()=>{dl(atlas.name+'_tex.png', atlas.imgB64);},600);
+    }
+  }
+}
+
+// ── 8. CANVAS RENDERING ────────────────────────────────────────────
+const vp = document.getElementById('vp'), vc = vp.getContext('2d');
+
+function resizeVp() {
+  const w=vp.parentElement.clientWidth, h=vp.parentElement.clientHeight;
+  if(vp.width!==w||vp.height!==h){vp.width=w;vp.height=h;}
+}
+
+function drawGrid() {
+  const step=50, cx=0, cy=0;
+  const vw=vp.width, vh=vp.height;
+  const x0=((-vw/2-panX)/zoom)/step|0, x1=((vw/2-panX)/zoom)/step+1|0;
+  const y0=((-vh/2-panY)/zoom)/step|0, y1=((vh/2-panY)/zoom)/step+1|0;
+  vc.strokeStyle='#12141c'; vc.lineWidth=1/zoom;
+  for(let xi=x0;xi<=x1;xi++){vc.beginPath();vc.moveTo(xi*step,-1e4);vc.lineTo(xi*step,1e4);vc.stroke();}
+  for(let yi=y0;yi<=y1;yi++){vc.beginPath();vc.moveTo(-1e4,yi*step);vc.lineTo(1e4,yi*step);vc.stroke();}
+  vc.strokeStyle='#1a1e2e'; vc.lineWidth=1.5/zoom;
+  vc.beginPath();vc.moveTo(0,-1e4);vc.lineTo(0,1e4);vc.stroke();
+  vc.beginPath();vc.moveTo(-1e4,0);vc.lineTo(1e4,0);vc.stroke();
+}
+
+function drawBone(b) {
+  const sel=b.id===selBone, hov=b.id===hovBone;
+  if(!b.visible) return;
+  const col = sel?'#00b8d9':hov?'#a8d0ff':(b.col||BONE_COLORS[0]);
+  const wa = mAngle(b.world);
+  const waR = wa*D2R;
+  const cs=Math.cos(waR), sn=Math.sin(waR);
+  const px=-sn, py=cs;
+  const w=Math.max(3/zoom, Math.min(10, b.len*.12));
+  const bx=b.world.tx, by=b.world.ty, tx=b.tipX, ty=b.tipY;
+  const blx=bx+cs*b.len*.24, bly=by+sn*b.len*.24;
+
+  vc.beginPath();
+  vc.moveTo(bx,by);
+  vc.lineTo(blx+px*w,bly+py*w);
+  vc.lineTo(tx,ty);
+  vc.lineTo(blx-px*w,bly-py*w);
+  vc.closePath();
+
+  if(sel){vc.shadowColor='#00b8d9';vc.shadowBlur=10/zoom;}
+  const g=vc.createLinearGradient(bx,by,tx,ty);
+  g.addColorStop(0,col+'aa');g.addColorStop(.3,col+'dd');g.addColorStop(1,col+'33');
+  vc.fillStyle=g;vc.fill();
+  vc.strokeStyle=col;vc.lineWidth=(sel?1.8:1.2)/zoom;vc.stroke();
+  vc.shadowBlur=0;
+
+  // Joint circle
+  const jr=w*.9;
+  vc.beginPath();vc.arc(bx,by,jr,0,2*PI);
+  vc.fillStyle=col+'cc';vc.fill();
+  vc.strokeStyle=col+'55';vc.lineWidth=.5/zoom;vc.stroke();
+
+  // Tip dot
+  vc.beginPath();vc.arc(tx,ty,2.5/zoom,0,2*PI);
+  vc.fillStyle=col+'99';vc.fill();
+
+  // Label
+  if((sel||hov)&&zoom>.3){
+    vc.save();vc.scale(1/zoom,1/zoom);
+    vc.font=`${Math.max(9,10/zoom)}px IBM Plex Sans,sans-serif`;
+    vc.fillStyle=col+'cc';vc.textAlign='center';
+    vc.fillText(b.name,(bx+tx)/2*zoom,(by+ty)/2*zoom-w*zoom-3);
+    vc.restore();
+  }
+
+  // Head bone indicator
+  if(b.name.toLowerCase().includes('head')&&b.len>15){
+    const r=b.len*.55;
+    vc.beginPath();vc.arc(tx,ty,r,0,2*PI);
+    vc.strokeStyle=col+'44';vc.lineWidth=1.5/zoom;
+    vc.setLineDash([6/zoom,4/zoom]);vc.stroke();vc.setLineDash([]);
+    const ep=b.len*.55*.38;
+    [-1,1].forEach(side=>{
+      const ex=tx+(-ep)*side*sn+ep*cs*0, ey=ty+ep*side*cs+ep*sn*0;
+      // approximate: eye at ±ep perpendicular from tip, offset forward
+      const fwd=b.len*.55*.3;
+      const ex2=tx+cs*fwd+sn*(-ep*side), ey2=ty+sn*fwd+cs*(ep*side);
+      vc.beginPath();vc.arc(ex2,ey2,2.5/zoom,0,2*PI);
+      vc.fillStyle=col+'bb';vc.fill();
+    });
+  }
+}
+
+function drawSlotImage(sid) {
+  const s=slots[sid]; if(!s||!s.visible)return;
+  const b=bones[s.boneId]; if(!b)return;
+  const disps=skin.slotDisplays[sid]||[]; if(!disps.length)return;
+  const d=disps[s.displayIdx]||disps[0]; if(!d||!d.name)return;
+  const r=atlas.regions[d.name]; if(!r||!atlas.img)return;
+  const dm=localM(d.transform);
+  const wm=mulM(b.world,dm);
+  vc.save();
+  vc.transform(wm.a,wm.b,wm.c,wm.d,wm.tx,wm.ty);
+  vc.globalAlpha=s.alpha||1;
+  vc.drawImage(atlas.img,r.x,r.y,r.w,r.h,-r.ow/2+(r.ox||0),-r.oh/2+(r.oy||0),r.ow,r.oh);
+  vc.globalAlpha=1;
+  vc.restore();
+}
+
+// Add-bone drag preview
+let addFrom=null, addPrev=null;
+
+function renderVp() {
+  resizeVp();
+  const vw=vp.width, vh=vp.height;
+  vc.fillStyle='#060810';vc.fillRect(0,0,vw,vh);
+  vc.save();
+  vc.translate(vw/2+panX, vh/2+panY);
+  vc.scale(zoom,zoom);
+  drawGrid();
+  // Draw slot images (behind bones, sorted by z)
+  slotOrder.slice().sort((a,b)=>(slots[a]?.z||0)-(slots[b]?.z||0)).forEach(drawSlotImage);
+  // Draw bones (non-selected first)
+  boneOrder.forEach(id=>{if(id!==selBone&&bones[id])drawBone(bones[id]);});
+  if(selBone&&bones[selBone])drawBone(bones[selBone]);
+  // Add-bone drag line
+  if(tool==='add'&&addFrom&&addPrev){
+    const p=bones[addFrom];
+    vc.beginPath();vc.moveTo(p.tipX,p.tipY);vc.lineTo(addPrev.x,addPrev.y);
+    vc.strokeStyle='#00b8d966';vc.lineWidth=2/zoom;
+    vc.setLineDash([6/zoom,4/zoom]);vc.stroke();vc.setLineDash([]);
+    vc.beginPath();vc.arc(addPrev.x,addPrev.y,4/zoom,0,2*PI);
+    vc.fillStyle='#00b8d9';vc.fill();
+    // Preview length indicator
+    const dx=addPrev.x-p.tipX,dy=addPrev.y-p.tipY;
+    const len=Math.hypot(dx,dy);
+    vc.save();vc.scale(1/zoom,1/zoom);
+    vc.font='9px IBM Plex Mono,monospace';vc.fillStyle='#00b8d9aa';vc.textAlign='center';
+    vc.fillText(len.toFixed(0)+'px',((p.tipX+addPrev.x)/2)*zoom,((p.tipY+addPrev.y)/2)*zoom-8);
+    vc.restore();
+  }
+  // Tip highlight in add mode
+  if(tool==='add'&&!addFrom){
+    boneOrder.forEach(id=>{
+      const b=bones[id];if(!b)return;
+      vc.beginPath();vc.arc(b.tipX,b.tipY,8/zoom,0,2*PI);
+      vc.strokeStyle='#00b8d833';vc.lineWidth=1/zoom;vc.stroke();
+    });
+  }
+  vc.restore();
+}
+
+// ── 9. VIEWPORT INPUT ──────────────────────────────────────────────
+let drag=false,dragType=null,dragBoneId=null,lmx=0,lmy=0;
+let pinch0=0;
+
+function s2w(sx,sy){
+  return{x:(sx-vp.width/2-panX)/zoom, y:(sy-vp.height/2-panY)/zoom};
+}
+
+function ptLineDist(px,py,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
+  if(!l2)return Math.hypot(px-ax,py-ay);
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2));
+  return Math.hypot(px-ax-t*dx,py-ay-t*dy);
+}
+
+function boneAt(wx,wy){
+  const th=12/zoom; let best=null,bd=Infinity;
+  boneOrder.forEach(id=>{
+    const b=bones[id];if(!b||!b.visible)return;
+    const d=ptLineDist(wx,wy,b.world.tx,b.world.ty,b.tipX,b.tipY);
+    if(d<th&&d<bd){bd=d;best=id;}
+  });
+  return best;
+}
+
+function nearestTip(wx,wy){
+  let best=null,bd=Infinity;
+  boneOrder.forEach(id=>{
+    const b=bones[id];if(!b)return;
+    const d=Math.hypot(wx-b.tipX,wy-b.tipY);
+    if(d<bd){bd=d;best=id;}
+  });
+  return bd<18/zoom?best:null;
+}
+
+function getEventPos(e) {
+  const rect=vp.getBoundingClientRect();
+  if(e.touches){
+    if(e.touches.length===0&&e.changedTouches.length>0){
+      const t=e.changedTouches[0];
+      return{x:t.clientX-rect.left,y:t.clientY-rect.top,count:0};
+    }
+    if(e.touches.length>=2){
+      const t0=e.touches[0],t1=e.touches[1];
+      return{x:(t0.clientX+t1.clientX)/2-rect.left,
+             y:(t0.clientY+t1.clientY)/2-rect.top,
+             count:2,
+             pinchDist:Math.hypot(t1.clientX-t0.clientX,t1.clientY-t0.clientY)};
+    }
+    const t=e.touches[0];
+    return{x:t.clientX-rect.left,y:t.clientY-rect.top,count:1};
+  }
+  return{x:e.clientX-rect.left,y:e.clientY-rect.top,count:1,button:e.button,alt:e.altKey};
+}
+
+vp.addEventListener('mousedown',vpDown,{passive:false});
+vp.addEventListener('touchstart',vpDown,{passive:false});
+vp.addEventListener('mousemove',vpMove,{passive:false});
+vp.addEventListener('touchmove',vpMove,{passive:false});
+vp.addEventListener('mouseup',vpUp,{passive:false});
+vp.addEventListener('touchend',vpUp,{passive:false});
+vp.addEventListener('wheel',vpWheel,{passive:false});
+vp.addEventListener('mouseleave',()=>{if(hovBone!==null){hovBone=null;renderVp();}});
+
+function vpDown(e){
+  e.preventDefault();
+  const pos=getEventPos(e);
+  if(pos.count===2){pinch0=pos.pinchDist;drag=true;dragType='pinch';lmx=pos.x;lmy=pos.y;return;}
+  lmx=pos.x;lmy=pos.y;
+  const w=s2w(pos.x,pos.y);
+  if(pos.button===1||(pos.button===0&&pos.alt)||tool==='pan'){drag=true;dragType='pan';return;}
+  if(tool==='select'){
+    const h=boneAt(w.x,w.y);
+    if(h){selectBone(h);drag=true;dragType='rotate';dragBoneId=h;}
+    else{selectBone(null);drag=true;dragType='pan';}
+  }
+  if(tool==='add'){
+    const tip=nearestTip(w.x,w.y);
+    if(tip&&!addFrom){addFrom=tip;addPrev={x:w.x,y:w.y};drag=true;dragType='newBone';}
+    else if(!Object.keys(bones).length){
+      // Create root bone
+      const id=genId();
+      addBone(makeBone(id,'root',null,w.x,w.y,0,60,BONE_COLORS[0]));
+      recalcAll();selectBone(id);refreshAll();
+    }
+  }
+}
+
+function vpMove(e){
+  e.preventDefault();
+  const pos=getEventPos(e);
+  const w=s2w(pos.x,pos.y);
+  document.getElementById('vpinfo').innerHTML=
+    `x: ${w.x.toFixed(0)}  y: ${w.y.toFixed(0)}<br>scroll: zoom · alt+drag: pan`;
+  if(!drag){
+    const h=boneAt(w.x,w.y);
+    if(h!==hovBone){hovBone=h;renderVp();}
+    return;
+  }
+  if(dragType==='pinch'&&pos.count===2){
+    const dzoom=pos.pinchDist/pinch0;
+    zoom=Math.max(.05,Math.min(16,zoom*dzoom));
+    pinch0=pos.pinchDist;
+    panX+=pos.x-lmx;panY+=pos.y-lmy;
+    lmx=pos.x;lmy=pos.y;renderVp();return;
+  }
+  if(dragType==='pan'){panX+=pos.x-lmx;panY+=pos.y-lmy;renderVp();}
+  else if(dragType==='rotate'){
+    const b=bones[dragBoneId];if(!b)return;
+    const nwa=Math.atan2(w.y-b.world.ty,w.x-b.world.tx)*R2D;
+    const pwa=b.parentId&&bones[b.parentId]?mAngle(bones[b.parentId].world):0;
+    b.local.rot=nwa-pwa;
+    if(document.getElementById('autokey').checked) recordKeyframe(curAnim,dragBoneId,curFrame);
+    recalcAll();renderVp();updateProps();renderTL();
+  }
+  else if(dragType==='newBone'){addPrev={x:w.x,y:w.y};renderVp();}
+  lmx=pos.x;lmy=pos.y;
+}
+
+function vpUp(e){
+  if(e.preventDefault)e.preventDefault();
+  if(dragType==='newBone'&&addFrom&&addPrev){
+    const p=bones[addFrom];
+    const dx=addPrev.x-p.tipX,dy=addPrev.y-p.tipY;
+    const len=Math.max(8,Math.hypot(dx,dy));
+    // New bone world angle
+    const wAng=Math.atan2(dy,dx)*R2D;
+    const pWAng=mAngle(p.world);
+    const localRot=wAng-pWAng;
+    const id=genId();
+    const nb=makeBone(id,'bone'+boneOrder.length,addFrom,p.len,0,localRot,len,BONE_COLORS[boneOrder.length%BONE_COLORS.length]);
+    addBone(nb);recalcAll();selectBone(id);refreshAll();
+  }
+  drag=false;dragType=null;dragBoneId=null;addFrom=null;addPrev=null;
+  renderVp();
+}
+
+function vpWheel(e){
+  e.preventDefault();
+  const rect=vp.getBoundingClientRect();
+  const sx=e.clientX-rect.left,sy=e.clientY-rect.top;
+  const wx=(sx-vp.width/2-panX)/zoom,wy=(sy-vp.height/2-panY)/zoom;
+  zoom=Math.max(.05,Math.min(16,zoom*(e.deltaY<0?1.12:.9)));
+  panX=sx-vp.width/2-wx*zoom;panY=sy-vp.height/2-wy*zoom;
+  renderVp();
+}
+
+// ── 10. TIMELINE ────────────────────────────────────────────────────
+const tlc=document.getElementById('tlcanvas'),tcc=tlc.getContext('2d');
+const FW=18,RH=22,TH=20;
+
+function renderTL(){
+  const anim=anims[curAnim];
+  const sd=document.getElementById('tlscroll');
+  const W=Math.max(sd.clientWidth||400,totalF*FW+40);
+  const H=RH+boneOrder.length*TH;
+  tlc.width=W;tlc.height=H;
+  // BG
+  tcc.fillStyle='#0d1018';tcc.fillRect(0,0,W,H);
+  // Ruler
+  tcc.fillStyle='#111520';tcc.fillRect(0,0,W,RH);
+  for(let f=0;f<=totalF;f++){
+    const x=f*FW+FW/2,maj=f%5===0||f===0;
+    tcc.fillStyle=maj?'#3a4060':'#1a2030';
+    tcc.fillRect(x,0,1,maj?RH:6);
+    if(maj&&zoom<20){
+      tcc.fillStyle='#506080';tcc.font='8px IBM Plex Mono,monospace';tcc.textAlign='center';
+      tcc.fillText(f,x,13);
+    }
+  }
+  // End line
+  tcc.strokeStyle='#ffffff20';tcc.lineWidth=1;
+  const ex=totalF*FW+FW/2;
+  tcc.beginPath();tcc.moveTo(ex,0);tcc.lineTo(ex,H);tcc.stroke();
+
+  // Tracks
+  boneOrder.forEach((id,i)=>{
+    const b=bones[id];if(!b)return;
+    const y=RH+i*TH;
+    if(id===selBone){tcc.fillStyle='rgba(0,184,217,.05)';tcc.fillRect(0,y,W,TH);}
+    else if(i%2===0){tcc.fillStyle='rgba(255,255,255,.02)';tcc.fillRect(0,y,W,TH);}
+    tcc.fillStyle='#1e203033';tcc.fillRect(0,y+TH-1,W,1);
+    // Keyframes
+    const trk=anim?.boneTracks[id]; if(!trk)return;
+    const allF=new Set([...(trk.rKFs||[]).map(k=>k.f),...(trk.tKFs||[]).map(k=>k.f)]);
+    allF.forEach(f=>{
+      const fx=f*FW+FW/2,cy=y+TH/2;
+      tcc.save();tcc.translate(fx,cy);tcc.rotate(PI/4);
+      tcc.fillStyle=id===selBone?'#00b8d9':'#e87a2099';
+      tcc.fillRect(-4,-4,8,8);tcc.restore();
+    });
+  });
+  // Playhead
+  const px=curFrame*FW+FW/2;
+  tcc.strokeStyle='#e87a20';tcc.lineWidth=1.5;
+  tcc.beginPath();tcc.moveTo(px,0);tcc.lineTo(px,H);tcc.stroke();
+  tcc.fillStyle='#e87a20';
+  tcc.beginPath();tcc.moveTo(px-5,0);tcc.lineTo(px+5,0);tcc.lineTo(px,10);tcc.fill();
+}
+
+function updateTLLabels(){
+  const el=document.getElementById('tllabels');el.innerHTML='';
+  const sp=document.createElement('div');sp.style.cssText=`height:${RH}px;border-bottom:1px solid var(--brd)`;
+  el.appendChild(sp);
+  boneOrder.forEach(id=>{
+    const b=bones[id];if(!b)return;
+    const d=document.createElement('div');
+    d.className='tll'+(id===selBone?' sel':'');
+    d.innerHTML=`<span class="tll-dot" style="background:${b.col}"></span>${b.name}`;
+    d.onclick=()=>selectBone(id);el.appendChild(d);
+  });
+}
+
+let tlDrag=false;
+document.getElementById('tlscroll').addEventListener('mousedown',e=>{tlDrag=true;tlSeek(e);});
+document.getElementById('tlscroll').addEventListener('mousemove',e=>{if(tlDrag)tlSeek(e);});
+document.addEventListener('mouseup',()=>{tlDrag=false;});
+document.getElementById('tlscroll').addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  const rect=tlc.getBoundingClientRect();
+  const f=Math.round((e.clientX-rect.left-FW/2)/FW);
+  const row=Math.floor((e.clientY-rect.top-RH)/TH);
+  if(row>=0&&row<boneOrder.length){
+    const id=boneOrder[row],anim=anims[curAnim];
+    if(anim?.boneTracks[id]){
+      const trk=anim.boneTracks[id];
+      trk.rKFs=trk.rKFs.filter(k=>k.f!==f);
+      trk.tKFs=trk.tKFs.filter(k=>k.f!==f);
+      renderTL();
+    }
+  }
+});
+
+function tlSeek(e){
+  const rect=tlc.getBoundingClientRect();
+  const f=Math.max(0,Math.min(totalF-1,Math.round((e.clientX-rect.left-FW/2)/FW)));
+  seekFrame(f);
+}
+
+// Touch on timeline
+document.getElementById('tlscroll').addEventListener('touchstart',e=>{e.preventDefault();tlDrag=true;tlSeekTouch(e);},{passive:false});
+document.getElementById('tlscroll').addEventListener('touchmove',e=>{e.preventDefault();if(tlDrag)tlSeekTouch(e);},{passive:false});
+function tlSeekTouch(e){
+  const t=e.touches[0],rect=tlc.getBoundingClientRect();
+  const f=Math.max(0,Math.min(totalF-1,Math.round((t.clientX-rect.left-FW/2)/FW)));
+  seekFrame(f);
+}
+
+// ── 11. PLAYBACK ─────────────────────────────────────────────────
+function togglePlay(){playing?pauseAnim():startAnim();}
+function startAnim(){
+  playing=true;lastTs=0;accMs=0;
+  document.getElementById('playbtn').textContent='⏸ PAUSE';
+  document.getElementById('playbtn').className='btn sel';
+  document.getElementById('playbtn2').textContent='⏸';
+  rafId=requestAnimationFrame(tick);
+}
+function pauseAnim(){
+  playing=false;if(rafId)cancelAnimationFrame(rafId);
+  document.getElementById('playbtn').textContent='▶ PLAY';
+  document.getElementById('playbtn').className='btn pri';
+  document.getElementById('playbtn2').textContent='▶';
+}
+function stopAnim(){pauseAnim();seekFrame(0);}
+function tick(ts){
+  if(!playing)return;
+  if(!lastTs)lastTs=ts;
+  const fps=parseInt(document.getElementById('fps-inp').value)||24;
+  accMs+=ts-lastTs;lastTs=ts;
+  const mspf=1000/fps;
+  while(accMs>=mspf){curFrame=(curFrame+1)%totalF;accMs-=mspf;}
+  applyAnimToFrame(curAnim,curFrame);recalcAll();
+  renderVp();renderTL();updateFrameDisp();
+  rafId=requestAnimationFrame(tick);
+}
+function seekFrame(f){
+  const was=playing;if(was)pauseAnim();
+  curFrame=Math.max(0,Math.min(totalF-1,f));
+  applyAnimToFrame(curAnim,curFrame);recalcAll();
+  renderVp();renderTL();updateFrameDisp();
+  if(was)startAnim();
+}
+function stepF(d){seekFrame(((curFrame+d)%totalF+totalF)%totalF);}
+function updateFrameDisp(){document.getElementById('fdisp').textContent=`${curFrame} / ${totalF}`;}
+
+// ── 12. UI UPDATES ────────────────────────────────────────────────
+function updateBoneTree(){
+  const tree=document.getElementById('pane-bones');tree.innerHTML='';
+  function row(id,depth){
+    const b=bones[id];if(!b)return;
+    const d=document.createElement('div');
+    d.className='brow'+(id===selBone?' sel':'');
+    d.innerHTML=`<span style="display:inline-block;width:${depth*12+8}px"></span>`+
+      `<span class="brow-ico" style="color:${b.col};margin-right:4px">${depth===0?'⬡':'◆'}</span>`+
+      `<span class="brow-name">${b.name}</span>`+
+      `<button class="brow-vis" onclick="event.stopPropagation();toggleBoneVis('${id}')">${b.visible?'👁':'👁'}</button>`;
+    d.onclick=()=>selectBone(id);tree.appendChild(d);
+    b.children.forEach(c=>row(c,depth+1));
+  }
+  boneOrder.filter(id=>bones[id]&&!bones[id].parentId).forEach(id=>row(id,0));
+}
+
+function updateSlotList(){
+  const el=document.getElementById('pane-slots');el.innerHTML='';
+  slotOrder.forEach(id=>{
+    const s=slots[id];if(!s)return;
+    const disps=skin.slotDisplays[id]||[];
+    const imgName=disps[0]?.name||'(no display)';
+    const d=document.createElement('div');
+    d.className='srow'+(id===selSlot?' sel':'');
+    d.innerHTML=`<span class="srow-dot" style="background:${bones[s.boneId]?.col||'#888'}"></span>`+
+      `<span style="flex:1;overflow:hidden;text-overflow:ellipsis">${s.name}</span>`+
+      `<span style="color:var(--t0);font-size:8px;font-family:IBM Plex Mono">${imgName.slice(0,10)}</span>`;
+    d.onclick=()=>{selSlot=id;selectBone(s.boneId);};
+    el.appendChild(d);
+  });
+}
+
+function updateProps(){
+  const b=selBone?bones[selBone]:null;
+  document.getElementById('p-name').textContent=b?b.name:'—';
+  document.getElementById('p-parent').textContent=b?(b.parentId?bones[b.parentId]?.name:'(root)'):'—';
+  if(b){
+    document.getElementById('p-rot').value=b.local.rot.toFixed(2);
+    document.getElementById('p-x').value=b.local.x.toFixed(1);
+    document.getElementById('p-y').value=b.local.y.toFixed(1);
+    document.getElementById('p-len').value=b.len.toFixed(1);
+    document.getElementById('p-wrot').textContent=mAngle(b.world).toFixed(1)+'°';
+    document.getElementById('p-wx').textContent=b.world.tx.toFixed(1);
+    document.getElementById('p-wy').textContent=b.world.ty.toFixed(1);
+  } else {
+    ['p-rot','p-x','p-y','p-len'].forEach(id=>document.getElementById(id).value='');
+    ['p-wrot','p-wx','p-wy'].forEach(id=>document.getElementById(id).textContent='—');
+  }
+}
+
+function refreshAll(){
+  rebuildOrder();recalcAll();
+  updateBoneTree();updateSlotList();updateProps();
+  updateTLLabels();renderTL();renderVp();updateFrameDisp();
+}
+
+function selectBone(id){
+  selBone=id;
+  updateBoneTree();updateSlotList();updateProps();updateTLLabels();renderTL();renderVp();
+}
+
+// Swatches
+(()=>{
+  const c=document.getElementById('swatches');
+  BONE_COLORS.forEach(col=>{
+    const d=document.createElement('div');
+    d.className='sw';d.style.background=col;
+    d.onclick=()=>{if(selBone&&bones[selBone]){bones[selBone].col=col;renderVp();updateBoneTree();}};
+    c.appendChild(d);
+  });
+})();
+
+// ── 13. TOOL ACTIONS ─────────────────────────────────────────────
+function setTool(t){
+  tool=t;
+  ['sel','add','pan'].forEach(x=>document.getElementById('tb-'+x)?.classList.remove('on'));
+  const m={select:'sel',add:'add',pan:'pan'};
+  document.getElementById('tb-'+m[t])?.classList.add('on');
+  document.getElementById('vpmode').textContent=t.toUpperCase();
+  vp.style.cursor=t==='pan'?'grab':t==='add'?'crosshair':'default';
+  if(t!=='add'){addFrom=null;addPrev=null;}
+  renderVp();
+}
+
+function recordKF(){
+  if(!selBone)return;
+  recordKeyframe(curAnim,selBone,curFrame);
+  renderTL();updateTLLabels();
+}
+
+function setRestPose(){
+  if(!selBone)return;
+  const b=bones[selBone];
+  b.rest={...b.local};
+  alert(`Rest pose set for "${b.name}"`);
+}
+
+function deleteSel(){
+  if(!selBone)return;
+  if(!confirm(`Delete "${bones[selBone]?.name}" and all its children?`))return;
+  const id=selBone;selBone=null;delBone(id);refreshAll();
+}
+
+function renameBone(){
+  if(!selBone)return;
+  const n=prompt('New name:',bones[selBone].name);
+  if(n){bones[selBone].name=n;refreshAll();}
+}
+
+function toggleBoneVis(id){
+  if(bones[id])bones[id].visible=!bones[id].visible;
+  renderVp();updateBoneTree();
+}
+
+function setPropRot(v){if(selBone&&bones[selBone]){bones[selBone].local.rot=v||0;if(document.getElementById('autokey').checked)recordKeyframe(curAnim,selBone,curFrame);recalcAll();renderVp();renderTL();}}
+function setPropX(v){if(selBone&&bones[selBone]){bones[selBone].local.x=v||0;recalcAll();renderVp();}}
+function setPropY(v){if(selBone&&bones[selBone]){bones[selBone].local.y=v||0;recalcAll();renderVp();}}
+function setPropLen(v){if(selBone&&bones[selBone]){bones[selBone].len=Math.max(1,v||1);recalcAll();renderVp();}}
+
+function setTotalF(n){
+  totalF=Math.max(4,Math.min(960,n||30));
+  Object.values(anims).forEach(a=>a.totalF=totalF);
+  curFrame=Math.min(curFrame,totalF-1);
+  renderTL();updateFrameDisp();
+}
+
+function switchAnim(name){
+  curAnim=name;
+  const a=anims[name];
+  if(a){totalF=a.totalF;document.getElementById('tf-inp').value=totalF;}
+  else{ensureAnim(name);}
+  seekFrame(0);updateTLLabels();renderTL();
+}
+
+function newAnim(){
+  const name=prompt('Animation name:','attack');
+  if(!name)return;
+  ensureAnim(name);
+  const opt=document.createElement('option');
+  opt.value=name;opt.textContent=name;
+  document.getElementById('anim-sel').appendChild(opt);
+  document.getElementById('anim-sel').value=name;
+  switchAnim(name);
+}
+
+function switchTab(t){
+  document.getElementById('tab-bones').classList.toggle('on',t==='bones');
+  document.getElementById('tab-slots').classList.toggle('on',t==='slots');
+  document.getElementById('pane-bones').classList.toggle('on',t==='bones');
+  document.getElementById('pane-slots').classList.toggle('on',t==='slots');
+}
+
+// ── 14. ATLAS MODAL ─────────────────────────────────────────────
+function openModal(id){document.getElementById(id).classList.add('on');}
+function closeModal(id){document.getElementById(id).classList.remove('on');}
+
+document.getElementById('fi-ajson').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>{
+    if(loadAtlasJSON(ev.target.result)){
+      pendAtlasJson=ev.target.result;
+      document.getElementById('drop-atlas-json').classList.add('ok');
+      document.getElementById('drop-atlas-json-lbl').textContent='✓ '+f.name;
+      const n=Object.keys(atlas.regions).length;
+      document.getElementById('atlas-regions').textContent=n+' regions: '+Object.keys(atlas.regions).slice(0,6).join(', ')+(n>6?'…':'');
+    }
+  };r.readAsText(f);
+});
+
+document.getElementById('fi-aimg').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>{
+    pendAtlasImgB64=ev.target.result;
+    const img=new Image();img.src=ev.target.result;
+    img.onload=()=>{
+      pendAtlasImg=img;
+      document.getElementById('drop-atlas-img').classList.add('ok');
+      document.getElementById('drop-atlas-img-lbl').textContent='✓ '+f.name+' ('+img.width+'×'+img.height+')';
+    };
+  };r.readAsDataURL(f);
+});
+
+function confirmAtlas(){
+  if(!pendAtlasImg){alert('Please load an atlas image.');return;}
+  atlas.img=pendAtlasImg;atlas.imgB64=pendAtlasImgB64;
+  atlas.w=pendAtlasImg.width;atlas.h=pendAtlasImg.height;
+  if(pendAtlasJson)loadAtlasJSON(pendAtlasJson);
+  pendAtlasJson=null;pendAtlasImg=null;pendAtlasImgB64=null;
+  closeModal('modal-atlas');renderVp();
+}
+
+// ── 15. ATTACH IMAGE MODAL ───────────────────────────────────────
+function openAttachModal(){
+  if(!selBone){alert('Select a bone first.');return;}
+  // List atlas regions
+  const el=document.getElementById('atlas-region-list');el.innerHTML='';
+  if(Object.keys(atlas.regions).length){
+    const hdr=document.createElement('div');
+    hdr.style.cssText='font-size:8px;letter-spacing:1px;color:var(--t0);text-transform:uppercase;padding:4px 0 6px';
+    hdr.textContent='Atlas regions:';el.appendChild(hdr);
+    Object.keys(atlas.regions).forEach(name=>{
+      const d=document.createElement('div');
+      d.style.cssText='padding:3px 6px;cursor:pointer;font-size:10px;color:var(--t1);border-radius:3px;margin:2px 0;';
+      d.textContent=name;
+      d.onmouseenter=()=>d.style.background='var(--p2)';
+      d.onmouseleave=()=>d.style.background='';
+      d.onclick=()=>{pendRegionName=name;
+        el.querySelectorAll('div').forEach(x=>x.style.color='var(--t1)');
+        d.style.color='var(--sel)';};
+      el.appendChild(d);
+    });
+  }
+  openModal('modal-attach');
+}
+
+document.getElementById('fi-simg').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>{
+    pendSingleImgB64=ev.target.result;
+    const img=new Image();img.src=ev.target.result;
+    img.onload=()=>{
+      pendSingleImg=img;
+      pendRegionName=f.name.replace(/\.(png|jpg|webp|gif)$/i,'');
+      document.getElementById('drop-single-img').classList.add('ok');
+      document.getElementById('drop-single-img-lbl').textContent='✓ '+f.name;
+    };
+  };r.readAsDataURL(f);
+});
+
+function confirmAttach(){
+  if(!selBone){closeModal('modal-attach');return;}
+  let regionName=pendRegionName;
+  if(!regionName){alert('Select a region or load an image.');return;}
+  if(pendSingleImg&&!atlas.regions[regionName]){
+    addSingleImageRegion(regionName,pendSingleImg,pendSingleImgB64);
+  }
+  // Create slot on this bone
+  const b=bones[selBone];
+  addSlot(selBone,b.name+'_slot',regionName,{x:0,y:0,rot:0,sx:1,sy:1});
+  pendSingleImg=null;pendSingleImgB64=null;pendRegionName=null;
+  closeModal('modal-attach');updateSlotList();renderVp();
+}
+
+// Drag-and-drop onto viewport
+const vpwrap=document.getElementById('vpwrap');
+const dz=document.getElementById('dropzone');
+vpwrap.addEventListener('dragover',e=>{e.preventDefault();dz.style.display='flex';});
+vpwrap.addEventListener('dragleave',()=>{dz.style.display='none';});
+vpwrap.addEventListener('drop',e=>{
+  e.preventDefault();dz.style.display='none';
+  const files=[...e.dataTransfer.files];
+  const json=files.find(f=>f.name.endsWith('.json'));
+  const img=files.find(f=>f.type.startsWith('image/'));
+  if(img){
+    const r=new FileReader();r.onload=ev=>{
+      const i2=new Image();i2.src=ev.target.result;
+      i2.onload=()=>{
+        pendSingleImg=i2;pendSingleImgB64=ev.target.result;
+        pendRegionName=img.name.replace(/\.(png|jpg|webp|gif)$/i,'');
+        if(!selBone&&boneOrder.length)selectBone(boneOrder[0]);
+        if(selBone)confirmAttach();
+      };
+    };r.readAsDataURL(img);
+  }
+  if(json){
+    const r=new FileReader();r.onload=ev=>{
+      pendAtlasJson=ev.target.result;loadAtlasJSON(ev.target.result);
+      document.getElementById('atlas-regions').textContent=Object.keys(atlas.regions).length+' regions loaded';
+      if(img){pendAtlasJson=ev.target.result;}
+    };r.readAsText(json);
+  }
+});
+
+// ── 16. KEYBOARD ─────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  const k=e.key.toLowerCase();
+  if(k==='s')setTool('select');
+  if(k==='a'){e.preventDefault();setTool('add');}
+  if(k===' '){e.preventDefault();setTool('pan');}
+  if(k==='k'){e.preventDefault();recordKF();}
+  if(k==='f'){
+    // Fit all bones in viewport
+    if(boneOrder.length){
+      let mx=0,my=0,cnt=0;
+      boneOrder.forEach(id=>{const b=bones[id];if(!b)return;mx+=b.world.tx;my+=b.world.ty;cnt++;});
+      if(cnt){panX=-mx/cnt*zoom;panY=-my/cnt*zoom;}
+      renderVp();
+    }
+  }
+  if(k==='delete'||k==='backspace'){
+    if(selBone&&confirm(`Delete "${bones[selBone]?.name}"?`)){
+      const id=selBone;selBone=null;delBone(id);refreshAll();
+    }
+  }
+  if(k==='arrowup'&&selBone&&bones[selBone]){
+    bones[selBone].local.rot-=2;
+    if(document.getElementById('autokey').checked)recordKeyframe(curAnim,selBone,curFrame);
+    recalcAll();renderVp();updateProps();renderTL();
+  }
+  if(k==='arrowdown'&&selBone&&bones[selBone]){
+    bones[selBone].local.rot+=2;
+    if(document.getElementById('autokey').checked)recordKeyframe(curAnim,selBone,curFrame);
+    recalcAll();renderVp();updateProps();renderTL();
+  }
+  if(k==='arrowleft')stepF(-1);
+  if(k==='arrowright')stepF(1);
+});
+
+// ── 17. HUMANOID PRESET ──────────────────────────────────────────
+function loadHumanoid(){
+  bones={};boneOrder=[];slots={};slotOrder=[];slotUid=0;
+  skin={name:'default',slotDisplays:{}};anims={};
+  selBone=null;selSlot=null;curFrame=0;totalF=30;
+  pauseAnim();
+
+  // Helper: add bone and immediately recalc so we can compute world transforms
+  // for subsequent bones that reference parent tips
+  function B(id,name,pid,lx,ly,lr,len,col){
+    const b=makeBone(id,name,pid,lx,ly,lr,len,col);addBone(b);recalcAll();
+  }
+
+  // Root
+  B('root','root',null,0,30,-90,8,'#666666');
+  // Pelvis (slightly below root tip = up direction, so positive Y in parent's local space = down)
+  B('pelvis','pelvis','root',0,8,90,32,'#e8904a');
+  // Spine chain (children of root, upward)
+  B('sp1','spine1','root',0,0,0,55,'#4a80e8');
+  B('sp2','spine2','sp1',55,0,0,45,'#4a80e8');
+  B('neck','neck','sp2',45,0,0,18,'#60a0f8');
+  B('head','head','neck',18,0,0,42,'#60a0f8');
+
+  // Left leg (child of pelvis, pointing down from pelvis tip)
+  B('lt','l.thigh','pelvis',32,-14,90,54,'#40c070');
+  B('ls','l.shin','lt',54,0,6,48,'#40c070');
+  B('lf','l.foot','ls',48,0,-76,26,'#40c070');
+
+  // Right leg
+  B('rt','r.thigh','pelvis',32,14,90,54,'#c05040');
+  B('rs','r.shin','rt',54,0,-6,48,'#c05040');
+  B('rf','r.foot','rs',48,0,-76,26,'#c05040');
+
+  // Left arm (shoulder sprouts from sp2 bone at ~1/3 along it)
+  B('lsh','l.shoulder','sp2',20,-15,-120,14,'#c09040');
+  B('lu','l.upper','lsh',14,0,-10,42,'#c09040');
+  B('ll','l.lower','lu',42,0,14,34,'#c09040');
+  B('lh','l.hand','ll',34,0,8,18,'#c09040');
+
+  // Right arm
+  B('rsh','r.shoulder','sp2',20,15,120,14,'#9040c0');
+  B('ru','r.upper','rsh',14,0,10,42,'#9040c0');
+  B('rl','r.lower','ru',42,0,-14,34,'#9040c0');
+  B('rh','r.hand','rl',34,0,-8,18,'#9040c0');
+
+  // IDLE ANIMATION (30 frames)
+  totalF=30;
+  document.getElementById('tf-inp').value=30;
+  document.getElementById('fps-inp').value=24;
+
+  const KF=(an,id,f,rot,tx,ty)=>{
+    ensureAnim(an);anims[an].totalF=totalF;
+    if(!anims[an].boneTracks[id])anims[an].boneTracks[id]={rKFs:[],tKFs:[]};
+    const t=anims[an].boneTracks[id];
+    t.rKFs.push({f,rot});
+    if(tx!==undefined)t.tKFs.push({f,x:tx,y:ty});
+  };
+
+  // Root bob
+  KF('idle','root',0,-90,0,30);KF('idle','root',15,-90,0,28);KF('idle','root',30,-90,0,30);
+  // Spine sway
+  KF('idle','sp1',0,0);KF('idle','sp1',15,-2);KF('idle','sp1',30,0);
+  KF('idle','sp2',0,0);KF('idle','sp2',15,-1.5);KF('idle','sp2',30,0);
+  // Head tilt
+  KF('idle','head',0,0);KF('idle','head',15,3);KF('idle','head',30,0);
+  // Arm sway
+  KF('idle','lu',0,-10);KF('idle','lu',15,-7);KF('idle','lu',30,-10);
+  KF('idle','ru',0,10);KF('idle','ru',15,7);KF('idle','ru',30,10);
+
+  // WALK ANIMATION (32 frames)
+  ensureAnim('walk');anims['walk'].totalF=32;
+  const WF=(id,f,rot)=>KF('walk',id,f,rot);
+
+  // Root bounce
+  KF('walk','root',0,-90,0,30);KF('walk','root',8,-90,0,26);KF('walk','root',16,-90,0,30);KF('walk','root',24,-90,0,26);
+  // Left leg forward
+  WF('lt',0,70);WF('lt',8,88);WF('lt',16,110);WF('lt',24,90);WF('lt',32,70);
+  WF('ls',0,6);WF('ls',8,30);WF('ls',16,52);WF('ls',24,14);WF('ls',32,6);
+  WF('lf',0,-70);WF('lf',8,-88);WF('lf',16,-96);WF('lf',24,-76);
+  // Right leg (opposite)
+  WF('rt',0,110);WF('rt',8,90);WF('rt',16,70);WF('rt',24,88);WF('rt',32,110);
+  WF('rs',0,52);WF('rs',8,14);WF('rs',16,6);WF('rs',24,30);WF('rs',32,52);
+  WF('rf',0,-96);WF('rf',8,-76);WF('rf',16,-70);WF('rf',24,-88);
+  // Arms (contralateral)
+  WF('lu',0,-60);WF('lu',8,-30);WF('lu',16,-5);WF('lu',24,-32);WF('lu',32,-60);
+  WF('ru',0,-5);WF('ru',8,-32);WF('ru',16,-60);WF('ru',24,-30);WF('ru',32,-5);
+  // Elbow bend
+  WF('ll',0,18);WF('ll',16,10);
+  WF('rl',0,-10);WF('rl',16,-18);
+  // Spine counter-rotation
+  WF('sp1',0,3);WF('sp1',8,0);WF('sp1',16,-3);WF('sp1',24,0);WF('sp1',32,3);
+  WF('sp2',0,2);WF('sp2',16,-2);
+
+  // Add anim to selector
+  const sel=document.getElementById('anim-sel');
+  sel.innerHTML='';
+  ['idle','walk'].forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
+  curAnim='idle';sel.value='idle';
+
+  zoom=1.0;panX=0;panY=0;
+  applyAnimToFrame('idle',0);recalcAll();refreshAll();
+}
+
+// ── 18. RESIZE HANDLER ───────────────────────────────────────────
+window.addEventListener('resize',()=>{resizeVp();renderVp();renderTL();});
+
+// ── 19. INIT ─────────────────────────────────────────────────────
+ensureAnim('idle');
+setTool('select');
+loadHumanoid();
+</script>
+</body>
+</html>
