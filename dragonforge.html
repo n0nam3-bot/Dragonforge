@@ -242,25 +242,35 @@ body{display:flex;flex-direction:column;}
   <div id="bgr-panel">
     <div class="row">
       <label>BG REMOVE</label>
-      <label class="bgr-toggle"><input type="checkbox" id="bgr-on" checked onchange="bgrToggle()"><span class="bgr-toggle-track"></span></label>
+      <label class="bgr-toggle"><input type="checkbox" id="bgr-on" checked onchange="bgrUpdate()"><span class="bgr-toggle-track"></span></label>
       <span id="bgr-auto-badge" class="bgr-auto-badge">AUTO-DETECT</span>
-      <span id="bgr-color-swatch" title="Click to pick custom color" onclick="document.getElementById('bgr-color-input').click()" style="background:#4caf50"></span>
+      <span id="bgr-color-swatch" title="Click to pick color" onclick="document.getElementById('bgr-color-input').click()" style="background:#4caf50"></span>
       <input type="color" id="bgr-color-input" value="#4caf50" oninput="bgrColorPick(this.value)" onchange="bgrColorPick(this.value)">
     </div>
     <div class="row">
       <label>TOLERANCE</label>
-      <input class="bgr-slider" type="range" id="bgr-tol" min="0" max="120" value="40" oninput="bgrUpdate()">
-      <span class="bgr-val" id="bgr-tol-val">40</span>
+      <input class="bgr-slider" type="range" id="bgr-tol" min="0" max="120" value="35" oninput="bgrUpdate()">
+      <span class="bgr-val" id="bgr-tol-val">35</span>
     </div>
     <div class="row">
       <label>FEATHER</label>
-      <input class="bgr-slider" type="range" id="bgr-fth" min="0" max="60" value="10" oninput="bgrUpdate()">
-      <span class="bgr-val" id="bgr-fth-val">10</span>
+      <input class="bgr-slider" type="range" id="bgr-fth" min="0" max="40" value="4" oninput="bgrUpdate()">
+      <span class="bgr-val" id="bgr-fth-val">4</span>
+    </div>
+    <div class="row">
+      <label>ROTATE °</label>
+      <input class="bgr-slider" type="range" id="bgr-rot" min="-180" max="180" value="0" oninput="bgrUpdate()">
+      <span class="bgr-val" id="bgr-rot-val">0</span>
     </div>
     <div class="row">
       <label>SCALE %</label>
-      <input class="bgr-slider" type="range" id="bgr-scale" min="10" max="200" value="100" oninput="bgrScaleUpdate()">
+      <input class="bgr-slider" type="range" id="bgr-scale" min="10" max="200" value="100" oninput="bgrUpdate()">
       <span class="bgr-val" id="bgr-scale-val">100</span>
+    </div>
+    <div class="row" style="gap:6px;margin-top:2px;">
+      <label>UPRIGHT</label>
+      <label class="bgr-toggle" title="Counter-rotate slot so image appears world-upright"><input type="checkbox" id="bgr-upright" checked><span class="bgr-toggle-track"></span></label>
+      <span style="font-size:8px;color:var(--t0);flex:1">Cancel bone rotation (full-body sprites)</span>
     </div>
   </div>
 
@@ -271,11 +281,12 @@ body{display:flex;flex-direction:column;}
   </div>
 
   <!-- ATLAS REGIONS (optional) -->
-  <div id="atlas-region-list" style="max-height:100px;overflow-y:auto;margin:6px 0;"></div>
+  <div id="atlas-region-list" style="max-height:80px;overflow-y:auto;margin:4px 0;"></div>
 
-  <div class="mbtns">
-    <button class="btn" onclick="bgrReset();closeModal('modal-attach')">CANCEL</button>
-    <button class="btn grn" id="btn-attach-ok" onclick="confirmAttach()">ATTACH TO BONE</button>
+  <div class="mbtns" style="flex-wrap:wrap;gap:6px;">
+    <button class="btn" onclick="bgrReset();closeModal('modal-attach')" style="margin-right:auto">CANCEL</button>
+    <button class="btn sel" onclick="loadAsReference()" title="Place image in viewport — rig on top of it">📌 USE AS REFERENCE</button>
+    <button class="btn grn" id="btn-attach-ok" onclick="confirmAttach()">⊞ ATTACH TO BONE</button>
   </div>
 </div>
 </div>
@@ -322,7 +333,8 @@ body{display:flex;flex-direction:column;}
   <input class="numf" id="tf-inp" type="number" value="30" min="4" max="960" onchange="setTotalF(+this.value)" title="Total frames">
   <div style="flex:1"></div>
   <button class="btn" onclick="openModal('modal-atlas')">ATLAS…</button>
-  <button class="btn sel" onclick="openAttachModal()">ATTACH IMG</button>
+  <button class="btn sel" onclick="openSpriteModal()">LOAD SPRITE</button>
+  <button class="btn" onclick="openAttachModal()">ATTACH IMG</button>
   <button class="btn" onclick="loadHumanoid()">LOAD CHAR</button>
   <button class="btn grn" onclick="exportAll()">EXPORT DB5</button>
 </div>
@@ -346,6 +358,20 @@ body{display:flex;flex-direction:column;}
     <div id="vpmode">SELECT</div>
     <div id="vpinfo">x: 0  y: 0<br>scroll: zoom · alt+drag: pan</div>
     <div id="vpkeys">S — select  A — add bone<br>K — keyframe  Del — delete<br>↑↓ — rotate bone  F — frame fit</div>
+    <!-- Reference sprite HUD -->
+    <div id="ref-hud" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);
+      background:rgba(13,16,32,.92);border:1px solid var(--sel);border-radius:4px;padding:5px 10px;
+      display:none;align-items:center;gap:8px;font-size:9px;letter-spacing:1px;color:var(--sel);white-space:nowrap;">
+      <span>📌 REF</span>
+      <span id="ref-hud-info" style="color:var(--t1);font-size:8px;"></span>
+      <span style="color:var(--t0);font-size:8px;">OPACITY</span>
+      <input type="range" min="10" max="100" value="70" id="ref-opacity-sl"
+        style="width:60px;height:3px;-webkit-appearance:none;background:var(--brd2);border-radius:2px;cursor:pointer;"
+        oninput="if(refSprite){refSprite.opacity=+this.value/100;renderVp();}">
+      <button class="btn" style="height:20px;font-size:8px;padding:0 6px;" id="ref-lock-btn" onclick="refToggleLock()">LOCK</button>
+      <button class="btn" style="height:20px;font-size:8px;padding:0 6px;border-color:var(--grn);color:var(--grn);" onclick="refAttachToSel()">→ ATTACH</button>
+      <button class="btn" style="height:20px;font-size:8px;padding:0 6px;border-color:var(--red);color:var(--red);" onclick="refClear()">✕</button>
+    </div>
   </div>
 
   <!-- RIGHT PANEL -->
@@ -878,6 +904,36 @@ function renderVp() {
   vc.translate(vw/2+panX, vh/2+panY);
   vc.scale(zoom,zoom);
   drawGrid();
+
+  // ── Reference sprite layer (behind bones) ──
+  if (refSprite) {
+    const rs = refSprite;
+    const hw = rs.img.width * rs.scale / 2, hh = rs.img.height * rs.scale / 2;
+    vc.save();
+    vc.translate(rs.x, rs.y);
+    vc.rotate(rs.rot * PI / 180);
+    vc.globalAlpha = rs.opacity;
+    vc.drawImage(rs.img, -hw, -hh, rs.img.width * rs.scale, rs.img.height * rs.scale);
+    vc.globalAlpha = 1;
+    if (!rs.locked) {
+      // Bounding box
+      vc.strokeStyle = '#00b8d9'; vc.lineWidth = 1/zoom;
+      vc.setLineDash([5/zoom, 3/zoom]);
+      vc.strokeRect(-hw, -hh, hw*2, hh*2);
+      vc.setLineDash([]);
+      // Corner handles
+      [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([sx,sy]) => {
+        vc.fillStyle = '#00b8d9'; vc.fillRect(sx*hw-4/zoom, sy*hh-4/zoom, 8/zoom, 8/zoom);
+      });
+      // Rotation handle stem + circle
+      vc.beginPath(); vc.moveTo(0,-hh); vc.lineTo(0,-hh-18/zoom);
+      vc.strokeStyle='#00b8d9'; vc.lineWidth=1/zoom; vc.stroke();
+      vc.beginPath(); vc.arc(0,-hh-18/zoom, 5/zoom, 0, 2*PI);
+      vc.fillStyle='#00b8d9'; vc.fill();
+    }
+    vc.restore();
+  }
+
   // Draw slot images (behind bones, sorted by z)
   slotOrder.slice().sort((a,b)=>(slots[a]?.z||0)-(slots[b]?.z||0)).forEach(drawSlotImage);
   // Draw bones (non-selected first)
@@ -891,7 +947,6 @@ function renderVp() {
     vc.setLineDash([6/zoom,4/zoom]);vc.stroke();vc.setLineDash([]);
     vc.beginPath();vc.arc(addPrev.x,addPrev.y,4/zoom,0,2*PI);
     vc.fillStyle='#00b8d9';vc.fill();
-    // Preview length indicator
     const dx=addPrev.x-p.tipX,dy=addPrev.y-p.tipY;
     const len=Math.hypot(dx,dy);
     vc.save();vc.scale(1/zoom,1/zoom);
@@ -899,7 +954,6 @@ function renderVp() {
     vc.fillText(len.toFixed(0)+'px',((p.tipX+addPrev.x)/2)*zoom,((p.tipY+addPrev.y)/2)*zoom-8);
     vc.restore();
   }
-  // Tip highlight in add mode
   if(tool==='add'&&!addFrom){
     boneOrder.forEach(id=>{
       const b=bones[id];if(!b)return;
@@ -981,6 +1035,16 @@ function vpDown(e){
   lmx=pos.x;lmy=pos.y;
   const w=s2w(pos.x,pos.y);
   if(pos.button===1||(pos.button===0&&pos.alt)||tool==='pan'){drag=true;dragType='pan';return;}
+
+  // ── Ref sprite interaction (priority over bones when not locked) ──
+  if(refSprite&&!refSprite.locked&&tool==='select'){
+    const hit=hitTestRefSprite(w.x,w.y);
+    if(hit){
+      drag=true; dragType='ref_'+hit; refLastW={x:w.x,y:w.y};
+      return;
+    }
+  }
+
   if(tool==='select'){
     const h=boneAt(w.x,w.y);
     if(h){selectBone(h);drag=true;dragType='rotate';dragBoneId=h;}
@@ -990,7 +1054,6 @@ function vpDown(e){
     const tip=nearestTip(w.x,w.y);
     if(tip&&!addFrom){addFrom=tip;addPrev={x:w.x,y:w.y};drag=true;dragType='newBone';}
     else if(!Object.keys(bones).length){
-      // Create root bone
       const id=genId();
       addBone(makeBone(id,'root',null,w.x,w.y,0,60,BONE_COLORS[0]));
       recalcAll();selectBone(id);refreshAll();
@@ -1016,7 +1079,19 @@ function vpMove(e){
     panX+=pos.x-lmx;panY+=pos.y-lmy;
     lmx=pos.x;lmy=pos.y;renderVp();return;
   }
-  if(dragType==='pan'){panX+=pos.x-lmx;panY+=pos.y-lmy;renderVp();}
+  // ── Ref sprite move / rotate ──
+  if(dragType==='ref_move'&&refSprite&&refLastW){
+    refSprite.x+=w.x-refLastW.x;
+    refSprite.y+=w.y-refLastW.y;
+    refLastW={x:w.x,y:w.y};
+    refHudUpdate();renderVp();
+  }
+  else if(dragType==='ref_rotate'&&refSprite){
+    const ang=Math.atan2(w.y-refSprite.y,w.x-refSprite.x)*R2D+90;
+    refSprite.rot=ang;
+    refHudUpdate();renderVp();
+  }
+  else if(dragType==='pan'){panX+=pos.x-lmx;panY+=pos.y-lmy;renderVp();}
   else if(dragType==='rotate'){
     const b=bones[dragBoneId];if(!b)return;
     const nwa=Math.atan2(w.y-b.world.ty,w.x-b.world.tx)*R2D;
@@ -1035,7 +1110,6 @@ function vpUp(e){
     const p=bones[addFrom];
     const dx=addPrev.x-p.tipX,dy=addPrev.y-p.tipY;
     const len=Math.max(8,Math.hypot(dx,dy));
-    // New bone world angle
     const wAng=Math.atan2(dy,dx)*R2D;
     const pWAng=mAngle(p.world);
     const localRot=wAng-pWAng;
@@ -1043,7 +1117,7 @@ function vpUp(e){
     const nb=makeBone(id,'bone'+boneOrder.length,addFrom,p.len,0,localRot,len,BONE_COLORS[boneOrder.length%BONE_COLORS.length]);
     addBone(nb);recalcAll();selectBone(id);refreshAll();
   }
-  drag=false;dragType=null;dragBoneId=null;addFrom=null;addPrev=null;
+  drag=false;dragType=null;dragBoneId=null;addFrom=null;addPrev=null;refLastW=null;
   renderVp();
 }
 
@@ -1051,6 +1125,12 @@ function vpWheel(e){
   e.preventDefault();
   const rect=vp.getBoundingClientRect();
   const sx=e.clientX-rect.left,sy=e.clientY-rect.top;
+  const w=s2w(sx,sy);
+  // If hovering ref sprite and it's unlocked, scroll scales it
+  if(refSprite&&!refSprite.locked&&hitTestRefSprite(w.x,w.y)){
+    refSprite.scale=Math.max(0.05,Math.min(10,refSprite.scale*(e.deltaY<0?1.06:.94)));
+    refHudUpdate();renderVp();return;
+  }
   const wx=(sx-vp.width/2-panX)/zoom,wy=(sy-vp.height/2-panY)/zoom;
   zoom=Math.max(.05,Math.min(16,zoom*(e.deltaY<0?1.12:.9)));
   panX=sx-vp.width/2-wx*zoom;panY=sy-vp.height/2-wy*zoom;
@@ -1389,8 +1469,7 @@ function confirmAtlas(){
 
 // ── 15. ATTACH IMAGE MODAL ───────────────────────────────────────
 function openAttachModal(){
-  if(!selBone){alert('Select a bone first.');return;}
-  // List atlas regions
+  // List atlas regions (if any)
   const el=document.getElementById('atlas-region-list');el.innerHTML='';
   if(Object.keys(atlas.regions).length){
     const hdr=document.createElement('div');
@@ -1411,113 +1490,144 @@ function openAttachModal(){
   openModal('modal-attach');
 }
 
-// ── BACKGROUND REMOVAL ENGINE ──────────────────────────────────────
-let bgrSrcImg = null, bgrSrcName = '', bgrBgColor = [0,255,0], bgrUserPicked = false;
-let bgrDebounce = null, bgrScale = 1.0;
+// ── BACKGROUND REMOVAL ENGINE (flood-fill from edges) ──────────────
+let bgrSrcImg = null, bgrSrcName = '', bgrBgColor = [0,200,0], bgrUserPicked = false;
+let bgrDebounce = null, bgrProcessedCanvas = null;
 
 function sampleDominantBgColor(img) {
-  // Draw to offscreen canvas and sample border pixels
   const c = document.createElement('canvas');
-  const MAX = 256; // downsample for speed
+  const MAX = 300;
   const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-  c.width = Math.ceil(img.width * scale);
-  c.height = Math.ceil(img.height * scale);
+  c.width = Math.max(1, Math.ceil(img.width * scale));
+  c.height = Math.max(1, Math.ceil(img.height * scale));
   const ctx = c.getContext('2d');
   ctx.drawImage(img, 0, 0, c.width, c.height);
   const W = c.width, H = c.height;
-
-  // Collect border pixels
-  const pts = [];
-  for (let x = 0; x < W; x++) { pts.push([x, 0]); pts.push([x, H - 1]); }
-  for (let y = 1; y < H - 1; y++) { pts.push([0, y]); pts.push([W - 1, y]); }
-
-  // Build color histogram (quantized to 8-step buckets)
+  const id = ctx.getImageData(0, 0, W, H), px = id.data;
   const hist = {};
-  pts.forEach(([x, y]) => {
-    const d = ctx.getImageData(x, y, 1, 1).data;
-    if (d[3] < 128) return; // skip transparent
-    const key = `${d[0] >> 3},${d[1] >> 3},${d[2] >> 3}`;
-    hist[key] = (hist[key] || {count: 0, r: d[0], g: d[1], b: d[2]});
+  function addPx(x, y) {
+    const i = (y * W + x) * 4;
+    if (px[i+3] < 128) return;
+    const key = `${px[i]>>4},${px[i+1]>>4},${px[i+2]>>4}`;
+    if (!hist[key]) hist[key] = {count:0, r:px[i], g:px[i+1], b:px[i+2]};
     hist[key].count++;
-  });
-
-  // Find most common bucket
-  let best = null, bestCount = 0;
-  Object.values(hist).forEach(v => { if (v.count > bestCount) { bestCount = v.count; best = v; } });
+  }
+  for (let x = 0; x < W; x++) { addPx(x, 0); addPx(x, H-1); }
+  for (let y = 1; y < H-1; y++) { addPx(0, y); addPx(W-1, y); }
+  let best = null, bestC = 0;
+  Object.values(hist).forEach(v => { if (v.count > bestC) { bestC = v.count; best = v; } });
   return best ? [best.r, best.g, best.b] : [0, 200, 0];
 }
 
 function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-  return [r, g, b];
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
 }
 function rgbToHex(r, g, b) {
   return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
 }
 
-function removeBackground(srcImg, bgR, bgG, bgB, tolerance, feather, scalePct) {
-  const scale = Math.min(1, (scalePct||100)/100);
-  const W = Math.round(srcImg.width * scale), H = Math.round(srcImg.height * scale);
+/* Flood-fill background removal.
+   Only erases pixels that are CONNECTED to the image border and match the bg color.
+   This prevents character colors that happen to match the bg from being erased. */
+function floodFillRemoveBg(srcImg, bgR, bgG, bgB, tolerance, feather, scalePct, rotDeg) {
+  // Step 1: draw with rotation + scale
+  const scale = Math.max(0.01, (scalePct || 100) / 100);
+  const rad = (rotDeg || 0) * PI / 180;
+  const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+  const srcW = Math.round(srcImg.width * scale), srcH = Math.round(srcImg.height * scale);
+  const W = Math.max(1, Math.round(srcW * cos + srcH * sin));
+  const H = Math.max(1, Math.round(srcW * sin + srcH * cos));
+
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(srcImg, 0, 0, W, H);
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(rad);
+  ctx.drawImage(srcImg, -srcW / 2, -srcH / 2, srcW, srcH);
+  ctx.restore();
+
+  if (!document.getElementById('bgr-on').checked) return c;
+
+  // Step 2: flood-fill from all border pixels
   const id = ctx.getImageData(0, 0, W, H);
   const px = id.data;
-  // Precompute max possible weighted distance for normalisation
-  const maxDist = Math.sqrt(255*255*0.2126 + 255*255*0.7152 + 255*255*0.0722);
-  for (let i = 0; i < px.length; i += 4) {
-    const r = px[i], g = px[i+1], b = px[i+2];
-    // Perceptually weighted color distance
-    const dr = r - bgR, dg = g - bgG, db = b - bgB;
-    const dist = Math.sqrt(dr*dr*0.2126 + dg*dg*0.7152 + db*db*0.0722) / maxDist * 255;
-    if (dist <= tolerance) {
-      px[i+3] = 0;
-    } else if (feather > 0 && dist <= tolerance + feather) {
-      const alpha = (dist - tolerance) / feather;
-      // Smooth step for nicer edges
-      const smooth = alpha * alpha * (3 - 2 * alpha);
-      px[i+3] = Math.round(px[i+3] * smooth);
+  const maxD = Math.sqrt(255*255*0.2126 + 255*255*0.7152 + 255*255*0.0722);
+
+  function colorDist(i) {
+    const dr = px[i]-bgR, dg = px[i+1]-bgG, db = px[i+2]-bgB;
+    return Math.sqrt(dr*dr*0.2126 + dg*dg*0.7152 + db*db*0.0722) / maxD * 255;
+  }
+
+  const N = W * H;
+  const visited = new Uint8Array(N);
+  const removed = new Uint8Array(N);
+  // Use a flat stack (pairs of x,y packed as x+y*W doesn't need encoding; use linear index)
+  const stack = new Int32Array(N);
+  let sp = 0;
+
+  function seedBorder() {
+    for (let x = 0; x < W; x++) { const i0=x, i1=(H-1)*W+x; if(!visited[i0]){visited[i0]=1;stack[sp++]=i0;} if(!visited[i1]){visited[i1]=1;stack[sp++]=i1;} }
+    for (let y = 1; y < H-1; y++) { const i0=y*W, i1=y*W+W-1; if(!visited[i0]){visited[i0]=1;stack[sp++]=i0;} if(!visited[i1]){visited[i1]=1;stack[sp++]=i1;} }
+  }
+  seedBorder();
+
+  while (sp > 0) {
+    const idx = stack[--sp];
+    const pi = idx * 4;
+    if (px[pi+3] === 0) { removed[idx]=1; continue; } // already transparent
+    if (colorDist(pi) <= tolerance) {
+      px[pi+3] = 0; removed[idx] = 1;
+      const x = idx % W, y = (idx / W) | 0;
+      if (x > 0   && !visited[idx-1]) { visited[idx-1]=1; stack[sp++]=idx-1; }
+      if (x < W-1 && !visited[idx+1]) { visited[idx+1]=1; stack[sp++]=idx+1; }
+      if (y > 0   && !visited[idx-W]) { visited[idx-W]=1; stack[sp++]=idx-W; }
+      if (y < H-1 && !visited[idx+W]) { visited[idx+W]=1; stack[sp++]=idx+W; }
     }
   }
+
+  // Step 3: feather — pixels adjacent to removed pixels get softened based on color proximity
+  if (feather > 0) {
+    for (let idx = 0; idx < N; idx++) {
+      if (removed[idx]) continue;
+      const pi = idx * 4;
+      if (px[pi+3] === 0) continue;
+      const d = colorDist(pi);
+      // Only feather pixels that are close to the bg color AND touch a removed pixel
+      if (d > tolerance + feather) continue;
+      const x = idx % W, y = (idx / W) | 0;
+      const touchesRemoved =
+        (x > 0   && removed[idx-1]) || (x < W-1 && removed[idx+1]) ||
+        (y > 0   && removed[idx-W]) || (y < H-1 && removed[idx+W]);
+      if (!touchesRemoved) continue;
+      const t = Math.max(0, (d - tolerance) / feather);
+      const smooth = t * t * (3 - 2 * t); // smoothstep
+      px[pi+3] = Math.round(px[pi+3] * smooth);
+    }
+  }
+
   ctx.putImageData(id, 0, 0);
   return c;
 }
 
 function bgrUpdate() {
-  const tolEl = document.getElementById('bgr-tol');
-  const fthEl = document.getElementById('bgr-fth');
-  document.getElementById('bgr-tol-val').textContent = tolEl.value;
-  document.getElementById('bgr-fth-val').textContent = fthEl.value;
-  document.getElementById('bgr-scale-val').textContent = document.getElementById('bgr-scale').value;
+  const tol = document.getElementById('bgr-tol').value;
+  const fth = document.getElementById('bgr-fth').value;
+  const rot = document.getElementById('bgr-rot').value;
+  const scl = document.getElementById('bgr-scale').value;
+  document.getElementById('bgr-tol-val').textContent = tol;
+  document.getElementById('bgr-fth-val').textContent = fth;
+  document.getElementById('bgr-rot-val').textContent = rot;
+  document.getElementById('bgr-scale-val').textContent = scl;
   if (!bgrSrcImg) return;
-  const loading = document.getElementById('bgr-loading');
-  loading.style.display = 'flex';
+  document.getElementById('bgr-loading').style.display = 'flex';
   clearTimeout(bgrDebounce);
   bgrDebounce = setTimeout(() => {
-    const on = document.getElementById('bgr-on').checked;
-    let c;
-    if (on) {
-      const [r, g, b] = bgrBgColor;
-      c = removeBackground(bgrSrcImg, r, g, b,
-        +tolEl.value, +fthEl.value, +document.getElementById('bgr-scale').value);
-    } else {
-      // Just scale
-      const scale = (+document.getElementById('bgr-scale').value) / 100;
-      const W = Math.round(bgrSrcImg.width * scale), H = Math.round(bgrSrcImg.height * scale);
-      c = document.createElement('canvas'); c.width = W; c.height = H;
-      c.getContext('2d').drawImage(bgrSrcImg, 0, 0, W, H);
-    }
+    const [r, g, b] = bgrBgColor;
+    const c = floodFillRemoveBg(bgrSrcImg, r, g, b, +tol, +fth, +scl, +rot);
     document.getElementById('bgr-preview').src = c.toDataURL('image/png');
-    loading.style.display = 'none';
-    // Store processed canvas
+    document.getElementById('bgr-loading').style.display = 'none';
     bgrProcessedCanvas = c;
-  }, 120);
-}
-
-function bgrScaleUpdate() {
-  document.getElementById('bgr-scale-val').textContent = document.getElementById('bgr-scale').value;
-  bgrUpdate();
+  }, 150);
 }
 
 function bgrColorPick(hex) {
@@ -1528,19 +1638,15 @@ function bgrColorPick(hex) {
   bgrUpdate();
 }
 
-function bgrToggle() {
-  bgrUpdate();
-}
-
 function bgrReset() {
   bgrSrcImg = null; bgrSrcName = ''; bgrProcessedCanvas = null; bgrUserPicked = false;
   pendSingleImg = null; pendSingleImgB64 = null; pendRegionName = null;
   document.getElementById('drop-single-img').classList.remove('ok');
   document.getElementById('drop-single-img-lbl').textContent = '🖼 Drop or click to load image (PNG / JPG / WebP)';
   document.getElementById('bgr-preview-wrap').style.display = 'none';
+  document.getElementById('bgr-rot').value = 0;
+  document.getElementById('bgr-rot-val').textContent = '0';
 }
-
-let bgrProcessedCanvas = null;
 
 function bgrLoadImage(img, name) {
   bgrSrcImg = img; bgrSrcName = name;
@@ -1553,6 +1659,88 @@ function bgrLoadImage(img, name) {
   }
   document.getElementById('bgr-preview-wrap').style.display = 'block';
   bgrUpdate();
+}
+
+// ── REFERENCE SPRITE LAYER ──────────────────────────────────────────
+// A floating image in the viewport you can position/rotate and rig over.
+let refSprite = null; // {img, x, y, rot, scale, opacity, locked}
+let refSelHandle = null; // 'move' | 'rotate' | null
+let refLastW = null; // last world position during drag
+
+function refHudUpdate() {
+  const hud = document.getElementById('ref-hud');
+  if (!refSprite) { hud.style.display = 'none'; return; }
+  hud.style.display = 'flex';
+  document.getElementById('ref-hud-info').textContent =
+    `${refSprite.img.width}×${refSprite.img.height}  rot:${refSprite.rot.toFixed(0)}°  scale:${refSprite.scale.toFixed(2)}${refSprite.locked?' 🔒':''}`;
+  document.getElementById('ref-lock-btn').textContent = refSprite.locked ? 'UNLOCK' : 'LOCK';
+}
+
+function refToggleLock() {
+  if (!refSprite) return;
+  refSprite.locked = !refSprite.locked;
+  refHudUpdate(); renderVp();
+}
+
+function refClear() {
+  refSprite = null; refHudUpdate(); renderVp();
+}
+
+function refAttachToSel() {
+  if (!refSprite || !selBone) { alert('Select a bone first.'); return; }
+  const b = bones[selBone];
+  const regionName = 'ref_' + (bgrSrcName || 'sprite');
+  const c = document.createElement('canvas');
+  c.width = refSprite.img.width; c.height = refSprite.img.height;
+  c.getContext('2d').drawImage(refSprite.img, 0, 0);
+  const b64 = c.toDataURL('image/png');
+  const finalImg = new Image(); finalImg.src = b64;
+  finalImg.onload = () => {
+    addSingleImageRegion(regionName, finalImg, b64);
+    const counterRot = document.getElementById('bgr-upright')?.checked ? -mAngle(b.world) : 0;
+    addSlot(selBone, b.name + '_slot', regionName, {x:0, y:0, rot: counterRot + refSprite.rot, sx: refSprite.scale, sy: refSprite.scale});
+    refClear();
+    updateSlotList(); renderVp();
+  };
+}
+
+function loadAsReference() {
+  if (!bgrProcessedCanvas) { alert('Load an image first.'); return; }
+  const b64 = bgrProcessedCanvas.toDataURL('image/png');
+  const img = new Image(); img.src = b64;
+  img.onload = () => {
+    refSprite = {
+      img, x: 0, y: 0,
+      rot: +(document.getElementById('bgr-rot')?.value || 0),
+      scale: 1, opacity: 0.7, locked: false
+    };
+    bgrReset(); closeModal('modal-attach');
+    refHudUpdate(); renderVp();
+  };
+}
+
+function hitTestRefSprite(wx, wy) {
+  if (!refSprite) return null;
+  const rs = refSprite;
+  const rad = rs.rot * PI / 180;
+  const cos = Math.cos(-rad), sin = Math.sin(-rad);
+  const dx = wx - rs.x, dy = wy - rs.y;
+  const lx = dx * cos - dy * sin, ly = dx * sin + dy * cos;
+  const hw = rs.img.width * rs.scale / 2, hh = rs.img.height * rs.scale / 2;
+  // Check rotation handle (above top-center)
+  const rHx = 0, rHy = -hh - 20 / zoom;
+  const dlx = lx - rHx, dly = ly - rHy;
+  if (Math.hypot(dlx, dly) < 10 / zoom) return 'rotate';
+  // Check body
+  if (Math.abs(lx) < hw && Math.abs(ly) < hh) return 'move';
+  return null;
+}
+
+function openSpriteModal() {
+  // Open attach modal in reference mode (no bone required)
+  const el = document.getElementById('atlas-region-list'); el.innerHTML = '';
+  bgrUserPicked = false;
+  openModal('modal-attach');
 }
 
 document.getElementById('fi-simg').addEventListener('change', e => {
@@ -1570,11 +1758,10 @@ document.getElementById('fi-simg').addEventListener('change', e => {
 });
 
 function confirmAttach() {
-  if (!selBone) { closeModal('modal-attach'); return; }
+  if (!selBone) { alert('Select a bone first, then click ATTACH TO BONE.'); return; }
   let regionName = pendRegionName;
   if (!regionName && !bgrProcessedCanvas) { alert('Load an image first.'); return; }
 
-  // Use processed canvas if available, else raw
   const useCanvas = bgrProcessedCanvas || (() => {
     const c = document.createElement('canvas');
     c.width = bgrSrcImg?.width || 1; c.height = bgrSrcImg?.height || 1;
@@ -1585,11 +1772,11 @@ function confirmAttach() {
   const finalB64 = useCanvas.toDataURL('image/png');
   const finalImg = new Image(); finalImg.src = finalB64;
   finalImg.onload = () => {
-    addSingleImageRegion(regionName, finalImg, finalB64);
+    if (!atlas.regions[regionName]) addSingleImageRegion(regionName, finalImg, finalB64);
     const b = bones[selBone];
-    // Scale the slot display transform to center the image on the bone's world position
-    const sx = 1, sy = 1;
-    addSlot(selBone, b.name + '_slot', regionName, {x: 0, y: 0, rot: 0, sx, sy});
+    // Counter-rotate so image lands world-upright (cancels bone's world angle)
+    const counterRot = document.getElementById('bgr-upright').checked ? -mAngle(b.world) : 0;
+    addSlot(selBone, b.name + '_slot', regionName, {x: 0, y: 0, rot: counterRot, sx: 1, sy: 1});
     bgrReset();
     closeModal('modal-attach');
     updateSlotList(); renderVp();
