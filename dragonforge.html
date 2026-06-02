@@ -4,201 +4,125 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>DragonForge — Skeletal Animation Studio</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 :root{
-  --bg:#0b0c0f;--p1:#111318;--p2:#161921;--brd:#1e2030;--brd2:#272d3e;
-  --t0:#3a4055;--t1:#6a7090;--t2:#a8b0c8;--t3:#d0d8ec;
-  --acc:#e87a20;--acc2:#cc5510;--sel:#00b8d9;--sel2:#007890;
-  --grn:#30c070;--red:#e04848;--yel:#f5c518;
-  --rh:42px;--lw:165px;--rw:196px;--tlh:158px;
+  --bg:#07090f;--p1:#0e1018;--p2:#13161f;--brd:#1a1d2a;--brd2:#22263a;
+  --t0:#30364a;--t1:#5a6080;--t2:#9098b8;--t3:#ccd4ec;
+  --acc:#e07820;--sel:#00b4d8;--grn:#28b860;--red:#d84040;--yel:#e8c020;
 }
-html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t2);
-  font-family:'IBM Plex Sans',sans-serif;font-size:11px;user-select:none;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:11px;}
 body{display:flex;flex-direction:column;}
 
-/* ── TOOLBAR ──────────────────────────────────────────── */
-#toolbar{height:var(--rh);min-height:var(--rh);background:var(--p1);
-  border-bottom:1px solid var(--brd);display:flex;align-items:center;
-  padding:0 8px;gap:4px;flex-shrink:0;overflow-x:auto;}
-.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;
-  color:var(--acc);letter-spacing:3px;margin-right:6px;white-space:nowrap;}
-.vsep{width:1px;height:24px;background:var(--brd2);flex-shrink:0;margin:0 2px;}
-.tb{width:30px;height:26px;background:transparent;border:1px solid var(--brd2);
-  border-radius:3px;color:var(--t1);cursor:pointer;display:flex;align-items:center;
-  justify-content:center;font-size:13px;transition:all .1s;flex-shrink:0;}
-.tb:hover{border-color:var(--acc);color:var(--acc);}
-.tb.on{background:rgba(232,122,32,.12);border-color:var(--acc);color:var(--acc);}
-.btn{height:26px;padding:0 8px;background:transparent;border:1px solid var(--brd2);
-  border-radius:3px;color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;
-  font-size:9px;letter-spacing:.5px;white-space:nowrap;flex-shrink:0;transition:all .1s;}
+/* ── TOOLBAR ── */
+#tb{height:40px;background:var(--p1);border-bottom:1px solid var(--brd);display:flex;align-items:center;padding:0 8px;gap:3px;flex-shrink:0;overflow:hidden;}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--acc);letter-spacing:3px;margin-right:6px;white-space:nowrap;}
+.vs{width:1px;height:22px;background:var(--brd2);flex-shrink:0;margin:0 3px;}
+.tb{width:28px;height:24px;background:transparent;border:1px solid var(--brd2);border-radius:3px;color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .1s;flex-shrink:0;}
+.tb:hover,.tb.on{border-color:var(--acc);color:var(--acc);background:rgba(224,120,32,.1);}
+.btn{height:24px;padding:0 7px;background:transparent;border:1px solid var(--brd2);border-radius:3px;color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.5px;white-space:nowrap;flex-shrink:0;transition:all .1s;}
 .btn:hover{border-color:var(--acc);color:var(--acc);}
-.btn.pri{background:rgba(232,122,32,.12);border-color:var(--acc);color:var(--acc);}
-.btn.sel{background:rgba(0,184,217,.1);border-color:var(--sel);color:var(--sel);}
-.btn.grn{background:rgba(48,192,112,.1);border-color:var(--grn);color:var(--grn);}
-.tbsel{height:26px;padding:0 6px;background:var(--p2);border:1px solid var(--brd2);
-  border-radius:3px;color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;
-  outline:none;cursor:pointer;flex-shrink:0;}
-.tbsel:hover{border-color:var(--acc);}
-.numf{width:34px;height:26px;background:var(--p2);border:1px solid var(--brd2);
-  border-radius:3px;color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;
-  text-align:center;outline:none;flex-shrink:0;padding:0 2px;}
-.numf:focus{border-color:var(--acc);}
-.lbl{font-size:8px;letter-spacing:1.5px;color:var(--t0);text-transform:uppercase;
-  white-space:nowrap;flex-shrink:0;}
-.frm{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t1);
-  min-width:54px;text-align:center;flex-shrink:0;}
+.btn.a{background:rgba(224,120,32,.1);border-color:var(--acc);color:var(--acc);}
+.btn.b{background:rgba(0,180,216,.1);border-color:var(--sel);color:var(--sel);}
+.btn.c{background:rgba(40,184,96,.1);border-color:var(--grn);color:var(--grn);}
+.btn.y{background:rgba(232,192,32,.1);border-color:var(--yel);color:var(--yel);}
+.sel{height:24px;padding:0 5px;background:var(--p2);border:1px solid var(--brd2);border-radius:3px;color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;outline:none;cursor:pointer;flex-shrink:0;}
+.nf{width:32px;height:24px;background:var(--p2);border:1px solid var(--brd2);border-radius:3px;color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;text-align:center;outline:none;padding:0 2px;flex-shrink:0;}
+.nf:focus{border-color:var(--acc);}
+.lbl{font-size:8px;letter-spacing:1.5px;color:var(--t0);text-transform:uppercase;white-space:nowrap;}
+.fd{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t1);min-width:50px;text-align:center;}
 
-/* ── MAIN ─────────────────────────────────────────────── */
+/* ── MAIN ── */
 #main{flex:1;display:flex;overflow:hidden;}
 
-/* ── LEFT PANEL ──────────────────────────────────────── */
-#lpanel{width:var(--lw);min-width:var(--lw);background:var(--p1);
-  border-right:1px solid var(--brd);display:flex;flex-direction:column;overflow:hidden;}
-.ph{height:26px;display:flex;align-items:center;padding:0 10px;justify-content:space-between;
-  font-size:8px;letter-spacing:2px;color:var(--t0);text-transform:uppercase;
-  border-bottom:1px solid var(--brd);flex-shrink:0;}
-.ph-btn{background:none;border:none;color:var(--t0);cursor:pointer;font-size:11px;padding:2px;}
-.ph-btn:hover{color:var(--acc);}
+/* ── LEFT ── */
+#left{width:168px;background:var(--p1);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+.ph{height:24px;display:flex;align-items:center;padding:0 8px;font-size:8px;letter-spacing:2px;color:var(--t0);text-transform:uppercase;border-bottom:1px solid var(--brd);flex-shrink:0;}
 .tabs{display:flex;border-bottom:1px solid var(--brd);flex-shrink:0;}
-.tab{flex:1;height:25px;background:transparent;border:none;border-bottom:2px solid transparent;
-  color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:8px;
-  letter-spacing:1px;text-transform:uppercase;transition:all .1s;}
-.tab:hover{color:var(--t2);}
+.tab{flex:1;height:22px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;transition:.1s;}
 .tab.on{color:var(--acc);border-bottom-color:var(--acc);}
-.tab-pane{flex:1;overflow-y:auto;display:none;}
-.tab-pane.on{display:block;}
-
-/* Tree rows */
-.brow{display:flex;align-items:center;height:22px;cursor:pointer;
-  font-size:10px;color:var(--t1);transition:background .06s;padding-right:6px;}
+.tp{flex:1;overflow-y:auto;display:none;}
+.tp.on{display:block;}
+.brow{display:flex;align-items:center;height:21px;cursor:pointer;font-size:9px;color:var(--t1);transition:background .06s;padding-right:4px;white-space:nowrap;}
 .brow:hover{background:var(--p2);}
-.brow.sel{background:rgba(0,184,217,.08);color:var(--sel);}
-.brow-ico{font-size:7px;flex-shrink:0;}
-.brow-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.brow-vis{background:none;border:none;color:var(--t0);cursor:pointer;font-size:9px;padding:2px 4px;}
-.brow-vis:hover{color:var(--t2);}
-
-/* Slot rows */
-.srow{display:flex;align-items:center;height:22px;cursor:pointer;
-  padding:0 8px;gap:4px;font-size:10px;color:var(--t1);transition:background .06s;}
+.brow.on{background:rgba(0,180,216,.07);color:var(--sel);}
+.srow{display:flex;align-items:center;height:21px;cursor:pointer;padding:0 6px;gap:4px;font-size:9px;color:var(--t1);transition:background .06s;}
 .srow:hover{background:var(--p2);}
-.srow.sel{background:rgba(0,184,217,.08);color:var(--sel);}
-.srow-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.srow.on{background:rgba(40,184,96,.07);color:var(--grn);}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
-/* ── VIEWPORT ────────────────────────────────────────── */
-#vpwrap{flex:1;position:relative;overflow:hidden;background:#060810;}
+/* ── VIEWPORT ── */
+#vpw{flex:1;position:relative;overflow:hidden;background:#050710;}
 #vp{width:100%;height:100%;display:block;touch-action:none;}
-#vpinfo{position:absolute;bottom:8px;left:10px;font-size:9px;color:var(--t0);
-  pointer-events:none;line-height:2;font-family:'IBM Plex Mono',monospace;}
-#vpmode{position:absolute;top:8px;left:10px;font-size:8px;letter-spacing:2px;
-  color:var(--acc);text-transform:uppercase;pointer-events:none;
-  font-family:'IBM Plex Mono',monospace;}
-#vpkeys{position:absolute;top:8px;right:10px;font-size:8px;color:var(--t0);
-  pointer-events:none;text-align:right;line-height:2;
-  font-family:'IBM Plex Mono',monospace;}
-#dropzone{position:absolute;inset:0;display:none;align-items:center;
-  justify-content:center;background:rgba(0,184,217,.06);
-  border:2px dashed var(--sel);pointer-events:none;}
-#dropzone span{color:var(--sel);font-size:14px;letter-spacing:2px;}
+#vpi{position:absolute;bottom:7px;left:9px;font-size:8px;color:var(--t0);pointer-events:none;line-height:2;}
+#vpm{position:absolute;top:8px;left:9px;font-size:8px;letter-spacing:2px;color:var(--acc);pointer-events:none;}
+#refhud{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(10,12,20,.95);border:1px solid var(--sel);border-radius:4px;padding:4px 10px;display:none;align-items:center;gap:7px;font-size:8px;letter-spacing:1px;color:var(--sel);white-space:nowrap;z-index:10;}
+#slicehud{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);background:rgba(10,12,20,.95);border:1px solid var(--yel);border-radius:4px;padding:5px 12px;display:none;align-items:center;gap:8px;font-size:8px;letter-spacing:1px;color:var(--yel);white-space:nowrap;z-index:10;}
+#dz{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,180,216,.05);border:2px dashed var(--sel);pointer-events:none;font-size:13px;color:var(--sel);letter-spacing:3px;}
 
-/* ── RIGHT PANEL ─────────────────────────────────────── */
-#rpanel{width:var(--rw);min-width:var(--rw);background:var(--p1);
-  border-left:1px solid var(--brd);display:flex;flex-direction:column;overflow-y:auto;}
-.pr{display:flex;align-items:center;justify-content:space-between;
-  padding:4px 10px;border-bottom:1px solid rgba(30,32,48,.6);}
-.pl{font-size:8px;letter-spacing:1px;color:var(--t0);text-transform:uppercase;}
-.pv{font-size:10px;color:var(--t2);font-family:'IBM Plex Mono',monospace;}
-.pi{width:80px;background:var(--bg);border:1px solid var(--brd2);border-radius:2px;
-  color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;
-  padding:2px 5px;text-align:right;outline:none;}
+/* ── RIGHT ── */
+#right{width:188px;background:var(--p1);border-left:1px solid var(--brd);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;}
+.sh{padding:5px 8px 2px;font-size:8px;letter-spacing:2px;color:var(--t0);text-transform:uppercase;}
+.pr{display:flex;align-items:center;justify-content:space-between;padding:3px 8px;border-bottom:1px solid rgba(26,29,42,.5);}
+.pl{font-size:8px;letter-spacing:.8px;color:var(--t0);text-transform:uppercase;}
+.pv{font-size:9px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px;}
+.pi{width:74px;background:var(--bg);border:1px solid var(--brd2);border-radius:2px;color:var(--t2);font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 4px;text-align:right;outline:none;}
 .pi:focus{border-color:var(--acc);}
-.pi2{width:38px;}
-.prow3{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px 8px;
-  border-bottom:1px solid rgba(30,32,48,.4);}
-.pb{width:100%;margin:3px 8px;height:22px;width:calc(100% - 16px);
-  background:transparent;border:1px solid var(--brd2);border-radius:3px;
-  color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;
-  font-size:8px;letter-spacing:.5px;transition:all .1s;}
+.pi2{width:36px;}
+.pb{display:block;width:calc(100% - 14px);margin:2px 7px;height:21px;background:transparent;border:1px solid var(--brd2);border-radius:3px;color:var(--t1);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:8px;transition:.1s;}
 .pb:hover{border-color:var(--acc);color:var(--acc);}
 .pb.r:hover{border-color:var(--red);color:var(--red);}
 .pb.g:hover{border-color:var(--grn);color:var(--grn);}
-.swatch-row{display:flex;flex-wrap:wrap;gap:3px;padding:6px 8px;}
-.sw{width:20px;height:20px;border-radius:3px;cursor:pointer;
-  border:1.5px solid transparent;transition:border-color .1s;}
-.sw:hover{border-color:#fff;}
-.sw.on{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.3);}
-.sec-hdr{padding:6px 10px 3px;font-size:8px;letter-spacing:2px;
-  color:var(--t0);text-transform:uppercase;}
+.swrow{display:flex;flex-wrap:wrap;gap:3px;padding:4px 8px 6px;}
+.sw{width:19px;height:19px;border-radius:3px;cursor:pointer;border:1.5px solid transparent;}
+.sw:hover,.sw.on{border-color:#fff;}
 
-/* ── TIMELINE ────────────────────────────────────────── */
-#tl{height:var(--tlh);min-height:var(--tlh);background:var(--p1);
-  border-top:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
-#tlhdr{height:26px;display:flex;align-items:center;padding:0 8px;gap:5px;
-  border-bottom:1px solid var(--brd);flex-shrink:0;}
+/* ── SLOT PROPS ── */
+#sec-slot{display:none;}
+
+/* ── TIMELINE ── */
+#tl{height:144px;background:var(--p1);border-top:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;}
+#tlhdr{height:24px;display:flex;align-items:center;padding:0 7px;gap:5px;border-bottom:1px solid var(--brd);flex-shrink:0;}
 #tlbody{flex:1;display:flex;overflow:hidden;}
-#tllabels{width:var(--lw);min-width:var(--lw);border-right:1px solid var(--brd);
-  overflow-y:auto;overflow-x:hidden;}
-.tll{height:20px;display:flex;align-items:center;padding:0 8px;
-  font-size:9px;color:var(--t0);border-bottom:1px solid rgba(30,32,48,.4);
-  cursor:pointer;gap:4px;}
+#tll{width:168px;min-width:168px;border-right:1px solid var(--brd);overflow-y:auto;}
+.tll{height:19px;display:flex;align-items:center;padding:0 7px;font-size:8px;color:var(--t0);gap:3px;cursor:pointer;border-bottom:1px solid rgba(26,29,42,.3);}
 .tll:hover{color:var(--t1);}
-.tll.sel{color:var(--sel);}
-.tll-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-#tlscroll{flex:1;overflow:auto;position:relative;}
-#tlcanvas{display:block;cursor:crosshair;}
+.tll.on{color:var(--sel);}
+#tls{flex:1;overflow:auto;}
+#tlc{display:block;cursor:crosshair;}
 
-/* ── MODAL ──────────────────────────────────────────── */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;
-  display:none;align-items:center;justify-content:center;}
-.overlay.on{display:flex;}
-.mbox{background:var(--p1);border:1px solid var(--brd2);border-radius:6px;
-  padding:20px;min-width:320px;max-width:480px;width:90%;}
-.mbox h2{font-family:'Rajdhani',sans-serif;font-size:18px;color:var(--acc);
-  letter-spacing:2px;margin-bottom:12px;}
-.mbox p{font-size:10px;color:var(--t1);margin-bottom:12px;line-height:1.6;}
-.mbox input[type=file]{display:none;}
-.filedrop{border:1px dashed var(--brd2);border-radius:4px;padding:16px;
-  text-align:center;cursor:pointer;font-size:10px;color:var(--t1);
-  margin-bottom:8px;transition:all .1s;}
-.filedrop:hover{border-color:var(--acc);color:var(--acc);}
-.filedrop.ok{border-color:var(--grn);color:var(--grn);}
-.mbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
-#atlas-regions{max-height:120px;overflow-y:auto;margin:8px 0;font-size:9px;
-  font-family:'IBM Plex Mono',monospace;color:var(--t1);}
+/* ── MODAL ── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:none;align-items:center;justify-content:center;}
+.ov.on{display:flex;}
+.mb{background:var(--p1);border:1px solid var(--brd2);border-radius:6px;padding:18px;min-width:300px;max-width:500px;width:92%;}
+.mb h2{font-family:'Rajdhani',sans-serif;font-size:17px;color:var(--acc);letter-spacing:2px;margin-bottom:10px;}
+.mb p{font-size:9px;color:var(--t1);margin-bottom:10px;line-height:1.7;}
+.fd2{border:1px dashed var(--brd2);border-radius:4px;padding:12px;text-align:center;cursor:pointer;font-size:9px;color:var(--t1);margin-bottom:6px;transition:.1s;}
+.fd2:hover{border-color:var(--acc);color:var(--acc);}
+.fd2.ok{border-color:var(--grn);color:var(--grn);}
+.mbtns{display:flex;gap:6px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;}
 
-/* ── BG REMOVAL PANEL ── */
-#bgr-panel{background:var(--bg);border:1px solid var(--brd2);border-radius:4px;padding:10px;margin:8px 0;}
-#bgr-panel .row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
-#bgr-panel .row:last-child{margin-bottom:0;}
-#bgr-panel label{font-size:8px;letter-spacing:1.2px;color:var(--t0);text-transform:uppercase;width:62px;flex-shrink:0;}
-.bgr-slider{flex:1;-webkit-appearance:none;height:3px;background:var(--brd2);border-radius:2px;outline:none;cursor:pointer;}
-.bgr-slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--acc);cursor:pointer;}
-.bgr-slider::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--acc);cursor:pointer;border:none;}
-.bgr-val{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--t2);width:26px;text-align:right;flex-shrink:0;}
-#bgr-color-swatch{width:22px;height:22px;border-radius:3px;border:1px solid var(--brd2);cursor:pointer;flex-shrink:0;}
-#bgr-color-input{opacity:0;width:0;height:0;position:absolute;}
-.bgr-auto-badge{font-size:8px;color:var(--grn);letter-spacing:1px;flex:1;}
-.bgr-toggle{position:relative;display:inline-block;width:32px;height:16px;flex-shrink:0;}
-.bgr-toggle input{opacity:0;width:0;height:0;}
-.bgr-toggle-track{position:absolute;inset:0;background:var(--brd2);border-radius:8px;cursor:pointer;transition:.1s;}
-.bgr-toggle input:checked+.bgr-toggle-track{background:var(--acc);}
-.bgr-toggle-track::after{content:'';position:absolute;width:12px;height:12px;left:2px;top:2px;
-  background:#fff;border-radius:50%;transition:.1s;}
-.bgr-toggle input:checked+.bgr-toggle-track::after{transform:translateX(16px);}
-
-/* preview canvas checkerboard */
-#bgr-preview-wrap{position:relative;width:100%;height:160px;border:1px solid var(--brd2);border-radius:4px;
-  overflow:hidden;margin:8px 0;display:none;
-  background-image:linear-gradient(45deg,#1a1a2a 25%,transparent 25%),
-    linear-gradient(-45deg,#1a1a2a 25%,transparent 25%),
-    linear-gradient(45deg,transparent 75%,#1a1a2a 75%),
-    linear-gradient(-45deg,transparent 75%,#1a1a2a 75%);
-  background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0;}
-#bgr-preview{width:100%;height:100%;object-fit:contain;display:block;}
-#bgr-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:9px;color:var(--t0);letter-spacing:2px;background:rgba(6,8,16,.6);}
+/* bgr */
+.bgp{background:var(--bg);border:1px solid var(--brd2);border-radius:4px;padding:8px;margin:6px 0;}
+.bgr{display:flex;align-items:center;gap:7px;margin-bottom:6px;}
+.bgr:last-child{margin-bottom:0;}
+.bgl{font-size:8px;letter-spacing:1px;color:var(--t0);text-transform:uppercase;width:58px;flex-shrink:0;}
+.bgs{flex:1;-webkit-appearance:none;height:3px;background:var(--brd2);border-radius:2px;outline:none;cursor:pointer;}
+.bgs::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--acc);cursor:pointer;}
+.bgv{font-size:9px;color:var(--t2);width:24px;text-align:right;flex-shrink:0;}
+#bgcsw{width:20px;height:20px;border-radius:3px;border:1px solid var(--brd2);cursor:pointer;flex-shrink:0;}
+#bgci{opacity:0;width:0;height:0;position:absolute;}
+.bgbadge{font-size:8px;color:var(--grn);flex:1;}
+.tgl{position:relative;display:inline-block;width:30px;height:15px;flex-shrink:0;}
+.tgl input{opacity:0;width:0;height:0;}
+.tgt{position:absolute;inset:0;background:var(--brd2);border-radius:8px;cursor:pointer;transition:.1s;}
+.tgl input:checked+.tgt{background:var(--acc);}
+.tgt::after{content:'';position:absolute;width:11px;height:11px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.1s;}
+.tgl input:checked+.tgt::after{transform:translateX(15px);}
+#bpv{width:100%;height:150px;border:1px solid var(--brd2);border-radius:3px;overflow:hidden;margin:6px 0;display:none;background-image:linear-gradient(45deg,#181820 25%,transparent 25%),linear-gradient(-45deg,#181820 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#181820 75%),linear-gradient(-45deg,transparent 75%,#181820 75%);background-size:14px 14px;background-position:0 0,0 7px,7px -7px,-7px 0;position:relative;}
+#bpvi{width:100%;height:100%;object-fit:contain;}
+#bpvl{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:8px;color:var(--t0);letter-spacing:2px;background:rgba(5,7,16,.7);}
 
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:var(--bg);}
@@ -207,238 +131,187 @@ body{display:flex;flex-direction:column;}
 </head>
 <body>
 
-<!-- ATLAS MODAL -->
-<div class="overlay" id="modal-atlas">
-<div class="mbox">
-  <h2>IMPORT TEXTURE ATLAS</h2>
-  <p>Drop or select a TexturePacker JSON Hash / DragonBones atlas JSON file and the matching PNG image.</p>
-  <div class="filedrop" id="drop-atlas-json" onclick="document.getElementById('fi-ajson').click()">
-    <span id="drop-atlas-json-lbl">📋 Drop atlas JSON here (or click)</span>
+<!-- ATTACH/LOAD MODAL -->
+<div class="ov" id="mod-load">
+<div class="mb">
+  <h2>LOAD SPRITE / ATTACH IMAGE</h2>
+  <p>Load a character image. Background is removed automatically. Then place it as a Reference to rig over, or attach it directly to the selected bone.</p>
+  <div class="fd2" id="fd-img" onclick="document.getElementById('fi-img').click()">
+    <span id="fd-img-lbl">🖼 Drop or click — PNG / JPG / WebP</span>
   </div>
-  <input type="file" id="fi-ajson" accept=".json">
-  <div class="filedrop" id="drop-atlas-img" onclick="document.getElementById('fi-aimg').click()">
-    <span id="drop-atlas-img-lbl">🖼 Drop atlas PNG here (or click)</span>
+  <input type="file" id="fi-img" accept="image/*" style="display:none">
+  <div class="bgp">
+    <div class="bgr">
+      <span class="bgl">REMOVE BG</span>
+      <label class="tgl"><input type="checkbox" id="bgon" checked oninput="bgrUpdate()"><span class="tgt"></span></label>
+      <span class="bgbadge" id="bgbadge">AUTO-DETECT</span>
+      <span id="bgcsw" onclick="document.getElementById('bgci').click()"></span>
+      <input type="color" id="bgci" value="#4caf50" oninput="bgrPick(this.value)">
+    </div>
+    <div class="bgr">
+      <span class="bgl">TOLERANCE</span>
+      <input class="bgs" type="range" id="bgtol" min="0" max="100" value="32" oninput="bgrUpdate()">
+      <span class="bgv" id="bgtvl">32</span>
+    </div>
+    <div class="bgr">
+      <span class="bgl">FEATHER</span>
+      <input class="bgs" type="range" id="bgfth" min="0" max="30" value="4" oninput="bgrUpdate()">
+      <span class="bgv" id="bgfvl">4</span>
+    </div>
+    <div class="bgr">
+      <span class="bgl">ROTATE °</span>
+      <input class="bgs" type="range" id="bgrot" min="-180" max="180" value="0" oninput="bgrUpdate()">
+      <span class="bgv" id="bgrvl">0</span>
+    </div>
+    <div class="bgr">
+      <span class="bgl">SCALE %</span>
+      <input class="bgs" type="range" id="bgscl" min="5" max="200" value="100" oninput="bgrUpdate()">
+      <span class="bgv" id="bgsvl">100</span>
+    </div>
   </div>
-  <input type="file" id="fi-aimg" accept="image/*">
-  <div id="atlas-regions">No regions loaded</div>
+  <div id="bpv"><img id="bpvi" alt=""><div id="bpvl">PROCESSING…</div></div>
   <div class="mbtns">
-    <button class="btn" onclick="closeModal('modal-atlas')">CANCEL</button>
-    <button class="btn grn" id="btn-atlas-ok" onclick="confirmAtlas()">APPLY</button>
-  </div>
-</div>
-</div>
-
-<!-- ATTACH IMAGE MODAL -->
-<div class="overlay" id="modal-attach">
-<div class="mbox" style="max-width:520px;">
-  <h2>ATTACH IMAGE TO BONE</h2>
-  <p>Load an image and use Background Removal to erase the solid background before attaching it as a slot.</p>
-  <div class="filedrop" id="drop-single-img" onclick="document.getElementById('fi-simg').click()">
-    <span id="drop-single-img-lbl">🖼 Drop or click to load image (PNG / JPG / WebP)</span>
-  </div>
-  <input type="file" id="fi-simg" accept="image/*">
-
-  <!-- BG REMOVAL PANEL -->
-  <div id="bgr-panel">
-    <div class="row">
-      <label>BG REMOVE</label>
-      <label class="bgr-toggle"><input type="checkbox" id="bgr-on" checked onchange="bgrUpdate()"><span class="bgr-toggle-track"></span></label>
-      <span id="bgr-auto-badge" class="bgr-auto-badge">AUTO-DETECT</span>
-      <span id="bgr-color-swatch" title="Click to pick color" onclick="document.getElementById('bgr-color-input').click()" style="background:#4caf50"></span>
-      <input type="color" id="bgr-color-input" value="#4caf50" oninput="bgrColorPick(this.value)" onchange="bgrColorPick(this.value)">
-    </div>
-    <div class="row">
-      <label>TOLERANCE</label>
-      <input class="bgr-slider" type="range" id="bgr-tol" min="0" max="120" value="35" oninput="bgrUpdate()">
-      <span class="bgr-val" id="bgr-tol-val">35</span>
-    </div>
-    <div class="row">
-      <label>FEATHER</label>
-      <input class="bgr-slider" type="range" id="bgr-fth" min="0" max="40" value="4" oninput="bgrUpdate()">
-      <span class="bgr-val" id="bgr-fth-val">4</span>
-    </div>
-    <div class="row">
-      <label>ROTATE °</label>
-      <input class="bgr-slider" type="range" id="bgr-rot" min="-180" max="180" value="0" oninput="bgrUpdate()">
-      <span class="bgr-val" id="bgr-rot-val">0</span>
-    </div>
-    <div class="row">
-      <label>SCALE %</label>
-      <input class="bgr-slider" type="range" id="bgr-scale" min="10" max="200" value="100" oninput="bgrUpdate()">
-      <span class="bgr-val" id="bgr-scale-val">100</span>
-    </div>
-    <div class="row" style="gap:6px;margin-top:2px;">
-      <label>UPRIGHT</label>
-      <label class="bgr-toggle" title="Counter-rotate slot so image appears world-upright"><input type="checkbox" id="bgr-upright" checked><span class="bgr-toggle-track"></span></label>
-      <span style="font-size:8px;color:var(--t0);flex:1">Cancel bone rotation (full-body sprites)</span>
-    </div>
-  </div>
-
-  <!-- LIVE PREVIEW -->
-  <div id="bgr-preview-wrap">
-    <img id="bgr-preview" alt="preview">
-    <div id="bgr-loading" style="display:none">PROCESSING…</div>
-  </div>
-
-  <!-- ATLAS REGIONS (optional) -->
-  <div id="atlas-region-list" style="max-height:80px;overflow-y:auto;margin:4px 0;"></div>
-
-  <div class="mbtns" style="flex-wrap:wrap;gap:6px;">
-    <button class="btn" onclick="bgrReset();closeModal('modal-attach')" style="margin-right:auto">CANCEL</button>
-    <button class="btn sel" onclick="loadAsReference()" title="Place image in viewport — rig on top of it">📌 USE AS REFERENCE</button>
-    <button class="btn grn" id="btn-attach-ok" onclick="confirmAttach()">⊞ ATTACH TO BONE</button>
+    <button class="btn" onclick="closeModal('mod-load')">CANCEL</button>
+    <button class="btn b" onclick="doLoadAsRef()">📌 USE AS REFERENCE</button>
+    <button class="btn c" onclick="doAttachToBone()">⊞ ATTACH TO BONE</button>
   </div>
 </div>
 </div>
 
 <!-- TOOLBAR -->
-<div id="toolbar">
+<div id="tb">
   <span class="logo">DRAGONFORGE</span>
-  <div class="vsep"></div>
-  <span class="lbl">TOOL</span>
-  <button class="tb on" id="tb-sel" title="Select & Rotate (S)" onclick="setTool('select')">
-    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linejoin="round">
-      <path d="M2 1v9l2.5-2.8 2 4 1.3-.6-2-4H9z"/>
-    </svg>
+  <div class="vs"></div>
+  <!-- Tools -->
+  <button class="tb on" id="tbs" title="Select (S)" onclick="setTool('sel')">
+    <svg width="11" height="11" viewBox="0 0 11 11" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linejoin="round"><path d="M1.5 1v8l2-2.5 1.8 3.5 1.2-.5-1.8-3.5H8z"/></svg>
   </button>
-  <button class="tb" id="tb-add" title="Add Bone (A)" onclick="setTool('add')">
-    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" fill="none" stroke-width="1.5">
-      <circle cx="6" cy="6" r="4.5"/><line x1="6" y1="3" x2="6" y2="9"/><line x1="3" y1="6" x2="9" y2="6"/>
-    </svg>
+  <button class="tb" id="tba" title="Add Bone (A)" onclick="setTool('add')">
+    <svg width="11" height="11" viewBox="0 0 11 11" stroke="currentColor" fill="none" stroke-width="1.4"><circle cx="5.5" cy="5.5" r="4"/><line x1="5.5" y1="2.5" x2="5.5" y2="8.5"/><line x1="2.5" y1="5.5" x2="8.5" y2="5.5"/></svg>
   </button>
-  <button class="tb" id="tb-pan" title="Pan (Space)" onclick="setTool('pan')">
-    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" fill="none" stroke-width="1.4">
-      <path d="M5 2.5C5 1.7 5.6 1 6.5 1 7.4 1 8 1.7 8 2.5v4"/><path d="M5 5.5V4c0-.8-.6-1.5-1.5-1.5S2 3.2 2 4v4c0 2.2 1.8 4 4 4h2"/>
-      <path d="M8 4.5c0-.8.6-1.5 1.5-1.5S11 3.7 11 4.5v1"/><path d="M9.5 5v-.5c0-.8.6-1.5 1.5-1.5"/>
-    </svg>
-  </button>
-  <div class="vsep"></div>
+  <button class="tb" id="tbp" title="Pan (Space)" onclick="setTool('pan')">⠿</button>
+  <div class="vs"></div>
+  <!-- Animation -->
   <span class="lbl">ANIM</span>
-  <select class="tbsel" id="anim-sel" onchange="switchAnim(this.value)">
-    <option value="idle">idle</option>
-  </select>
-  <button class="btn" onclick="newAnim()">+ ANIM</button>
-  <button class="btn pri" onclick="recordKF()" title="Record keyframe [K]">● KEY</button>
-  <div class="vsep"></div>
-  <button class="btn" onclick="seekFrame(0)">⏮</button>
+  <select class="sel" id="animsel" onchange="switchAnim(this.value)"><option value="idle">idle</option></select>
+  <button class="btn" onclick="newAnim()">+ANIM</button>
+  <button class="btn a" onclick="recordKF()" title="Record keyframe (K)">●KEY</button>
+  <div class="vs"></div>
+  <button class="btn" onclick="seekF(0)">⏮</button>
   <button class="btn" onclick="stepF(-1)">◀</button>
-  <button class="btn pri" id="playbtn" onclick="togglePlay()">▶ PLAY</button>
+  <button class="btn a" id="playbtn" onclick="togglePlay()">▶ PLAY</button>
   <button class="btn" onclick="stepF(1)">▶</button>
   <button class="btn" onclick="stopAnim()">⏹</button>
-  <span class="frm" id="fdisp">0 / 30</span>
-  <div class="vsep"></div>
-  <span class="lbl">FPS</span>
-  <input class="numf" id="fps-inp" type="number" value="24" min="1" max="60" title="Frames per second">
-  <span class="lbl">LEN</span>
-  <input class="numf" id="tf-inp" type="number" value="30" min="4" max="960" onchange="setTotalF(+this.value)" title="Total frames">
+  <span class="fd" id="fdisp">0/30</span>
+  <div class="vs"></div>
+  <span class="lbl">FPS</span><input class="nf" id="fpsinp" type="number" value="24" min="1" max="60">
+  <span class="lbl">LEN</span><input class="nf" id="leninp" type="number" value="30" min="4" max="960" onchange="setTotalF(+this.value)">
   <div style="flex:1"></div>
-  <button class="btn" onclick="openModal('modal-atlas')">ATLAS…</button>
-  <button class="btn sel" onclick="openSpriteModal()">LOAD SPRITE</button>
-  <button class="btn" onclick="openAttachModal()">ATTACH IMG</button>
+  <label style="display:flex;align-items:center;gap:4px;font-size:8px;color:var(--t0);letter-spacing:1px;cursor:pointer;">
+    <input type="checkbox" id="autokey" style="cursor:pointer;"> AUTO-KEY
+  </label>
+  <div class="vs"></div>
+  <button class="btn b" onclick="openModal('mod-load')">LOAD SPRITE</button>
   <button class="btn" onclick="loadHumanoid()">LOAD CHAR</button>
-  <button class="btn grn" onclick="exportAll()">EXPORT DB5</button>
+  <button class="btn" onclick="resetPose()">RESET POSE</button>
+  <button class="btn c" onclick="exportAll()">EXPORT DB5</button>
 </div>
 
 <!-- MAIN -->
 <div id="main">
-  <!-- LEFT PANEL -->
-  <div id="lpanel">
+  <!-- LEFT: hierarchy -->
+  <div id="left">
     <div class="tabs">
-      <button class="tab on" id="tab-bones" onclick="switchTab('bones')">BONES</button>
-      <button class="tab" id="tab-slots" onclick="switchTab('slots')">SLOTS</button>
+      <button class="tab on" id="tab-b" onclick="switchTab('b')">BONES</button>
+      <button class="tab" id="tab-s" onclick="switchTab('s')">SLOTS</button>
     </div>
-    <div class="tab-pane on" id="pane-bones" id="bone-tree"></div>
-    <div class="tab-pane" id="pane-slots" id="slot-list"></div>
+    <div class="tp on" id="pane-b"></div>
+    <div class="tp" id="pane-s"></div>
   </div>
 
   <!-- VIEWPORT -->
-  <div id="vpwrap">
+  <div id="vpw">
     <canvas id="vp"></canvas>
-    <div id="dropzone"><span>DROP ATLAS / IMAGE</span></div>
-    <div id="vpmode">SELECT</div>
-    <div id="vpinfo">x: 0  y: 0<br>scroll: zoom · alt+drag: pan</div>
-    <div id="vpkeys">S — select  A — add bone<br>K — keyframe  Del — delete<br>↑↓ — rotate bone  F — frame fit</div>
-    <!-- Reference sprite HUD -->
-    <div id="ref-hud" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);
-      background:rgba(13,16,32,.92);border:1px solid var(--sel);border-radius:4px;padding:5px 10px;
-      display:none;align-items:center;gap:8px;font-size:9px;letter-spacing:1px;color:var(--sel);white-space:nowrap;">
-      <span>📌 REF</span>
-      <span id="ref-hud-info" style="color:var(--t1);font-size:8px;"></span>
-      <span style="color:var(--t0);font-size:8px;">OPACITY</span>
-      <input type="range" min="10" max="100" value="70" id="ref-opacity-sl"
-        style="width:60px;height:3px;-webkit-appearance:none;background:var(--brd2);border-radius:2px;cursor:pointer;"
-        oninput="if(refSprite){refSprite.opacity=+this.value/100;renderVp();}">
-      <button class="btn" style="height:20px;font-size:8px;padding:0 6px;border-color:#f5c518;color:#f5c518;" id="ref-slice-btn" onclick="toggleSliceMode()">✂ SLICE</button>
-      <button class="btn" style="height:20px;font-size:8px;padding:0 6px;" id="ref-lock-btn" onclick="refToggleLock()">LOCK</button>
-      <button class="btn" style="height:20px;font-size:8px;padding:0 6px;border-color:var(--grn);color:var(--grn);" onclick="refAttachToSel()">→ ATTACH</button>
-      <button class="btn" style="height:20px;font-size:8px;padding:0 6px;border-color:var(--red);color:var(--red);" onclick="refClear()">✕</button>
+    <div id="dz">DROP IMAGE</div>
+    <div id="vpm">SELECT</div>
+    <div id="vpi">x: 0  y: 0<br>scroll=zoom · alt+drag=pan</div>
+    <!-- Ref HUD -->
+    <div id="refhud">
+      📌 REF
+      <span id="refinfo" style="color:var(--t1);font-size:8px"></span>
+      OPACITY <input type="range" min="10" max="100" value="70" id="refop" style="width:55px;height:3px;-webkit-appearance:none;background:var(--brd2);border-radius:2px;cursor:pointer;" oninput="if(ref){ref.opacity=+this.value/100;draw();}">
+      <button class="btn" id="reflock-btn" style="height:18px;font-size:7px;padding:0 5px;" onclick="refToggleLock()">LOCK</button>
+      <button class="btn y" style="height:18px;font-size:7px;padding:0 5px;" id="slicebtn" onclick="toggleSlice()">✂ SLICE</button>
+      <button class="btn" style="height:18px;font-size:7px;padding:0 5px;border-color:var(--grn);color:var(--grn);" onclick="refAttach()">→BONE</button>
+      <button class="btn" style="height:18px;font-size:7px;padding:0 5px;border-color:var(--red);color:var(--red);" onclick="clearRef()">✕</button>
     </div>
-    <!-- Slice mode HUD -->
-    <div id="slice-hud" style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
-      background:rgba(13,16,32,.92);border:1px solid #f5c518;border-radius:4px;padding:5px 12px;
-      display:none;align-items:center;gap:8px;font-size:9px;letter-spacing:1px;color:#f5c518;white-space:nowrap;">
-      ✂ SLICE MODE — Draw a rectangle over a body part. It will be cropped and attached to the selected bone.
-      <button class="btn" style="height:20px;font-size:8px;padding:0 6px;" onclick="toggleSliceMode()">DONE</button>
+    <!-- Slice HUD -->
+    <div id="slicehud">
+      ✂ SLICE MODE — Draw rectangle over body part to crop &amp; attach to selected bone (ESC to exit)
     </div>
   </div>
 
-  <!-- RIGHT PANEL -->
-  <div id="rpanel">
-    <div class="ph" style="border-bottom:1px solid var(--brd)"><span>PROPERTIES</span></div>
+  <!-- RIGHT: properties -->
+  <div id="right">
+    <div class="ph">PROPERTIES</div>
 
-    <!-- BONE SECTION -->
-    <div class="sec-hdr" id="sec-bone-hdr">BONE</div>
+    <!-- Bone props -->
     <div id="sec-bone">
-      <div class="pr"><span class="pl">Name</span><span class="pv" id="p-name" style="font-size:10px;max-width:110px;overflow:hidden;text-overflow:ellipsis">—</span></div>
-      <div class="pr"><span class="pl">Parent</span><span class="pv" id="p-parent" style="font-size:10px">—</span></div>
-      <div class="pr"><span class="pl">Local Rot</span><input class="pi" id="p-rot" type="number" step="0.5" onchange="setPropRot(+this.value)" placeholder="°"></div>
-      <div class="prow3">
-        <div><div class="pl" style="margin-bottom:3px">LOCAL X</div><input class="pi pi2" id="p-x" type="number" step="1" onchange="setPropX(+this.value)"></div>
-        <div><div class="pl" style="margin-bottom:3px">LOCAL Y</div><input class="pi pi2" id="p-y" type="number" step="1" onchange="setPropY(+this.value)"></div>
+      <div class="sh">BONE</div>
+      <div class="pr"><span class="pl">Name</span><span class="pv" id="p-name">—</span></div>
+      <div class="pr"><span class="pl">Parent</span><span class="pv" id="p-par">—</span></div>
+      <div class="pr"><span class="pl">Local Rot</span><input class="pi" id="p-rot" type="number" step="0.5" onchange="setBoneRot(+this.value)"></div>
+      <div class="pr">
+        <span class="pl">Loc X</span><input class="pi pi2" id="p-lx" type="number" step="1" onchange="setBoneLx(+this.value)">
+        <span class="pl" style="margin-left:4px">Y</span><input class="pi pi2" id="p-ly" type="number" step="1" onchange="setBoneLy(+this.value)">
       </div>
-      <div class="pr"><span class="pl">Length</span><input class="pi pi2" id="p-len" type="number" step="1" onchange="setPropLen(+this.value)"></div>
+      <div class="pr"><span class="pl">Length</span><input class="pi pi2" id="p-len" type="number" step="1" onchange="setBoneLen(+this.value)"></div>
       <div class="pr"><span class="pl">World Rot</span><span class="pv" id="p-wrot">—</span></div>
-      <div class="pr"><span class="pl">World X / Y</span><span class="pv" id="p-wxy">—</span></div>
+      <div class="pr"><span class="pl">World X/Y</span><span class="pv" id="p-wxy">—</span></div>
     </div>
 
-    <!-- SLOT / IMAGE SECTION -->
-    <div class="sec-hdr" id="sec-slot-hdr" style="color:var(--grn)">SLOT IMAGE</div>
-    <div id="sec-slot" style="display:none">
-      <div class="pr"><span class="pl">Image</span><span class="pv" id="sp-name" style="font-size:9px;max-width:100px;overflow:hidden;text-overflow:ellipsis">—</span></div>
-      <div class="pr"><span class="pl">Offset X</span><input class="pi pi2" id="sp-x" type="number" step="1" onchange="setSlotX(+this.value)" placeholder="0"></div>
-      <div class="pr"><span class="pl">Offset Y</span><input class="pi pi2" id="sp-y" type="number" step="1" onchange="setSlotY(+this.value)" placeholder="0"></div>
-      <div class="pr"><span class="pl">Rotation</span><input class="pi pi2" id="sp-rot" type="number" step="0.5" onchange="setSlotRot(+this.value)" placeholder="0°"></div>
-      <div class="pr"><span class="pl">Scale X</span><input class="pi pi2" id="sp-sx" type="number" step="0.01" onchange="setSlotSx(+this.value)" placeholder="1"></div>
-      <div class="pr"><span class="pl">Scale Y</span><input class="pi pi2" id="sp-sy" type="number" step="0.01" onchange="setSlotSy(+this.value)" placeholder="1"></div>
-      <div class="pr"><span class="pl">Alpha</span><input class="pi pi2" id="sp-alpha" type="number" step="0.05" min="0" max="1" onchange="setSlotAlpha(+this.value)" placeholder="1"></div>
-      <div style="padding:2px 0">
-        <button class="pb" onclick="nudgeSlotToBone()" title="Center image pivot at bone root">⊙ ALIGN TO BONE</button>
-        <button class="pb r" onclick="deleteSelSlot()">⊗ REMOVE SLOT</button>
-      </div>
-      <div style="padding:4px 9px;font-size:8px;color:var(--t0);line-height:1.8">
-        Offset: distance from bone joint to image center.<br>
-        Rotation: extra spin on top of bone angle.<br>
-        Use <b style="color:var(--t1)">ALIGN TO BONE</b> to snap image center to the bone root.
+    <!-- Slot props (shows when a slot is selected) -->
+    <div id="sec-slot">
+      <div class="sh" style="color:var(--grn);margin-top:4px">SLOT IMAGE</div>
+      <div class="pr"><span class="pl">Name</span><span class="pv" id="sp-name">—</span></div>
+      <div class="pr"><span class="pl">Bone</span><span class="pv" id="sp-bone">—</span></div>
+      <div class="pr"><span class="pl">Offset X</span><input class="pi pi2" id="sp-ox" type="number" step="0.5" onchange="setSlotOx(+this.value)"></div>
+      <div class="pr"><span class="pl">Offset Y</span><input class="pi pi2" id="sp-oy" type="number" step="0.5" onchange="setSlotOy(+this.value)"></div>
+      <div class="pr"><span class="pl">Rotation</span><input class="pi pi2" id="sp-oa" type="number" step="0.5" onchange="setSlotOa(+this.value)"></div>
+      <div class="pr"><span class="pl">Scale X</span><input class="pi pi2" id="sp-sx" type="number" step="0.01" onchange="setSlotSx(+this.value)"></div>
+      <div class="pr"><span class="pl">Scale Y</span><input class="pi pi2" id="sp-sy" type="number" step="0.01" onchange="setSlotSy(+this.value)"></div>
+      <div class="pr"><span class="pl">Alpha</span><input class="pi pi2" id="sp-al" type="number" step="0.05" min="0" max="1" onchange="setSlotAl(+this.value)"></div>
+      <button class="pb g" onclick="centerSlotOnBone()" title="Reset offset to 0,0 — image center snaps to bone root">⊙ CENTER ON BONE</button>
+      <button class="pb r" onclick="deleteSelSlot()">⊗ REMOVE SLOT</button>
+      <div style="padding:4px 8px 2px;font-size:8px;color:var(--t0);line-height:1.9;">
+        Drag image in viewport to reposition.<br>
+        Rotate handle (circle above) = rotation.<br>
+        Offset X/Y = distance from bone pivot.
       </div>
     </div>
 
-    <div class="sec-hdr">BONE COLOR</div>
-    <div class="swatch-row" id="swatches"></div>
-    <div class="sec-hdr">ACTIONS</div>
+    <div class="sh" style="margin-top:4px">BONE COLOR</div>
+    <div class="swrow" id="swatches"></div>
+
+    <div class="sh">BONE ACTIONS</div>
     <button class="pb g" onclick="recordKF()">● RECORD KEYFRAME</button>
     <button class="pb" onclick="setRestPose()">⊙ SET AS REST POSE</button>
-    <button class="pb" onclick="openAttachModal()">⊞ ATTACH IMAGE TO BONE</button>
+    <button class="pb" onclick="openModal('mod-load')">⊞ ATTACH IMAGE</button>
     <button class="pb" onclick="renameBone()">✎ RENAME BONE</button>
-    <button class="pb r" onclick="deleteSel()">⊗ DELETE BONE</button>
-    <div class="sec-hdr" style="margin-top:4px">SHORTCUTS</div>
-    <div style="padding:4px 10px 10px;font-size:8px;color:var(--t0);line-height:2.2;font-family:'IBM Plex Mono',monospace;">
-      S — select  A — add bone<br>
+    <button class="pb r" onclick="deleteSelBone()">⊗ DELETE BONE</button>
+
+    <div class="sh" style="margin-top:4px">SHORTCUTS</div>
+    <div style="padding:3px 8px 8px;font-size:8px;color:var(--t0);line-height:2.1;">
+      S — select / move slots<br>
+      A — add bone<br>
+      Space — pan<br>
       K — record keyframe<br>
-      ↑↓ — rotate ±2°<br>
-      Del — delete selected<br>
-      F — fit to viewport<br>
-      Space — pan tool<br>
-      ✂ — slice ref sprite
+      X — slice mode (with ref)<br>
+      ESC — exit slice mode<br>
+      ↑↓ — rotate bone ±2°<br>
+      ←→ — prev/next frame<br>
+      F — fit view<br>
+      Del — delete selected
     </div>
   </div>
 </div>
@@ -447,1791 +320,1288 @@ body{display:flex;flex-direction:column;}
 <div id="tl">
   <div id="tlhdr">
     <span class="lbl">TIMELINE</span>
-    <div class="vsep" style="height:16px"></div>
-    <button class="btn" onclick="seekFrame(0)">⏮</button>
-    <button class="btn pri" id="playbtn2" onclick="togglePlay()">▶</button>
+    <div class="vs" style="height:16px"></div>
+    <button class="btn" onclick="seekF(0)">⏮</button>
+    <button class="btn a" id="playbtn2" onclick="togglePlay()">▶</button>
     <button class="btn" onclick="stopAnim()">⏹</button>
-    <div class="vsep" style="height:16px"></div>
-    <span class="lbl">AUTO-KEY</span>
-    <input type="checkbox" id="autokey" style="margin-left:3px;cursor:pointer;" title="Auto-record keyframe on bone change">
     <div style="flex:1"></div>
-    <span style="font-size:8px;color:var(--t0);font-family:IBM Plex Mono,monospace">
-      Click/drag = seek · ◆ = keyframe · right-click kf = delete
-    </span>
+    <span style="font-size:8px;color:var(--t0);">click/drag=seek · right-click◆=del kf</span>
   </div>
   <div id="tlbody">
-    <div id="tllabels"></div>
-    <div id="tlscroll"><canvas id="tlcanvas"></canvas></div>
+    <div id="tll"></div>
+    <div id="tls"><canvas id="tlc"></canvas></div>
   </div>
 </div>
 
 <script>
 'use strict';
-// ═══════════════════════════════════════════════════════════════════
-// DRAGONFORGE  —  DragonBones 5.5 compatible animation studio
-// Single HTML file, zero dependencies, works on GitHub Pages
-// Exports: *_ske.json (skeleton+animation) + *_tex.json + *_tex.png
-// ═══════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+// DRAGONFORGE v3 — Clean, correct DragonBones 5.5 compatible studio
+// Each slot image truly follows its bone (simple trig, no matrix bugs)
+// Images are stored per-slot, packed into atlas only at export
+// ════════════════════════════════════════════════════════════════════
 
-// ── 1. STATE ────────────────────────────────────────────────────────
-const PI = Math.PI, D2R = PI/180, R2D = 180/PI;
-let bones = {}, boneOrder = [];  // boneOrder = depth-first traversal order
-let slots = {}, slotOrder = [];  // slotOrder sorted by z
-let skin = {name:'default', slotDisplays:{}};
-let atlas = {regions:{}, img:null, imgB64:null, w:0, h:0, name:'atlas'};
-let anims = {}, curAnim = 'idle', curFrame = 0, totalF = 30;
-let playing = false, rafId = null, lastTs = 0, accMs = 0;
+const D2R = Math.PI/180, R2D = 180/Math.PI, PI = Math.PI;
+const COLORS = ['#e07820','#d84040','#28b860','#2870e0','#9040c0','#00b4d8','#d0b020','#d04080'];
+
+// ── STATE ────────────────────────────────────────────────────────────
+let bones  = {};   // {id: Bone}
+let bOrder = [];   // depth-first traversal order
+let slots  = {};   // {id: Slot}
+let sOrder = [];   // z-order
+let images = {};   // {name: {canvas, w, h}}  -- one canvas per image
+let anims  = {};   // {name: Anim}
+let curAnim = 'idle', curF = 0, totalF = 30, fps = 24;
+let playing = false, rafId = null, lastT = 0, accMs = 0;
 let selBone = null, selSlot = null, hovBone = null;
-let tool = 'select';
-let panX = 0, panY = 0, zoom = 1.0;
-let uidCnt = 0;
-const genId = () => 'b' + (++uidCnt);
+let tool = 'sel';
+let panX = 0, panY = 0, zoom = 1;
+let uid = 0;
+const gid = () => 'b' + (++uid);
 
-// Pending atlas import (modal state)
-let pendAtlasJson = null, pendAtlasImg = null, pendAtlasImgB64 = null;
-let pendSingleImg = null, pendSingleImgB64 = null, pendRegionName = null;
-
-const BONE_COLORS = ['#e87a20','#e84040','#20c060','#2080e8','#c040c0','#20c8d0','#e0c020','#e06080'];
-
-// ── 2. MATRIX MATH ──────────────────────────────────────────────────
-// Matrix: {a,b,c,d,tx,ty}  transforms point [x,y] → [a*x+c*y+tx, b*x+d*y+ty]
-const IDM = {a:1,b:0,c:0,d:1,tx:0,ty:0};
-
-function localM({x,y,rot,sx,sy}) {
-  const r = rot*D2R, cs=Math.cos(r), sn=Math.sin(r);
-  return {a:cs*(sx||1), b:sn*(sx||1), c:-sn*(sy||1), d:cs*(sy||1), tx:x, ty:y};
+// ── BONE ─────────────────────────────────────────────────────────────
+// lx,ly = offset from parent root in parent-local space
+// la = local rotation in degrees (relative to parent)
+// World: wx,wy,wa,tipX,tipY
+function makeBone(id,name,pid,lx,ly,la,len,col){
+  return {id,name,parentId:pid||null,children:[],
+    lx,ly,la, restLx:lx,restLy:ly,restLa:la,
+    len,color:col||COLORS[0],visible:true,
+    wx:0,wy:0,wa:0,tipX:0,tipY:0};
 }
-function mulM(p,m) {
-  return {
-    a:  p.a*m.a + p.c*m.b,   b:  p.b*m.a + p.d*m.b,
-    c:  p.a*m.c + p.c*m.d,   d:  p.b*m.c + p.d*m.d,
-    tx: p.a*m.tx+ p.c*m.ty+p.tx,  ty: p.b*m.tx+p.d*m.ty+p.ty
-  };
-}
-function applyM(m,x,y) { return {x:m.a*x+m.c*y+m.tx, y:m.b*x+m.d*y+m.ty}; }
-function invM(m) {
-  const d=m.a*m.d-m.b*m.c, inv={a:m.d/d,b:-m.b/d,c:-m.c/d,d:m.a/d,tx:0,ty:0};
-  inv.tx=-(inv.a*m.tx+inv.c*m.ty); inv.ty=-(inv.b*m.tx+inv.d*m.ty); return inv;
-}
-function mAngle(m) { return Math.atan2(m.b, m.a)*R2D; }
-
-// ── 3. BONE SYSTEM ─────────────────────────────────────────────────
-function makeBone(id,name,pid,rx,ry,rr,len,col) {
-  return {
-    id, name, parentId:pid||null, children:[],
-    rest:{x:rx,y:ry,rot:rr,sx:1,sy:1},
-    local:{x:rx,y:ry,rot:rr,sx:1,sy:1},
-    world:{...IDM}, tipX:0, tipY:0,
-    len:len||60, col:col||BONE_COLORS[0],
-    visible:true
-  };
-}
-
-function addBone(b) {
-  bones[b.id] = b;
-  if (b.parentId && bones[b.parentId]) {
-    bones[b.parentId].children.push(b.id);
-  }
+function addBone(b){
+  bones[b.id]=b;
+  if(b.parentId&&bones[b.parentId]) bones[b.parentId].children.push(b.id);
   rebuildOrder();
 }
-
-function delBone(id) {
-  const b = bones[id]; if(!b)return;
+function removeBone(id){
+  const b=bones[id]; if(!b)return;
   if(b.parentId&&bones[b.parentId])
-    bones[b.parentId].children = bones[b.parentId].children.filter(x=>x!==id);
-  [...b.children].forEach(delBone);
+    bones[b.parentId].children=bones[b.parentId].children.filter(x=>x!==id);
+  [...b.children].forEach(removeBone);
   // Remove slots on this bone
-  const toRemSlots = Object.values(slots).filter(s=>s.boneId===id);
-  toRemSlots.forEach(s=>{delSlot(s.id);});
-  // Remove from animation tracks
-  Object.values(anims).forEach(a=>{delete a.boneTracks[id];});
+  [...sOrder].forEach(sid=>{ if(slots[sid]?.boneId===id) removeSlot(sid); });
+  // Remove from animations
+  Object.values(anims).forEach(a=>delete a.tracks[id]);
   delete bones[id]; rebuildOrder();
 }
-
-function rebuildOrder() {
-  boneOrder = [];
-  function dfs(id){boneOrder.push(id);bones[id]?.children.forEach(dfs);}
-  Object.keys(bones).filter(id=>!bones[id].parentId).forEach(dfs);
+function rebuildOrder(){
+  bOrder=[];
+  function dfs(id){bOrder.push(id);bones[id]?.children.forEach(dfs);}
+  Object.keys(bones).filter(id=>bones[id]&&!bones[id].parentId).forEach(dfs);
 }
-
-function recalcAll() {
-  function proc(id) {
-    const b = bones[id]; if(!b)return;
-    const lm = localM(b.local);
-    b.world = b.parentId && bones[b.parentId] ? mulM(bones[b.parentId].world, lm) : lm;
-    const tip = applyM(b.world, b.len, 0);
-    b.tipX = tip.x; b.tipY = tip.y;
+function recalcAll(){
+  function proc(id){
+    const b=bones[id]; if(!b)return;
+    if(!b.parentId){b.wx=b.lx;b.wy=b.ly;b.wa=b.la;}
+    else{
+      const p=bones[b.parentId];
+      const pa=p.wa*D2R, cos=Math.cos(pa), sin=Math.sin(pa);
+      b.wx=p.wx+b.lx*cos-b.ly*sin;
+      b.wy=p.wy+b.lx*sin+b.ly*cos;
+      b.wa=p.wa+b.la;
+    }
+    const wa=b.wa*D2R;
+    b.tipX=b.wx+Math.cos(wa)*b.len;
+    b.tipY=b.wy+Math.sin(wa)*b.len;
     b.children.forEach(proc);
   }
-  Object.keys(bones).filter(id=>!bones[id].parentId).forEach(proc);
+  bOrder.filter(id=>bones[id]&&!bones[id].parentId).forEach(proc);
 }
 
-// ── 4. SLOT / SKIN SYSTEM ──────────────────────────────────────────
-let slotUid = 0;
-function addSlot(boneId, name, imgName, transform) {
-  const id = 'slot_' + (++slotUid);
-  const z = slotOrder.length;
-  slots[id] = {id, name:name||id, boneId, z, displayIdx:0, alpha:1, visible:true};
-  slotOrder.push(id);
-  skin.slotDisplays[id] = [{
-    type:'image', name:imgName||'', transform:transform||{x:0,y:0,rot:0,sx:1,sy:1}
-  }];
-  return id;
+// ── SLOT ─────────────────────────────────────────────────────────────
+// ox,oy = offset from bone root in bone-local space (degrees)
+// oa    = extra rotation on the image (degrees)
+// The image center sits at boneRoot + rotate(ox,oy, bone.wa)
+let slotUid=0;
+function makeSlot(boneId,name,imgName,ox,oy,oa,sx,sy,alpha){
+  return {id:'s'+(++slotUid),name,boneId,imgName:imgName||'',
+    ox:ox||0,oy:oy||0,oa:oa||0,sx:sx||1,sy:sy||1,alpha:alpha??1,
+    z:sOrder.length,visible:true};
+}
+function addSlot(s){
+  slots[s.id]=s; sOrder.push(s.id);
+}
+function removeSlot(id){
+  delete slots[id]; sOrder=sOrder.filter(x=>x!==id);
+  sOrder.forEach((id,i)=>{if(slots[id])slots[id].z=i;});
 }
 
-function delSlot(id) {
-  delete slots[id]; delete skin.slotDisplays[id];
-  slotOrder = slotOrder.filter(x=>x!==id);
+// Slot world transform — pure trig, obviously correct
+function slotWT(s){
+  const b=bones[s.boneId]; if(!b)return null;
+  const ba=b.wa*D2R, cos=Math.cos(ba), sin=Math.sin(ba);
+  return {
+    wx: b.wx + s.ox*cos - s.oy*sin,
+    wy: b.wy + s.ox*sin + s.oy*cos,
+    wa: (b.wa + s.oa)*D2R,
+    sx: s.sx, sy: s.sy
+  };
 }
 
-// ── 5. TEXTURE ATLAS ───────────────────────────────────────────────
-function loadAtlasJSON(jsonStr) {
-  let j; try{j=JSON.parse(jsonStr);}catch(e){return false;}
-  atlas.regions = {};
-  // DragonBones format
-  if (j.SubTexture) {
-    atlas.w = j.width||0; atlas.h = j.height||0; atlas.name = j.name||'atlas';
-    j.SubTexture.forEach(r=>{
-      atlas.regions[r.name]={x:r.x,y:r.y,w:r.width,h:r.height,
-        ox:r.frameX||0,oy:r.frameY||0,ow:r.frameWidth||r.width,oh:r.frameHeight||r.height};
-    });
-    return true;
-  }
-  // TexturePacker JSON Hash
-  if (j.frames && j.meta) {
-    atlas.name = (j.meta.image||'atlas').replace(/\.(png|jpg)$/i,'');
-    atlas.w = j.meta.size?.w||0; atlas.h = j.meta.size?.h||0;
-    Object.entries(j.frames).forEach(([k,v])=>{
-      const name = k.replace(/\.(png|jpg|webp)$/i,'');
-      const f=v.frame, ss=v.spriteSourceSize||{x:0,y:0}, src=v.sourceSize||{w:f.w,h:f.h};
-      atlas.regions[name]={x:f.x,y:f.y,w:f.w,h:f.h,
-        ox:-ss.x,oy:-ss.y,ow:src.w,oh:src.h};
-    });
-    return true;
-  }
-  return false;
-}
-
-// Build a synthetic single-image atlas region
-function addSingleImageRegion(name, img, b64) {
-  atlas.regions[name] = {x:0,y:0,w:img.width,h:img.height,ox:0,oy:0,ow:img.width,oh:img.height};
-  if (!atlas.img) { atlas.img = img; atlas.imgB64 = b64; atlas.w = img.width; atlas.h = img.height; atlas.name = name; }
-  // Composite onto existing atlas if one exists (simple row pack)
-  else { packRegionIntoAtlas(name, img, b64); }
-}
-
-function packRegionIntoAtlas(name, newImg, newB64) {
-  const oc = document.createElement('canvas');
-  oc.width = Math.max(atlas.w, newImg.width);
-  oc.height = atlas.h + newImg.height + 2;
-  const ox = oc.getContext('2d');
-  if (atlas.img) ox.drawImage(atlas.img, 0, 0);
-  const ny = atlas.h + 1;
-  ox.drawImage(newImg, 0, ny);
-  atlas.regions[name] = {x:0,y:ny,w:newImg.width,h:newImg.height,ox:0,oy:0,ow:newImg.width,oh:newImg.height};
-  atlas.w = oc.width; atlas.h = oc.height;
-  atlas.imgB64 = oc.toDataURL('image/png');
-  const img2 = new Image(); img2.src = atlas.imgB64;
-  img2.onload = ()=>{atlas.img=img2;renderVp();};
-}
-
-// ── 6. ANIMATION SYSTEM ────────────────────────────────────────────
-function ensureAnim(name) {
-  if (!anims[name]) anims[name] = {name, totalF, boneTracks:{}};
+// ── ANIMATION ────────────────────────────────────────────────────────
+function ensureAnim(name){
+  if(!anims[name]) anims[name]={name,totalF,tracks:{}};
   return anims[name];
 }
-
-function recordKeyframe(animName, boneId, frame) {
-  const a = ensureAnim(animName), b = bones[boneId]; if(!b)return;
-  if (!a.boneTracks[boneId]) a.boneTracks[boneId] = {rKFs:[], tKFs:[]};
-  const t = a.boneTracks[boneId];
-  // Update or insert rotation KF
-  const ri = t.rKFs.findIndex(k=>k.f===frame);
-  if(ri>=0) t.rKFs[ri].rot=b.local.rot; else t.rKFs.push({f:frame,rot:b.local.rot});
-  // Update or insert translate KF
-  const ti = t.tKFs.findIndex(k=>k.f===frame);
-  if(ti>=0){t.tKFs[ti].x=b.local.x;t.tKFs[ti].y=b.local.y;}
-  else t.tKFs.push({f:frame,x:b.local.x,y:b.local.y});
+function addKF(animName,boneId,frame){
+  const a=ensureAnim(animName), b=bones[boneId]; if(!b)return;
+  if(!a.tracks[boneId]) a.tracks[boneId]={rKFs:[],tKFs:[]};
+  const t=a.tracks[boneId];
+  // Rotation
+  const ri=t.rKFs.findIndex(k=>k.f===frame);
+  if(ri>=0)t.rKFs[ri].a=b.la; else t.rKFs.push({f:frame,a:b.la});
+  // Translate (only for root bones)
+  if(!b.parentId){
+    const ti=t.tKFs.findIndex(k=>k.f===frame);
+    if(ti>=0){t.tKFs[ti].x=b.lx;t.tKFs[ti].y=b.ly;}
+    else t.tKFs.push({f:frame,x:b.lx,y:b.ly});
+  }
+  t.rKFs.sort((a,b)=>a.f-b.f);
+  t.tKFs.sort((a,b)=>a.f-b.f);
+}
+function removeKF(animName,boneId,frame){
+  const a=anims[animName]; if(!a?.tracks[boneId])return;
+  const t=a.tracks[boneId];
+  t.rKFs=t.rKFs.filter(k=>k.f!==frame);
+  t.tKFs=t.tKFs.filter(k=>k.f!==frame);
 }
 
-function interpKFs(kfs, frame, prop, restVal, tf) {
-  if (!kfs||!kfs.length) return restVal;
-  const sorted = [...kfs].sort((a,b)=>a.f-b.f);
-  const first=sorted[0], last=sorted[sorted.length-1];
-  if (frame <= first.f) return first[prop];
-  if (frame >= last.f) {
-    // Interpolate to first frame for looping
-    if (tf > last.f && frame < tf) {
-      const t = (frame-last.f)/(tf-last.f);
-      return last[prop]+(first[prop]-last[prop])*t;
-    }
+function lerpKF(kfs,frame,prop,restVal,tf){
+  if(!kfs||!kfs.length)return restVal;
+  const s=[...kfs].sort((a,b)=>a.f-b.f);
+  const first=s[0],last=s[s.length-1];
+  if(frame<=first.f)return first[prop];
+  if(frame>=last.f){
+    // Loop back to first
+    if(tf>last.f){const t=(frame-last.f)/(tf-last.f);return last[prop]+(first[prop]-last[prop])*t;}
     return last[prop];
   }
-  let b0=first, b1=last;
-  for (let i=0;i<sorted.length-1;i++) {
-    if (sorted[i].f<=frame&&sorted[i+1].f>frame){b0=sorted[i];b1=sorted[i+1];break;}
+  let a=first,b=last;
+  for(let i=0;i<s.length-1;i++){
+    if(s[i].f<=frame&&s[i+1].f>frame){a=s[i];b=s[i+1];break;}
   }
-  const t = (frame-b0.f)/(b1.f-b0.f);
-  return b0[prop]+(b1[prop]-b0[prop])*t;
+  const t=(frame-a.f)/(b.f-a.f);
+  return a[prop]+( b[prop]-a[prop])*t;
 }
 
-function applyAnimToFrame(animName, frame) {
-  const a = anims[animName]; if(!a)return;
-  boneOrder.forEach(id=>{
+function applyAnim(animName,frame){
+  const a=anims[animName]; if(!a)return;
+  bOrder.forEach(id=>{
     const b=bones[id]; if(!b)return;
-    const trk = a.boneTracks[id];
-    b.local.rot = trk ? interpKFs(trk.rKFs,frame,'rot',b.rest.rot,a.totalF) : b.rest.rot;
-    if(trk){
-      b.local.x = interpKFs(trk.tKFs,frame,'x',b.rest.x,a.totalF);
-      b.local.y = interpKFs(trk.tKFs,frame,'y',b.rest.y,a.totalF);
-    } else {
-      b.local.x=b.rest.x; b.local.y=b.rest.y;
-    }
-    b.local.sx=b.rest.sx; b.local.sy=b.rest.sy;
+    const t=a.tracks[id];
+    b.la=t?lerpKF(t.rKFs,frame,'a',b.restLa,a.totalF):b.restLa;
+    if(t&&!b.parentId){
+      b.lx=lerpKF(t.tKFs,frame,'x',b.restLx,a.totalF);
+      b.ly=lerpKF(t.tKFs,frame,'y',b.restLy,a.totalF);
+    } else if(!b.parentId){b.lx=b.restLx;b.ly=b.restLy;}
   });
 }
 
-// ── 7. DRAGONBONES 5.5 EXPORT ──────────────────────────────────────
-function buildDragonBonesJSON() {
-  const fps = parseInt(document.getElementById('fps-inp').value)||24;
-  const armName = 'Armature';
-  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-  boneOrder.forEach(id=>{
-    const b=bones[id];
-    [b.world.tx,b.tipX].forEach(x=>{minX=Math.min(minX,x);maxX=Math.max(maxX,x);});
-    [b.world.ty,b.tipY].forEach(y=>{minY=Math.min(minY,y);maxY=Math.max(maxY,y);});
-  });
-  if(!boneOrder.length){minX=minY=-100;maxX=maxY=100;}
-  const pad=20;
-  const aabb={x:minX-pad,y:minY-pad,width:maxX-minX+pad*2,height:maxY-minY+pad*2};
+// ── CANVAS ───────────────────────────────────────────────────────────
+const vp=document.getElementById('vp'), vc=vp.getContext('2d');
 
-  // Bones array
-  const dbBones = boneOrder.map(id=>{
-    const b=bones[id];
-    const r={name:b.name,length:b.len};
-    if(b.parentId&&bones[b.parentId]) r.parent=bones[b.parentId].name;
-    const t=b.rest, tr={};
-    if(Math.abs(t.x)>.001) tr.x=+t.x.toFixed(4);
-    if(Math.abs(t.y)>.001) tr.y=+t.y.toFixed(4);
-    if(Math.abs(t.rot)>.001){tr.skX=+t.rot.toFixed(4);tr.skY=+t.rot.toFixed(4);}
-    if(Math.abs(t.sx-1)>.001) tr.scX=+t.sx.toFixed(4);
-    if(Math.abs(t.sy-1)>.001) tr.scY=+t.sy.toFixed(4);
-    if(Object.keys(tr).length) r.transform=tr;
-    return r;
-  });
-
-  // Slots array
-  const dbSlots = slotOrder.map((id,i)=>{
-    const s=slots[id];
-    return {name:s.name, parent:bones[s.boneId]?.name||'root', z:i};
-  });
-
-  // Skin
-  const dbSkinSlots = [];
-  slotOrder.forEach(id=>{
-    const s=slots[id]; const disps=skin.slotDisplays[id]||[];
-    if(!disps.length)return;
-    const dbDisps = disps.map(d=>{
-      const r={name:d.name};
-      const t=d.transform, tr={};
-      if(Math.abs(t.x)>.001) tr.x=+t.x.toFixed(4);
-      if(Math.abs(t.y)>.001) tr.y=+t.y.toFixed(4);
-      if(Math.abs(t.rot)>.001){tr.skX=+t.rot.toFixed(4);tr.skY=+t.rot.toFixed(4);}
-      if(Math.abs(t.sx-1)>.001) tr.scX=+t.sx.toFixed(4);
-      if(Math.abs(t.sy-1)>.001) tr.scY=+t.sy.toFixed(4);
-      if(Object.keys(tr).length) r.transform=tr;
-      return r;
-    });
-    dbSkinSlots.push({name:s.name, display:dbDisps});
-  });
-
-  // Animations
-  const dbAnims = Object.values(anims).map(anim=>{
-    const da = {duration:anim.totalF, playTimes:0, name:anim.name, bone:[]};
-    boneOrder.forEach(id=>{
-      const b=bones[id]; const trk=anim.boneTracks[id]; if(!trk)return;
-      const dbt = {name:b.name};
-      // Rotation frames → delta from rest
-      if(trk.rKFs&&trk.rKFs.length){
-        const kfs=[...trk.rKFs].sort((a,bb)=>a.f-bb.f);
-        const frames=[];
-        for(let i=0;i<kfs.length;i++){
-          const kf=kfs[i], nf=i<kfs.length-1?kfs[i+1].f:anim.totalF;
-          frames.push({duration:nf-kf.f,tweenEasing:0,rotate:+(kf.rot-b.rest.rot).toFixed(4)});
-        }
-        frames.push({duration:0}); dbt.rotateFrame=frames;
-      }
-      // Translate frames → delta from rest
-      if(trk.tKFs&&trk.tKFs.length){
-        const hasMovement = trk.tKFs.some(k=>Math.abs(k.x-b.rest.x)>.01||Math.abs(k.y-b.rest.y)>.01);
-        if(hasMovement){
-          const kfs=[...trk.tKFs].sort((a,bb)=>a.f-bb.f);
-          const frames=[];
-          for(let i=0;i<kfs.length;i++){
-            const kf=kfs[i], nf=i<kfs.length-1?kfs[i+1].f:anim.totalF;
-            frames.push({duration:nf-kf.f,tweenEasing:0,
-              x:+(kf.x-b.rest.x).toFixed(4), y:+(kf.y-b.rest.y).toFixed(4)});
-          }
-          frames.push({duration:0}); dbt.translateFrame=frames;
-        }
-      }
-      if(dbt.rotateFrame||dbt.translateFrame) da.bone.push(dbt);
-    });
-    return da;
-  });
-
-  const firstAnim = dbAnims[0]?.name||'idle';
-  return {
-    frameRate:fps, name:'dragonforge_export', version:'5.5', compatibleVersion:'5.5',
-    armature:[{
-      type:'Armature', frameRate:fps, name:armName, aabb,
-      bone:dbBones, slot:dbSlots,
-      skin:[{name:'default', slot:dbSkinSlots}],
-      animation:dbAnims,
-      defaultActions:[{gotoAndPlay:firstAnim}]
-    }]
-  };
-}
-
-function buildAtlasJSON() {
-  const subTex = Object.entries(atlas.regions).map(([name,r])=>({
-    name, x:r.x, y:r.y, width:r.w, height:r.h,
-    frameX:r.ox||0, frameY:r.oy||0,
-    frameWidth:r.ow||r.w, frameHeight:r.oh||r.h
-  }));
-  return {
-    name: atlas.name+'_tex',
-    imagePath: atlas.name+'_tex.png',
-    width: atlas.w, height: atlas.h,
-    SubTexture: subTex
-  };
-}
-
-function dl(filename, content) {
-  const a=document.createElement('a'); a.href=content; a.download=filename; a.click();
-}
-
-function exportAll() {
-  const skeJSON = JSON.stringify(buildDragonBonesJSON(), null, 2);
-  const skeName = (anims[curAnim]?.name||'character')+'_ske.json';
-  dl(skeName, 'data:application/json;charset=utf-8,'+encodeURIComponent(skeJSON));
-  if(Object.keys(atlas.regions).length) {
-    const texJSON = JSON.stringify(buildAtlasJSON(), null, 2);
-    const texName = atlas.name+'_tex.json';
-    setTimeout(()=>{dl(texName,'data:application/json;charset=utf-8,'+encodeURIComponent(texJSON));},300);
-    if(atlas.imgB64){
-      setTimeout(()=>{dl(atlas.name+'_tex.png', atlas.imgB64);},600);
-    }
+function resizeVp(){
+  const el=document.getElementById('vpw');
+  if(vp.width!==el.clientWidth||vp.height!==el.clientHeight){
+    vp.width=el.clientWidth; vp.height=el.clientHeight;
   }
 }
 
-// ── 8. CANVAS RENDERING ────────────────────────────────────────────
-const vp = document.getElementById('vp'), vc = vp.getContext('2d');
+function vp2w(sx,sy){return{x:(sx-vp.width/2-panX)/zoom,y:(sy-vp.height/2-panY)/zoom};}
+function w2vp(wx,wy){return{x:wx*zoom+vp.width/2+panX,y:wy*zoom+vp.height/2+panY};}
 
-function resizeVp() {
-  const w=vp.parentElement.clientWidth, h=vp.parentElement.clientHeight;
-  if(vp.width!==w||vp.height!==h){vp.width=w;vp.height=h;}
+function drawGrid(){
+  const step=50, cx=vp.width/2+panX, cy=vp.height/2+panY;
+  const x0=((0-cx)/zoom/step|0)-1, x1=(((vp.width-cx)/zoom/step)|0)+1;
+  const y0=((0-cy)/zoom/step|0)-1, y1=(((vp.height-cy)/zoom/step)|0)+1;
+  vc.strokeStyle='#0e1020'; vc.lineWidth=1/zoom;
+  for(let xi=x0;xi<=x1;xi++){vc.beginPath();vc.moveTo(xi*step,-1e5);vc.lineTo(xi*step,1e5);vc.stroke();}
+  for(let yi=y0;yi<=y1;yi++){vc.beginPath();vc.moveTo(-1e5,yi*step);vc.lineTo(1e5,yi*step);vc.stroke();}
+  vc.strokeStyle='#181a2e'; vc.lineWidth=1.5/zoom;
+  vc.beginPath();vc.moveTo(0,-1e5);vc.lineTo(0,1e5);vc.stroke();
+  vc.beginPath();vc.moveTo(-1e5,0);vc.lineTo(1e5,0);vc.stroke();
 }
 
-function drawGrid() {
-  const step=50, cx=0, cy=0;
-  const vw=vp.width, vh=vp.height;
-  const x0=((-vw/2-panX)/zoom)/step|0, x1=((vw/2-panX)/zoom)/step+1|0;
-  const y0=((-vh/2-panY)/zoom)/step|0, y1=((vh/2-panY)/zoom)/step+1|0;
-  vc.strokeStyle='#12141c'; vc.lineWidth=1/zoom;
-  for(let xi=x0;xi<=x1;xi++){vc.beginPath();vc.moveTo(xi*step,-1e4);vc.lineTo(xi*step,1e4);vc.stroke();}
-  for(let yi=y0;yi<=y1;yi++){vc.beginPath();vc.moveTo(-1e4,yi*step);vc.lineTo(1e4,yi*step);vc.stroke();}
-  vc.strokeStyle='#1a1e2e'; vc.lineWidth=1.5/zoom;
-  vc.beginPath();vc.moveTo(0,-1e4);vc.lineTo(0,1e4);vc.stroke();
-  vc.beginPath();vc.moveTo(-1e4,0);vc.lineTo(1e4,0);vc.stroke();
+function drawSlotImage(sid){
+  const s=slots[sid]; if(!s||!s.visible)return;
+  const img=images[s.imgName]; if(!img||!img.canvas)return;
+  const t=slotWT(s); if(!t)return;
+  const isSel=sid===selSlot;
+  vc.save();
+  vc.globalAlpha=s.alpha??1;
+  vc.translate(t.wx,t.wy);
+  vc.rotate(t.wa);
+  vc.scale(t.sx,t.sy);
+  vc.drawImage(img.canvas,-img.w/2,-img.h/2,img.w,img.h);
+  vc.globalAlpha=1;
+  if(isSel){
+    // Selection box
+    vc.strokeStyle='#28b860'; vc.lineWidth=1.5/zoom;
+    vc.setLineDash([5/zoom,3/zoom]);
+    vc.strokeRect(-img.w/2,-img.h/2,img.w,img.h);
+    vc.setLineDash([]);
+    // Pivot crosshair
+    const cs=7/zoom;
+    vc.strokeStyle='#28b860bb'; vc.lineWidth=1/zoom;
+    vc.beginPath();vc.moveTo(-cs,0);vc.lineTo(cs,0);vc.moveTo(0,-cs);vc.lineTo(0,cs);vc.stroke();
+    // Rotation handle
+    vc.beginPath();vc.moveTo(0,-img.h/2);vc.lineTo(0,-img.h/2-18/zoom);
+    vc.strokeStyle='#28b860'; vc.lineWidth=1/zoom; vc.stroke();
+    vc.beginPath();vc.arc(0,-img.h/2-18/zoom,5/zoom,0,2*PI);
+    vc.fillStyle='#28b860'; vc.fill();
+  }
+  vc.restore();
 }
 
-function drawBone(b) {
-  const sel=b.id===selBone, hov=b.id===hovBone;
-  if(!b.visible) return;
-  const col = sel?'#00b8d9':hov?'#a8d0ff':(b.col||BONE_COLORS[0]);
-  const wa = mAngle(b.world);
-  const waR = wa*D2R;
-  const cs=Math.cos(waR), sn=Math.sin(waR);
-  const px=-sn, py=cs;
-  const w=Math.max(3/zoom, Math.min(10, b.len*.12));
-  const bx=b.world.tx, by=b.world.ty, tx=b.tipX, ty=b.tipY;
-  const blx=bx+cs*b.len*.24, bly=by+sn*b.len*.24;
-
+function drawBone(id){
+  const b=bones[id]; if(!b||!b.visible)return;
+  const isSel=id===selBone, isHov=id===hovBone;
+  const col=isSel?'#00b4d8':isHov?'#80d0ec':(b.color||COLORS[0]);
+  const wa=b.wa*D2R, cos=Math.cos(wa), sin=Math.sin(wa);
+  const px=-sin, py=cos;
+  const w=Math.max(3.5/zoom,Math.min(9,b.len*.12));
+  const bx=b.wx,by=b.wy,tx=b.tipX,ty=b.tipY;
+  const blx=bx+cos*b.len*.22, bly=by+sin*b.len*.22;
   vc.beginPath();
   vc.moveTo(bx,by);
   vc.lineTo(blx+px*w,bly+py*w);
   vc.lineTo(tx,ty);
   vc.lineTo(blx-px*w,bly-py*w);
   vc.closePath();
-
-  if(sel){vc.shadowColor='#00b8d9';vc.shadowBlur=10/zoom;}
+  if(isSel){vc.shadowColor='#00b4d8';vc.shadowBlur=8/zoom;}
   const g=vc.createLinearGradient(bx,by,tx,ty);
-  g.addColorStop(0,col+'aa');g.addColorStop(.3,col+'dd');g.addColorStop(1,col+'33');
-  vc.fillStyle=g;vc.fill();
-  vc.strokeStyle=col;vc.lineWidth=(sel?1.8:1.2)/zoom;vc.stroke();
+  g.addColorStop(0,col+'99'); g.addColorStop(.3,col+'cc'); g.addColorStop(1,col+'33');
+  vc.fillStyle=g; vc.fill();
+  vc.strokeStyle=col; vc.lineWidth=(isSel?1.8:1.1)/zoom; vc.stroke();
   vc.shadowBlur=0;
-
-  // Joint circle
-  const jr=w*.9;
-  vc.beginPath();vc.arc(bx,by,jr,0,2*PI);
-  vc.fillStyle=col+'cc';vc.fill();
-  vc.strokeStyle=col+'55';vc.lineWidth=.5/zoom;vc.stroke();
-
+  // Root joint
+  vc.beginPath();vc.arc(bx,by,w*.9,0,2*PI);
+  vc.fillStyle=col+'cc'; vc.fill();
   // Tip dot
-  vc.beginPath();vc.arc(tx,ty,2.5/zoom,0,2*PI);
-  vc.fillStyle=col+'99';vc.fill();
-
+  vc.beginPath();vc.arc(tx,ty,2.2/zoom,0,2*PI);
+  vc.fillStyle=col+'88'; vc.fill();
   // Label
-  if((sel||hov)&&zoom>.3){
+  if((isSel||isHov)&&zoom>.28){
     vc.save();vc.scale(1/zoom,1/zoom);
-    vc.font=`${Math.max(9,10/zoom)}px IBM Plex Sans,sans-serif`;
-    vc.fillStyle=col+'cc';vc.textAlign='center';
+    vc.font=`${Math.max(9,9/zoom)}px IBM Plex Mono,monospace`;
+    vc.fillStyle=col+'cc'; vc.textAlign='center';
     vc.fillText(b.name,(bx+tx)/2*zoom,(by+ty)/2*zoom-w*zoom-3);
     vc.restore();
   }
-
-  // Head bone indicator
-  if(b.name.toLowerCase().includes('head')&&b.len>15){
-    const r=b.len*.55;
-    vc.beginPath();vc.arc(tx,ty,r,0,2*PI);
-    vc.strokeStyle=col+'44';vc.lineWidth=1.5/zoom;
-    vc.setLineDash([6/zoom,4/zoom]);vc.stroke();vc.setLineDash([]);
-    const ep=b.len*.55*.38;
-    [-1,1].forEach(side=>{
-      const ex=tx+(-ep)*side*sn+ep*cs*0, ey=ty+ep*side*cs+ep*sn*0;
-      // approximate: eye at ±ep perpendicular from tip, offset forward
-      const fwd=b.len*.55*.3;
-      const ex2=tx+cs*fwd+sn*(-ep*side), ey2=ty+sn*fwd+cs*(ep*side);
-      vc.beginPath();vc.arc(ex2,ey2,2.5/zoom,0,2*PI);
-      vc.fillStyle=col+'bb';vc.fill();
-    });
-  }
 }
 
-function drawSlotImage(sid) {
-  const s=slots[sid]; if(!s||!s.visible)return;
-  const b=bones[s.boneId]; if(!b)return;
-  const disps=skin.slotDisplays[sid]||[]; if(!disps.length)return;
-  const d=disps[s.displayIdx]||disps[0]; if(!d||!d.name)return;
-  const r=atlas.regions[d.name]; if(!r||!atlas.img)return;
-  const dm=localM(d.transform);
-  const wm=mulM(b.world,dm);
-  vc.save();
-  vc.transform(wm.a,wm.b,wm.c,wm.d,wm.tx,wm.ty);
-  vc.globalAlpha=s.alpha??1;
-  vc.drawImage(atlas.img,r.x,r.y,r.w,r.h,-r.ow/2,- r.oh/2,r.ow,r.oh);
-  vc.globalAlpha=1;
-  // Selection / hover outline
-  if(sid===selSlot){
-    vc.strokeStyle='#30c070'; vc.lineWidth=1.5/zoom;
-    vc.setLineDash([5/zoom,3/zoom]);
-    vc.strokeRect(-r.ow/2,-r.oh/2,r.ow,r.oh);
-    vc.setLineDash([]);
-    // Pivot crosshair at image center
-    const cs=6/zoom;
-    vc.strokeStyle='#30c070bb'; vc.lineWidth=1/zoom;
-    vc.beginPath();vc.moveTo(-cs,0);vc.lineTo(cs,0);vc.moveTo(0,-cs);vc.lineTo(0,cs);vc.stroke();
-  }
-  vc.restore();
-}
-
-// Add-bone drag preview
+// Ref sprite state
+let ref=null; // {canvas, img, w, h, x, y, angle(deg), scale, opacity, locked}
+let sliceMode=false, sliceDrag=null;
 let addFrom=null, addPrev=null;
-// Slice mode state
-let sliceMode=false, sliceDrag=null; // sliceDrag={wx0,wy0,wx1,wy1}
 
-function renderVp() {
+function draw(){
   resizeVp();
-  const vw=vp.width, vh=vp.height;
-  vc.fillStyle='#060810';vc.fillRect(0,0,vw,vh);
+  vc.fillStyle='#050710'; vc.fillRect(0,0,vp.width,vp.height);
   vc.save();
-  vc.translate(vw/2+panX, vh/2+panY);
+  vc.translate(vp.width/2+panX, vp.height/2+panY);
   vc.scale(zoom,zoom);
   drawGrid();
 
-  // ── Reference sprite layer (behind bones) ──
-  if (refSprite) {
-    const rs = refSprite;
-    const hw = rs.img.width * rs.scale / 2, hh = rs.img.height * rs.scale / 2;
+  // ── Ref sprite (behind everything) ──
+  if(ref){
+    const hw=ref.w/2, hh=ref.h/2;
     vc.save();
-    vc.translate(rs.x, rs.y);
-    vc.rotate(rs.rot * PI / 180);
-    vc.globalAlpha = rs.opacity;
-    vc.drawImage(rs.img, -hw, -hh, rs.img.width * rs.scale, rs.img.height * rs.scale);
-    vc.globalAlpha = 1;
-    if (!rs.locked) {
-      vc.strokeStyle = '#00b8d9'; vc.lineWidth = 1/zoom;
-      vc.setLineDash([5/zoom, 3/zoom]);
-      vc.strokeRect(-hw, -hh, hw*2, hh*2);
+    vc.translate(ref.x,ref.y);
+    vc.rotate(ref.angle*D2R);
+    vc.scale(ref.scale,ref.scale);
+    vc.globalAlpha=ref.opacity;
+    vc.drawImage(ref.canvas,-hw,-hh,ref.w,ref.h);
+    vc.globalAlpha=1;
+    if(!ref.locked){
+      vc.strokeStyle='#00b4d8'; vc.lineWidth=1/zoom;
+      vc.setLineDash([5/zoom,3/zoom]);
+      vc.strokeRect(-hw,-hh,hw*2,hh*2);
       vc.setLineDash([]);
-      [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([sx,sy]) => {
-        vc.fillStyle = '#00b8d9'; vc.fillRect(sx*hw-4/zoom, sy*hh-4/zoom, 8/zoom, 8/zoom);
+      [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([sx,sy])=>{
+        vc.fillStyle='#00b4d8';
+        vc.fillRect(sx*hw-4/zoom,sy*hh-4/zoom,8/zoom,8/zoom);
       });
-      vc.beginPath(); vc.moveTo(0,-hh); vc.lineTo(0,-hh-18/zoom);
-      vc.strokeStyle='#00b8d9'; vc.lineWidth=1/zoom; vc.stroke();
-      vc.beginPath(); vc.arc(0,-hh-18/zoom, 5/zoom, 0, 2*PI);
-      vc.fillStyle='#00b8d9'; vc.fill();
+      vc.beginPath();vc.moveTo(0,-hh);vc.lineTo(0,-hh-16/zoom);vc.strokeStyle='#00b4d8';vc.lineWidth=1/zoom;vc.stroke();
+      vc.beginPath();vc.arc(0,-hh-16/zoom,5/zoom,0,2*PI);vc.fillStyle='#00b4d8';vc.fill();
     }
-    // Slice mode: draw the drag rectangle
-    if (sliceMode && sliceDrag) {
-      // Convert world coords back to sprite-local for drawing
+    // Slice drag rect
+    if(sliceMode&&sliceDrag){
+      vc.restore(); // exit ref space
+      vc.save();   // world space
       const sd=sliceDrag;
-      // draw in world space directly
-      vc.restore(); // back to world
-      vc.save();
-      const x=Math.min(sd.wx0,sd.wx1),y=Math.min(sd.wy0,sd.wy1);
-      const w=Math.abs(sd.wx1-sd.wx0),h=Math.abs(sd.wy1-sd.wy0);
-      vc.fillStyle='rgba(245,197,24,.12)';vc.fillRect(x,y,w,h);
-      vc.strokeStyle='#f5c518';vc.lineWidth=1.5/zoom;
-      vc.setLineDash([4/zoom,3/zoom]);vc.strokeRect(x,y,w,h);vc.setLineDash([]);
-      // Dimensions label
-      vc.save();vc.scale(1/zoom,1/zoom);
-      vc.font='9px IBM Plex Mono,monospace';vc.fillStyle='#f5c518';vc.textAlign='center';
-      vc.fillText(`${w.toFixed(0)}×${h.toFixed(0)}`,(x+w/2)*zoom,(y-5/zoom)*zoom);
-      vc.restore();
-      // Don't double-restore
-      vc.restore();vc.save();vc.translate(vw/2+panX,vh/2+panY);vc.scale(zoom,zoom);
+      const x=Math.min(sd.x0,sd.x1),y=Math.min(sd.y0,sd.y1);
+      const w=Math.abs(sd.x1-sd.x0),h=Math.abs(sd.y1-sd.y0);
+      vc.fillStyle='rgba(232,192,32,.1)'; vc.fillRect(x,y,w,h);
+      vc.strokeStyle='#e8c020'; vc.lineWidth=1.5/zoom;
+      vc.setLineDash([4/zoom,3/zoom]); vc.strokeRect(x,y,w,h); vc.setLineDash([]);
+      if(w>10&&h>10){
+        vc.save();vc.scale(1/zoom,1/zoom);
+        vc.font='9px IBM Plex Mono,monospace'; vc.fillStyle='#e8c020';
+        vc.textAlign='center';
+        vc.fillText(`${w.toFixed(0)}×${h.toFixed(0)}`,(x+w/2)*zoom,(y-6)*zoom);
+        vc.restore();
+      }
     } else {
       vc.restore();
     }
   }
 
-  // Draw slot images sorted by z
-  slotOrder.slice().sort((a,b)=>(slots[a]?.z||0)-(slots[b]?.z||0)).forEach(drawSlotImage);
-  // Draw bones (non-selected first, selected on top)
-  boneOrder.forEach(id=>{if(id!==selBone&&bones[id])drawBone(bones[id]);});
-  if(selBone&&bones[selBone])drawBone(bones[selBone]);
+  // ── Slot images (sorted by z, behind bones) ──
+  [...sOrder].sort((a,b)=>(slots[a]?.z||0)-(slots[b]?.z||0)).forEach(drawSlotImage);
 
-  // Add-bone drag line
+  // ── Bones (non-selected first, sel on top) ──
+  bOrder.forEach(id=>{if(id!==selBone)drawBone(id);});
+  if(selBone) drawBone(selBone);
+
+  // ── Add-bone preview ──
   if(tool==='add'&&addFrom&&addPrev){
     const p=bones[addFrom];
     vc.beginPath();vc.moveTo(p.tipX,p.tipY);vc.lineTo(addPrev.x,addPrev.y);
-    vc.strokeStyle='#00b8d966';vc.lineWidth=2/zoom;
-    vc.setLineDash([6/zoom,4/zoom]);vc.stroke();vc.setLineDash([]);
+    vc.strokeStyle='#00b4d866'; vc.lineWidth=2/zoom;
+    vc.setLineDash([6/zoom,4/zoom]); vc.stroke(); vc.setLineDash([]);
     vc.beginPath();vc.arc(addPrev.x,addPrev.y,4/zoom,0,2*PI);
-    vc.fillStyle='#00b8d9';vc.fill();
+    vc.fillStyle='#00b4d8'; vc.fill();
     const dx=addPrev.x-p.tipX,dy=addPrev.y-p.tipY;
-    const len=Math.hypot(dx,dy);
     vc.save();vc.scale(1/zoom,1/zoom);
-    vc.font='9px IBM Plex Mono,monospace';vc.fillStyle='#00b8d9aa';vc.textAlign='center';
-    vc.fillText(len.toFixed(0)+'px',((p.tipX+addPrev.x)/2)*zoom,((p.tipY+addPrev.y)/2)*zoom-8);
+    vc.font='9px IBM Plex Mono,monospace';vc.fillStyle='#00b4d8';vc.textAlign='center';
+    vc.fillText(Math.hypot(dx,dy).toFixed(0)+'px',((p.tipX+addPrev.x)/2)*zoom,((p.tipY+addPrev.y)/2)*zoom-8);
     vc.restore();
   }
   if(tool==='add'&&!addFrom){
-    boneOrder.forEach(id=>{
-      const b=bones[id];if(!b)return;
-      vc.beginPath();vc.arc(b.tipX,b.tipY,8/zoom,0,2*PI);
-      vc.strokeStyle='#00b8d833';vc.lineWidth=1/zoom;vc.stroke();
-    });
+    bOrder.forEach(id=>{const b=bones[id];if(!b)return;
+      vc.beginPath();vc.arc(b.tipX,b.tipY,7/zoom,0,2*PI);
+      vc.strokeStyle='#00b4d833';vc.lineWidth=1/zoom;vc.stroke();});
   }
   vc.restore();
 }
 
-// ── 9. VIEWPORT INPUT ──────────────────────────────────────────────
-let drag=false,dragType=null,dragBoneId=null,lmx=0,lmy=0;
-let pinch0=0;
-
-function s2w(sx,sy){
-  return{x:(sx-vp.width/2-panX)/zoom, y:(sy-vp.height/2-panY)/zoom};
-}
-
+// ── HIT TESTS ────────────────────────────────────────────────────────
 function ptLineDist(px,py,ax,ay,bx,by){
   const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
   if(!l2)return Math.hypot(px-ax,py-ay);
   const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2));
   return Math.hypot(px-ax-t*dx,py-ay-t*dy);
 }
-
 function boneAt(wx,wy){
   const th=12/zoom; let best=null,bd=Infinity;
-  boneOrder.forEach(id=>{
-    const b=bones[id];if(!b||!b.visible)return;
-    const d=ptLineDist(wx,wy,b.world.tx,b.world.ty,b.tipX,b.tipY);
-    if(d<th&&d<bd){bd=d;best=id;}
-  });
+  bOrder.forEach(id=>{const b=bones[id];if(!b||!b.visible)return;
+    const d=ptLineDist(wx,wy,b.wx,b.wy,b.tipX,b.tipY);
+    if(d<th&&d<bd){bd=d;best=id;}});
   return best;
 }
-
 function nearestTip(wx,wy){
   let best=null,bd=Infinity;
-  boneOrder.forEach(id=>{
-    const b=bones[id];if(!b)return;
+  bOrder.forEach(id=>{const b=bones[id];if(!b)return;
     const d=Math.hypot(wx-b.tipX,wy-b.tipY);
-    if(d<bd){bd=d;best=id;}
-  });
-  return bd<18/zoom?best:null;
+    if(d<bd){bd=d;best=id;}});
+  return bd<16/zoom?best:null;
+}
+function slotAt(wx,wy){
+  // Top-most z first
+  for(const sid of [...sOrder].reverse()){
+    const s=slots[sid]; if(!s||!s.visible)continue;
+    const img=images[s.imgName]; if(!img)continue;
+    const t=slotWT(s); if(!t)continue;
+    // Transform world point to slot-local
+    const dx=wx-t.wx, dy=wy-t.wy;
+    const cos=Math.cos(-t.wa), sin=Math.sin(-t.wa);
+    const lx=(dx*cos-dy*sin)/t.sx, ly=(dx*sin+dy*cos)/t.sy;
+    if(Math.abs(lx)<img.w/2&&Math.abs(ly)<img.h/2) return sid;
+  }
+  return null;
+}
+function slotRotHandle(sid,wx,wy){
+  const s=slots[sid]; if(!s)return false;
+  const img=images[s.imgName]; if(!img)return false;
+  const t=slotWT(s); if(!t)return false;
+  const hx=t.wx+Math.cos(t.wa-PI/2)*(img.h/2+18/zoom);
+  const hy=t.wy+Math.sin(t.wa-PI/2)*(img.h/2+18/zoom);
+  return Math.hypot(wx-hx,wy-hy)<8/zoom;
+}
+function hitRef(wx,wy){
+  if(!ref||ref.locked)return null;
+  const r=ref.angle*D2R;
+  const cos=Math.cos(-r),sin=Math.sin(-r);
+  const dx=(wx-ref.x)/ref.scale, dy=(wy-ref.y)/ref.scale;
+  const lx=dx*cos-dy*sin, ly=dx*sin+dy*cos;
+  const hw=ref.w/2, hh=ref.h/2;
+  // Rotate handle
+  if(Math.abs(lx)<8/zoom&&ly<-hh&&ly>-hh-22/zoom) return 'rot';
+  // Body
+  if(Math.abs(lx)<hw&&Math.abs(ly)<hh) return 'move';
+  return null;
 }
 
-function getEventPos(e) {
+// ── INPUT ────────────────────────────────────────────────────────────
+let drag=false, dragType=null, dragBoneId=null, dragSlotId=null;
+let lmx=0,lmy=0,lmwx=0,lmwy=0;
+let pinch0=0;
+
+function getPos(e){
   const rect=vp.getBoundingClientRect();
   if(e.touches){
-    if(e.touches.length===0&&e.changedTouches.length>0){
+    if(!e.touches.length&&e.changedTouches.length){
       const t=e.changedTouches[0];
       return{x:t.clientX-rect.left,y:t.clientY-rect.top,count:0};
     }
     if(e.touches.length>=2){
-      const t0=e.touches[0],t1=e.touches[1];
-      return{x:(t0.clientX+t1.clientX)/2-rect.left,
-             y:(t0.clientY+t1.clientY)/2-rect.top,
-             count:2,
-             pinchDist:Math.hypot(t1.clientX-t0.clientX,t1.clientY-t0.clientY)};
+      const a=e.touches[0],b=e.touches[1];
+      return{x:(a.clientX+b.clientX)/2-rect.left,y:(a.clientY+b.clientY)/2-rect.top,
+             count:2,pd:Math.hypot(b.clientX-a.clientX,b.clientY-a.clientY)};
     }
     const t=e.touches[0];
     return{x:t.clientX-rect.left,y:t.clientY-rect.top,count:1};
   }
-  return{x:e.clientX-rect.left,y:e.clientY-rect.top,count:1,button:e.button,alt:e.altKey};
+  return{x:e.clientX-rect.left,y:e.clientY-rect.top,count:1,btn:e.button,alt:e.altKey};
 }
 
-vp.addEventListener('mousedown',vpDown,{passive:false});
-vp.addEventListener('touchstart',vpDown,{passive:false});
-vp.addEventListener('mousemove',vpMove,{passive:false});
-vp.addEventListener('touchmove',vpMove,{passive:false});
-vp.addEventListener('mouseup',vpUp,{passive:false});
-vp.addEventListener('touchend',vpUp,{passive:false});
+vp.addEventListener('mousedown',e=>{e.preventDefault();vpDown(e);},{passive:false});
+vp.addEventListener('touchstart',e=>{e.preventDefault();vpDown(e);},{passive:false});
+vp.addEventListener('mousemove',e=>{e.preventDefault();vpMove(e);},{passive:false});
+vp.addEventListener('touchmove',e=>{e.preventDefault();vpMove(e);},{passive:false});
+vp.addEventListener('mouseup',e=>{e.preventDefault();vpUp(e);},{passive:false});
+vp.addEventListener('touchend',e=>{e.preventDefault();vpUp(e);},{passive:false});
 vp.addEventListener('wheel',vpWheel,{passive:false});
-vp.addEventListener('mouseleave',()=>{if(hovBone!==null){hovBone=null;renderVp();}});
+vp.addEventListener('mouseleave',()=>{if(hovBone!==null){hovBone=null;draw();}});
 
 function vpDown(e){
-  e.preventDefault();
-  const pos=getEventPos(e);
-  if(pos.count===2){pinch0=pos.pinchDist;drag=true;dragType='pinch';lmx=pos.x;lmy=pos.y;return;}
+  const pos=getPos(e);
+  if(pos.count===2){pinch0=pos.pd;drag=true;dragType='pinch';lmx=pos.x;lmy=pos.y;return;}
   lmx=pos.x;lmy=pos.y;
-  const w=s2w(pos.x,pos.y);
+  const w=vp2w(pos.x,pos.y); lmwx=w.x; lmwy=w.y;
 
-  // ── Slice mode ──
-  if(sliceMode&&refSprite){
-    sliceDrag={wx0:w.x,wy0:w.y,wx1:w.x,wy1:w.y};
+  // Slice mode takes priority
+  if(sliceMode&&ref){
+    sliceDrag={x0:w.x,y0:w.y,x1:w.x,y1:w.y};
     drag=true;dragType='slice';return;
   }
+  if(pos.btn===1||(pos.btn===0&&pos.alt)||tool==='pan'){drag=true;dragType='pan';return;}
 
-  if(pos.button===1||(pos.button===0&&pos.alt)||tool==='pan'){drag=true;dragType='pan';return;}
+  // Ref sprite drag
+  const rh=hitRef(w.x,w.y);
+  if(rh&&tool==='sel'){drag=true;dragType='ref_'+rh;lmwx=w.x;lmwy=w.y;return;}
 
-  // ── Ref sprite interaction (when not locked) ──
-  if(refSprite&&!refSprite.locked&&tool==='select'){
-    const hit=hitTestRefSprite(w.x,w.y);
-    if(hit){drag=true;dragType='ref_'+hit;refLastW={x:w.x,y:w.y};return;}
-  }
-
-  if(tool==='select'){
-    // Try clicking a slot image first
-    const clickedSlot=slotAt(w.x,w.y);
-    if(clickedSlot){
-      selSlot=clickedSlot;selectBone(slots[clickedSlot].boneId);
-      updateSlotProps();renderVp();return;
+  if(tool==='sel'){
+    // Slot rotation handle first
+    if(selSlot&&slotRotHandle(selSlot,w.x,w.y)){
+      drag=true;dragType='slot_rot';dragSlotId=selSlot;return;
     }
-    const h=boneAt(w.x,w.y);
-    if(h){selSlot=null;selectBone(h);drag=true;dragType='rotate';dragBoneId=h;}
-    else{selSlot=null;selectBone(null);drag=true;dragType='pan';}
+    // Slot body — select & drag to reposition
+    const sid=slotAt(w.x,w.y);
+    if(sid){
+      selSlot=sid; selBone=slots[sid]?.boneId||null;
+      updateUI(); draw();
+      drag=true;dragType='slot_move';dragSlotId=sid;return;
+    }
+    // Bone
+    const bid=boneAt(w.x,w.y);
+    if(bid){
+      selSlot=null; selBone=bid; updateUI(); draw();
+      drag=true;dragType='bone_rot';dragBoneId=bid;return;
+    }
+    selSlot=null; selBone=null; updateUI(); draw();
+    drag=true;dragType='pan';
   }
   if(tool==='add'){
     const tip=nearestTip(w.x,w.y);
-    if(tip&&!addFrom){addFrom=tip;addPrev={x:w.x,y:w.y};drag=true;dragType='newBone';}
-    else if(!Object.keys(bones).length){
-      const id=genId();
-      addBone(makeBone(id,'root',null,w.x,w.y,0,60,BONE_COLORS[0]));
-      recalcAll();selectBone(id);refreshAll();
+    if(tip){addFrom=tip;addPrev={x:w.x,y:w.y};drag=true;dragType='addBone';}
+    else if(!bOrder.length){
+      // First bone — root at click
+      const id=gid(); addBone(makeBone(id,'root',null,w.x,w.y,0,60,COLORS[0]));
+      recalcAll(); selBone=id; updateUI(); draw();
     }
   }
 }
 
 function vpMove(e){
-  e.preventDefault();
-  const pos=getEventPos(e);
-  const w=s2w(pos.x,pos.y);
-  document.getElementById('vpinfo').innerHTML=
-    `x: ${w.x.toFixed(0)}  y: ${w.y.toFixed(0)}<br>scroll: zoom · alt+drag: pan`;
+  const pos=getPos(e);
+  const w=vp2w(pos.x,pos.y);
+  document.getElementById('vpi').innerHTML=`x: ${w.x.toFixed(0)}  y: ${w.y.toFixed(0)}<br>scroll=zoom · alt+drag=pan`;
+
   if(!drag){
     const h=boneAt(w.x,w.y);
-    if(h!==hovBone){hovBone=h;renderVp();}
+    if(h!==hovBone){hovBone=h;draw();}
     return;
   }
   if(dragType==='pinch'&&pos.count===2){
-    const dzoom=pos.pinchDist/pinch0;
-    zoom=Math.max(.05,Math.min(16,zoom*dzoom));
-    pinch0=pos.pinchDist;
-    panX+=pos.x-lmx;panY+=pos.y-lmy;
-    lmx=pos.x;lmy=pos.y;renderVp();return;
+    const dz=pos.pd/pinch0; zoom=Math.max(.04,Math.min(16,zoom*dz));
+    pinch0=pos.pd; panX+=pos.x-lmx; panY+=pos.y-lmy; lmx=pos.x; lmy=pos.y; draw(); return;
   }
-  if(dragType==='slice'&&sliceDrag){
-    sliceDrag.wx1=w.x;sliceDrag.wy1=w.y;renderVp();
+  if(dragType==='pan'){panX+=pos.x-lmx; panY+=pos.y-lmy; draw();}
+  else if(dragType==='slice'&&sliceDrag){sliceDrag.x1=w.x;sliceDrag.y1=w.y;draw();}
+  else if(dragType==='ref_move'&&ref){ref.x+=w.x-lmwx;ref.y+=w.y-lmwy;updateRefHud();draw();}
+  else if(dragType==='ref_rot'&&ref){ref.angle=Math.atan2(w.y-ref.y,w.x-ref.x)*R2D+90;updateRefHud();draw();}
+  else if(dragType==='bone_rot'){
+    const b=bones[dragBoneId]; if(!b)return;
+    const twa=Math.atan2(w.y-b.wy,w.x-b.wx)*R2D;
+    const pwa=b.parentId&&bones[b.parentId]?bones[b.parentId].wa:0;
+    b.la=twa-pwa;
+    if(document.getElementById('autokey').checked) addKF(curAnim,dragBoneId,curF);
+    recalcAll(); draw(); updateBoneProps();
   }
-  else if(dragType==='ref_move'&&refSprite&&refLastW){
-    refSprite.x+=w.x-refLastW.x;refSprite.y+=w.y-refLastW.y;
-    refLastW={x:w.x,y:w.y};refHudUpdate();renderVp();
+  else if(dragType==='slot_move'&&dragSlotId){
+    // Drag slot image → update its bone-local offset
+    const s=slots[dragSlotId]; if(!s)return;
+    const b=bones[s.boneId]; if(!b)return;
+    const ba=b.wa*D2R;
+    const cos=Math.cos(-ba), sin=Math.sin(-ba);
+    const dx=w.x-b.wx, dy=w.y-b.wy;
+    s.ox=dx*cos-dy*sin;
+    s.oy=dx*sin+dy*cos;
+    draw(); updateSlotProps();
   }
-  else if(dragType==='ref_rotate'&&refSprite){
-    refSprite.rot=Math.atan2(w.y-refSprite.y,w.x-refSprite.x)*R2D+90;
-    refHudUpdate();renderVp();
+  else if(dragType==='slot_rot'&&dragSlotId){
+    const s=slots[dragSlotId]; if(!s)return;
+    const b=bones[s.boneId]; if(!b)return;
+    // Compute angle from slot world center to mouse, minus bone angle
+    const t=slotWT(s);
+    const ang=Math.atan2(w.y-t.wy,w.x-t.wx)*R2D;
+    s.oa=ang-b.wa+90; // +90 because handle is above (y-axis)
+    draw(); updateSlotProps();
   }
-  else if(dragType==='pan'){panX+=pos.x-lmx;panY+=pos.y-lmy;renderVp();}
-  else if(dragType==='rotate'){
-    const b=bones[dragBoneId];if(!b)return;
-    const nwa=Math.atan2(w.y-b.world.ty,w.x-b.world.tx)*R2D;
-    const pwa=b.parentId&&bones[b.parentId]?mAngle(bones[b.parentId].world):0;
-    b.local.rot=nwa-pwa;
-    if(document.getElementById('autokey').checked) recordKeyframe(curAnim,dragBoneId,curFrame);
-    recalcAll();renderVp();updateProps();renderTL();
-  }
-  else if(dragType==='newBone'){addPrev={x:w.x,y:w.y};renderVp();}
-  lmx=pos.x;lmy=pos.y;
+  else if(dragType==='addBone'&&addFrom){addPrev={x:w.x,y:w.y};draw();}
+  lmx=pos.x; lmy=pos.y; lmwx=w.x; lmwy=w.y;
 }
 
 function vpUp(e){
-  if(e.preventDefault)e.preventDefault();
-  // ── Finish slice ──
   if(dragType==='slice'&&sliceDrag){
-    const sd=sliceDrag;
-    const x=Math.min(sd.wx0,sd.wx1),y=Math.min(sd.wy0,sd.wy1);
-    const w=Math.abs(sd.wx1-sd.wx0),h=Math.abs(sd.wy1-sd.wy0);
-    sliceDrag=null;
+    const sd=sliceDrag; sliceDrag=null;
+    const x=Math.min(sd.x0,sd.x1),y=Math.min(sd.y0,sd.y1);
+    const w=Math.abs(sd.x1-sd.x0),h=Math.abs(sd.y1-sd.y0);
     if(w>4&&h>4) commitSlice(x,y,w,h);
-    drag=false;dragType=null;renderVp();return;
+    drag=false; dragType=null; draw(); return;
   }
-  if(dragType==='newBone'&&addFrom&&addPrev){
+  if(dragType==='addBone'&&addFrom&&addPrev){
     const p=bones[addFrom];
     const dx=addPrev.x-p.tipX,dy=addPrev.y-p.tipY;
-    const len=Math.max(8,Math.hypot(dx,dy));
-    const wAng=Math.atan2(dy,dx)*R2D;
-    const pWAng=mAngle(p.world);
-    const localRot=wAng-pWAng;
-    const id=genId();
-    const nb=makeBone(id,'bone'+boneOrder.length,addFrom,p.len,0,localRot,len,BONE_COLORS[boneOrder.length%BONE_COLORS.length]);
-    addBone(nb);recalcAll();selectBone(id);refreshAll();
+    const len=Math.max(6,Math.hypot(dx,dy));
+    const twa=Math.atan2(dy,dx)*R2D;
+    const la=twa-p.wa;
+    const id=gid(), nb=makeBone(id,'bone'+bOrder.length,addFrom,p.len,0,la,len,COLORS[bOrder.length%COLORS.length]);
+    addBone(nb); recalcAll(); selBone=id; updateUI(); draw();
   }
-  drag=false;dragType=null;dragBoneId=null;addFrom=null;addPrev=null;refLastW=null;
-  renderVp();
+  drag=false; dragType=null; dragBoneId=null; dragSlotId=null;
+  addFrom=null; addPrev=null;
+  draw();
 }
 
 function vpWheel(e){
   e.preventDefault();
   const rect=vp.getBoundingClientRect();
-  const sx=e.clientX-rect.left,sy=e.clientY-rect.top;
-  const w=s2w(sx,sy);
-  // If hovering ref sprite and it's unlocked, scroll scales it
-  if(refSprite&&!refSprite.locked&&hitTestRefSprite(w.x,w.y)){
-    refSprite.scale=Math.max(0.05,Math.min(10,refSprite.scale*(e.deltaY<0?1.06:.94)));
-    refHudUpdate();renderVp();return;
+  const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+  // If hovering unlocked ref sprite, scroll scales it
+  const w=vp2w(sx,sy);
+  if(ref&&!ref.locked&&hitRef(w.x,w.y)){
+    ref.scale=Math.max(.02,Math.min(10,ref.scale*(e.deltaY<0?1.07:.93)));
+    updateRefHud(); draw(); return;
   }
-  const wx=(sx-vp.width/2-panX)/zoom,wy=(sy-vp.height/2-panY)/zoom;
-  zoom=Math.max(.05,Math.min(16,zoom*(e.deltaY<0?1.12:.9)));
-  panX=sx-vp.width/2-wx*zoom;panY=sy-vp.height/2-wy*zoom;
-  renderVp();
+  const wx=(sx-vp.width/2-panX)/zoom, wy=(sy-vp.height/2-panY)/zoom;
+  zoom=Math.max(.04,Math.min(16,zoom*(e.deltaY<0?1.12:.9)));
+  panX=sx-vp.width/2-wx*zoom; panY=sy-vp.height/2-wy*zoom;
+  draw();
 }
 
-// ── 10. TIMELINE ────────────────────────────────────────────────────
-const tlc=document.getElementById('tlcanvas'),tcc=tlc.getContext('2d');
-const FW=18,RH=22,TH=20;
-
-function renderTL(){
-  const anim=anims[curAnim];
-  const sd=document.getElementById('tlscroll');
-  const W=Math.max(sd.clientWidth||400,totalF*FW+40);
-  const H=RH+boneOrder.length*TH;
-  tlc.width=W;tlc.height=H;
+// ── TIMELINE ─────────────────────────────────────────────────────────
+const tlc=document.getElementById('tlc'), tcc=tlc.getContext('2d');
+const FW=18,RH=20,TH=19;
+function drawTL(){
+  const a=anims[curAnim];
+  const sd=document.getElementById('tls');
+  const W=Math.max(sd.clientWidth||400,totalF*FW+40), H=RH+bOrder.length*TH;
+  tlc.width=W; tlc.height=H;
   // BG
-  tcc.fillStyle='#0d1018';tcc.fillRect(0,0,W,H);
+  tcc.fillStyle='#0a0c14'; tcc.fillRect(0,0,W,H);
   // Ruler
-  tcc.fillStyle='#111520';tcc.fillRect(0,0,W,RH);
+  tcc.fillStyle='#0e1020'; tcc.fillRect(0,0,W,RH);
   for(let f=0;f<=totalF;f++){
-    const x=f*FW+FW/2,maj=f%5===0||f===0;
-    tcc.fillStyle=maj?'#3a4060':'#1a2030';
-    tcc.fillRect(x,0,1,maj?RH:6);
-    if(maj&&zoom<20){
-      tcc.fillStyle='#506080';tcc.font='8px IBM Plex Mono,monospace';tcc.textAlign='center';
-      tcc.fillText(f,x,13);
-    }
+    const x=f*FW+FW/2, maj=f%5===0;
+    tcc.fillStyle=maj?'#2a3050':'#161828'; tcc.fillRect(x,0,1,maj?RH:5);
+    if(maj){tcc.fillStyle='#404870';tcc.font='8px IBM Plex Mono,monospace';tcc.textAlign='center';tcc.fillText(f,x,12);}
   }
-  // End line
-  tcc.strokeStyle='#ffffff20';tcc.lineWidth=1;
+  // End marker
+  tcc.strokeStyle='#ffffff18'; tcc.lineWidth=1;
   const ex=totalF*FW+FW/2;
   tcc.beginPath();tcc.moveTo(ex,0);tcc.lineTo(ex,H);tcc.stroke();
-
   // Tracks
-  boneOrder.forEach((id,i)=>{
-    const b=bones[id];if(!b)return;
+  bOrder.forEach((id,i)=>{
+    const b=bones[id]; if(!b)return;
     const y=RH+i*TH;
-    if(id===selBone){tcc.fillStyle='rgba(0,184,217,.05)';tcc.fillRect(0,y,W,TH);}
-    else if(i%2===0){tcc.fillStyle='rgba(255,255,255,.02)';tcc.fillRect(0,y,W,TH);}
-    tcc.fillStyle='#1e203033';tcc.fillRect(0,y+TH-1,W,1);
-    // Keyframes
-    const trk=anim?.boneTracks[id]; if(!trk)return;
-    const allF=new Set([...(trk.rKFs||[]).map(k=>k.f),...(trk.tKFs||[]).map(k=>k.f)]);
+    if(id===selBone){tcc.fillStyle='rgba(0,180,216,.04)';tcc.fillRect(0,y,W,TH);}
+    else if(i%2===0){tcc.fillStyle='rgba(255,255,255,.015)';tcc.fillRect(0,y,W,TH);}
+    tcc.fillStyle='#1a1d2a33';tcc.fillRect(0,y+TH-1,W,1);
+    const t=a?.tracks[id]; if(!t)return;
+    const allF=new Set([...(t.rKFs||[]).map(k=>k.f),...(t.tKFs||[]).map(k=>k.f)]);
     allF.forEach(f=>{
-      const fx=f*FW+FW/2,cy=y+TH/2;
+      const fx=f*FW+FW/2, cy=y+TH/2;
       tcc.save();tcc.translate(fx,cy);tcc.rotate(PI/4);
-      tcc.fillStyle=id===selBone?'#00b8d9':'#e87a2099';
-      tcc.fillRect(-4,-4,8,8);tcc.restore();
+      tcc.fillStyle=id===selBone?'#00b4d8':'#e0782088';
+      tcc.fillRect(-3.5,-3.5,7,7);tcc.restore();
     });
   });
   // Playhead
-  const px=curFrame*FW+FW/2;
-  tcc.strokeStyle='#e87a20';tcc.lineWidth=1.5;
+  const px=curF*FW+FW/2;
+  tcc.strokeStyle='#e07820';tcc.lineWidth=1.5;
   tcc.beginPath();tcc.moveTo(px,0);tcc.lineTo(px,H);tcc.stroke();
-  tcc.fillStyle='#e87a20';
-  tcc.beginPath();tcc.moveTo(px-5,0);tcc.lineTo(px+5,0);tcc.lineTo(px,10);tcc.fill();
+  tcc.fillStyle='#e07820';
+  tcc.beginPath();tcc.moveTo(px-5,0);tcc.lineTo(px+5,0);tcc.lineTo(px,9);tcc.fill();
 }
-
-function updateTLLabels(){
-  const el=document.getElementById('tllabels');el.innerHTML='';
-  const sp=document.createElement('div');sp.style.cssText=`height:${RH}px;border-bottom:1px solid var(--brd)`;
-  el.appendChild(sp);
-  boneOrder.forEach(id=>{
-    const b=bones[id];if(!b)return;
+function drawTLLabels(){
+  const el=document.getElementById('tll'); el.innerHTML='';
+  const sp=document.createElement('div'); sp.style.height=RH+'px'; sp.style.borderBottom='1px solid var(--brd)'; el.appendChild(sp);
+  bOrder.forEach(id=>{
+    const b=bones[id]; if(!b)return;
     const d=document.createElement('div');
-    d.className='tll'+(id===selBone?' sel':'');
-    d.innerHTML=`<span class="tll-dot" style="background:${b.col}"></span>${b.name}`;
-    d.onclick=()=>selectBone(id);el.appendChild(d);
+    d.className='tll'+(id===selBone?' on':'');
+    d.innerHTML=`<span style="width:7px;height:7px;border-radius:50%;background:${b.color};flex-shrink:0;display:inline-block;"></span>${b.name}`;
+    d.onclick=()=>selectBone(id); el.appendChild(d);
   });
 }
 
 let tlDrag=false;
-document.getElementById('tlscroll').addEventListener('mousedown',e=>{tlDrag=true;tlSeek(e);});
-document.getElementById('tlscroll').addEventListener('mousemove',e=>{if(tlDrag)tlSeek(e);});
+document.getElementById('tls').addEventListener('mousedown',e=>{tlDrag=true;tlSeek(e);});
+document.getElementById('tls').addEventListener('mousemove',e=>{if(tlDrag)tlSeek(e);});
 document.addEventListener('mouseup',()=>{tlDrag=false;});
-document.getElementById('tlscroll').addEventListener('contextmenu',e=>{
+document.getElementById('tls').addEventListener('contextmenu',e=>{
   e.preventDefault();
   const rect=tlc.getBoundingClientRect();
   const f=Math.round((e.clientX-rect.left-FW/2)/FW);
   const row=Math.floor((e.clientY-rect.top-RH)/TH);
-  if(row>=0&&row<boneOrder.length){
-    const id=boneOrder[row],anim=anims[curAnim];
-    if(anim?.boneTracks[id]){
-      const trk=anim.boneTracks[id];
-      trk.rKFs=trk.rKFs.filter(k=>k.f!==f);
-      trk.tKFs=trk.tKFs.filter(k=>k.f!==f);
-      renderTL();
-    }
-  }
+  if(row>=0&&row<bOrder.length){removeKF(curAnim,bOrder[row],f);drawTL();}
 });
-
 function tlSeek(e){
   const rect=tlc.getBoundingClientRect();
   const f=Math.max(0,Math.min(totalF-1,Math.round((e.clientX-rect.left-FW/2)/FW)));
-  seekFrame(f);
+  seekF(f);
 }
+document.getElementById('tls').addEventListener('touchstart',e=>{e.preventDefault();tlDrag=true;tlSeekT(e);},{passive:false});
+document.getElementById('tls').addEventListener('touchmove',e=>{e.preventDefault();if(tlDrag)tlSeekT(e);},{passive:false});
+function tlSeekT(e){const t=e.touches[0],rect=tlc.getBoundingClientRect();
+  seekF(Math.max(0,Math.min(totalF-1,Math.round((t.clientX-rect.left-FW/2)/FW))));}
 
-// Touch on timeline
-document.getElementById('tlscroll').addEventListener('touchstart',e=>{e.preventDefault();tlDrag=true;tlSeekTouch(e);},{passive:false});
-document.getElementById('tlscroll').addEventListener('touchmove',e=>{e.preventDefault();if(tlDrag)tlSeekTouch(e);},{passive:false});
-function tlSeekTouch(e){
-  const t=e.touches[0],rect=tlc.getBoundingClientRect();
-  const f=Math.max(0,Math.min(totalF-1,Math.round((t.clientX-rect.left-FW/2)/FW)));
-  seekFrame(f);
-}
-
-// ── 11. PLAYBACK ─────────────────────────────────────────────────
+// ── PLAYBACK ──────────────────────────────────────────────────────────
 function togglePlay(){playing?pauseAnim():startAnim();}
 function startAnim(){
-  playing=true;lastTs=0;accMs=0;
+  playing=true;lastT=0;accMs=0;
   document.getElementById('playbtn').textContent='⏸ PAUSE';
-  document.getElementById('playbtn').className='btn sel';
+  document.getElementById('playbtn').className='btn b';
   document.getElementById('playbtn2').textContent='⏸';
   rafId=requestAnimationFrame(tick);
 }
 function pauseAnim(){
   playing=false;if(rafId)cancelAnimationFrame(rafId);
   document.getElementById('playbtn').textContent='▶ PLAY';
-  document.getElementById('playbtn').className='btn pri';
+  document.getElementById('playbtn').className='btn a';
   document.getElementById('playbtn2').textContent='▶';
 }
-function stopAnim(){pauseAnim();seekFrame(0);}
+function stopAnim(){pauseAnim();seekF(0);}
 function tick(ts){
   if(!playing)return;
-  if(!lastTs)lastTs=ts;
-  const fps=parseInt(document.getElementById('fps-inp').value)||24;
-  accMs+=ts-lastTs;lastTs=ts;
-  const mspf=1000/fps;
-  while(accMs>=mspf){curFrame=(curFrame+1)%totalF;accMs-=mspf;}
-  applyAnimToFrame(curAnim,curFrame);recalcAll();
-  renderVp();renderTL();updateFrameDisp();
+  if(!lastT)lastT=ts;
+  fps=parseInt(document.getElementById('fpsinp').value)||24;
+  accMs+=ts-lastT;lastT=ts;
+  const mpf=1000/fps;
+  while(accMs>=mpf){curF=(curF+1)%totalF;accMs-=mpf;}
+  applyAnim(curAnim,curF);recalcAll();draw();drawTL();updateFDisp();
   rafId=requestAnimationFrame(tick);
 }
-function seekFrame(f){
+function seekF(f){
   const was=playing;if(was)pauseAnim();
-  curFrame=Math.max(0,Math.min(totalF-1,f));
-  applyAnimToFrame(curAnim,curFrame);recalcAll();
-  renderVp();renderTL();updateFrameDisp();
+  curF=Math.max(0,Math.min(totalF-1,f));
+  applyAnim(curAnim,curF);recalcAll();draw();drawTL();updateFDisp();
   if(was)startAnim();
 }
-function stepF(d){seekFrame(((curFrame+d)%totalF+totalF)%totalF);}
-function updateFrameDisp(){document.getElementById('fdisp').textContent=`${curFrame} / ${totalF}`;}
+function stepF(d){seekF(((curF+d)%totalF+totalF)%totalF);}
+function updateFDisp(){document.getElementById('fdisp').textContent=curF+'/'+totalF;}
 
-// ── 12. UI UPDATES ────────────────────────────────────────────────
+// ── UI ────────────────────────────────────────────────────────────────
+function selectBone(id){selBone=id;selSlot=null;updateUI();}
+function updateUI(){updateBoneTree();updateSlotPanel();updateBoneProps();updateSlotProps();drawTLLabels();drawTL();draw();}
+function refreshAll(){rebuildOrder();recalcAll();updateUI();updateFDisp();}
+
 function updateBoneTree(){
-  const tree=document.getElementById('pane-bones');tree.innerHTML='';
-  function row(id,depth){
+  const t=document.getElementById('pane-b');t.innerHTML='';
+  function row(id,d){
     const b=bones[id];if(!b)return;
-    const d=document.createElement('div');
-    d.className='brow'+(id===selBone?' sel':'');
-    d.innerHTML=`<span style="display:inline-block;width:${depth*12+8}px"></span>`+
-      `<span class="brow-ico" style="color:${b.col};margin-right:4px">${depth===0?'⬡':'◆'}</span>`+
-      `<span class="brow-name">${b.name}</span>`+
-      `<button class="brow-vis" onclick="event.stopPropagation();toggleBoneVis('${id}')">${b.visible?'👁':'👁'}</button>`;
-    d.onclick=()=>selectBone(id);tree.appendChild(d);
-    b.children.forEach(c=>row(c,depth+1));
+    const el=document.createElement('div');
+    el.className='brow'+(id===selBone?' on':'');
+    el.innerHTML=`<span style="display:inline-block;width:${d*12+6}px"></span>`+
+      `<span style="color:${b.color};margin-right:4px;font-size:7px">${d===0?'⬡':'◆'}</span>`+
+      `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${b.name}</span>`;
+    el.onclick=()=>selectBone(id);t.appendChild(el);
+    b.children.forEach(c=>row(c,d+1));
   }
-  boneOrder.filter(id=>bones[id]&&!bones[id].parentId).forEach(id=>row(id,0));
+  bOrder.filter(id=>bones[id]&&!bones[id].parentId).forEach(id=>row(id,0));
 }
 
-function updateSlotList(){
-  const el=document.getElementById('pane-slots');el.innerHTML='';
-  slotOrder.forEach(id=>{
+function updateSlotPanel(){
+  const t=document.getElementById('pane-s');t.innerHTML='';
+  [...sOrder].reverse().forEach(id=>{
     const s=slots[id];if(!s)return;
-    const disps=skin.slotDisplays[id]||[];
-    const imgName=disps[0]?.name||'(no display)';
-    const d=document.createElement('div');
-    d.className='srow'+(id===selSlot?' sel':'');
-    d.innerHTML=`<span class="srow-dot" style="background:${bones[s.boneId]?.col||'#888'}"></span>`+
-      `<span style="flex:1;overflow:hidden;text-overflow:ellipsis">${s.name}</span>`+
-      `<span style="color:var(--t0);font-size:8px;font-family:IBM Plex Mono">${imgName.slice(0,10)}</span>`;
-    d.onclick=()=>{selSlot=id;selectBone(s.boneId);};
-    el.appendChild(d);
+    const el=document.createElement('div');
+    el.className='srow'+(id===selSlot?' on':'');
+    el.innerHTML=`<span class="sdot" style="background:${bones[s.boneId]?.color||'#888'}"></span>`+
+      `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${s.name}</span>`+
+      `<button style="background:none;border:none;color:var(--t0);cursor:pointer;padding:0 2px;" onclick="event.stopPropagation();moveSlotZ('${id}',-1)">↑</button>`+
+      `<button style="background:none;border:none;color:var(--t0);cursor:pointer;padding:0 2px;" onclick="event.stopPropagation();moveSlotZ('${id}',1)">↓</button>`;
+    el.onclick=()=>{selSlot=id;selBone=s.boneId;updateUI();};
+    t.appendChild(el);
   });
 }
+function moveSlotZ(id,d){
+  const i=sOrder.indexOf(id), ni=i+d;
+  if(ni<0||ni>=sOrder.length)return;
+  [sOrder[i],sOrder[ni]]=[sOrder[ni],sOrder[i]];
+  sOrder.forEach((sid,i)=>{if(slots[sid])slots[sid].z=i;});
+  updateSlotPanel();draw();
+}
 
-function updateProps(){
+function updateBoneProps(){
   const b=selBone?bones[selBone]:null;
   document.getElementById('p-name').textContent=b?b.name:'—';
-  document.getElementById('p-parent').textContent=b?(b.parentId?bones[b.parentId]?.name:'(root)'):'—';
+  document.getElementById('p-par').textContent=b?(b.parentId?bones[b.parentId]?.name:'(root)'):'—';
   if(b){
-    document.getElementById('p-rot').value=b.local.rot.toFixed(2);
-    document.getElementById('p-x').value=b.local.x.toFixed(1);
-    document.getElementById('p-y').value=b.local.y.toFixed(1);
+    document.getElementById('p-rot').value=b.la.toFixed(2);
+    document.getElementById('p-lx').value=b.lx.toFixed(1);
+    document.getElementById('p-ly').value=b.ly.toFixed(1);
     document.getElementById('p-len').value=b.len.toFixed(1);
-    document.getElementById('p-wrot').textContent=mAngle(b.world).toFixed(1)+'°';
-    document.getElementById('p-wxy').textContent=b.world.tx.toFixed(1)+' / '+b.world.ty.toFixed(1);
+    document.getElementById('p-wrot').textContent=b.wa.toFixed(1)+'°';
+    document.getElementById('p-wxy').textContent=b.wx.toFixed(1)+' / '+b.wy.toFixed(1);
   } else {
-    ['p-rot','p-x','p-y','p-len'].forEach(id=>document.getElementById(id).value='');
-    ['p-wrot','p-wxy'].forEach(id=>document.getElementById(id).textContent='—');
+    ['p-rot','p-lx','p-ly','p-len'].forEach(i=>document.getElementById(i).value='');
+    ['p-wrot','p-wxy'].forEach(i=>document.getElementById(i).textContent='—');
   }
-  updateSlotProps();
+  document.getElementById('sec-bone').style.display=b?'block':'none';
 }
 
-// ── SLOT PROPERTIES ────────────────────────────────────────────────
 function updateSlotProps(){
   const sec=document.getElementById('sec-slot');
-  if(!selSlot||!slots[selSlot]){sec.style.display='none';return;}
+  const s=selSlot?slots[selSlot]:null;
+  if(!s){sec.style.display='none';return;}
   sec.style.display='block';
-  const s=slots[selSlot];
-  const disps=skin.slotDisplays[selSlot]||[];
-  const d=disps[s.displayIdx]||disps[0];
-  if(!d){sec.style.display='none';return;}
-  document.getElementById('sp-name').textContent=d.name||'—';
-  const t=d.transform||{x:0,y:0,rot:0,sx:1,sy:1};
-  document.getElementById('sp-x').value=(t.x||0).toFixed(1);
-  document.getElementById('sp-y').value=(t.y||0).toFixed(1);
-  document.getElementById('sp-rot').value=(t.rot||0).toFixed(2);
-  document.getElementById('sp-sx').value=(t.sx??1).toFixed(3);
-  document.getElementById('sp-sy').value=(t.sy??1).toFixed(3);
-  document.getElementById('sp-alpha').value=(s.alpha??1).toFixed(2);
+  document.getElementById('sp-name').textContent=s.name;
+  document.getElementById('sp-bone').textContent=bones[s.boneId]?.name||'—';
+  document.getElementById('sp-ox').value=s.ox.toFixed(1);
+  document.getElementById('sp-oy').value=s.oy.toFixed(1);
+  document.getElementById('sp-oa').value=s.oa.toFixed(2);
+  document.getElementById('sp-sx').value=s.sx.toFixed(3);
+  document.getElementById('sp-sy').value=s.sy.toFixed(3);
+  document.getElementById('sp-al').value=(s.alpha??1).toFixed(2);
 }
 
-function getSelSlotDisp(){
-  if(!selSlot)return null;
-  const s=slots[selSlot]; if(!s)return null;
-  const disps=skin.slotDisplays[selSlot]||[];
-  return (disps[s.displayIdx]||disps[0])||null;
-}
-function setSlotX(v){const d=getSelSlotDisp();if(d){d.transform.x=v||0;renderVp();}}
-function setSlotY(v){const d=getSelSlotDisp();if(d){d.transform.y=v||0;renderVp();}}
-function setSlotRot(v){const d=getSelSlotDisp();if(d){d.transform.rot=v||0;renderVp();}}
-function setSlotSx(v){const d=getSelSlotDisp();if(d){d.transform.sx=v||1;renderVp();}}
-function setSlotSy(v){const d=getSelSlotDisp();if(d){d.transform.sy=v||1;renderVp();}}
-function setSlotAlpha(v){if(selSlot&&slots[selSlot]){slots[selSlot].alpha=Math.max(0,Math.min(1,v??1));renderVp();}}
+// Bone prop setters
+function setBoneRot(v){if(selBone&&bones[selBone]){bones[selBone].la=v||0;if(document.getElementById('autokey').checked)addKF(curAnim,selBone,curF);recalcAll();draw();updateBoneProps();drawTL();}}
+function setBoneLx(v){if(selBone&&bones[selBone]){bones[selBone].lx=v||0;recalcAll();draw();updateBoneProps();}}
+function setBoneLy(v){if(selBone&&bones[selBone]){bones[selBone].ly=v||0;recalcAll();draw();updateBoneProps();}}
+function setBoneLen(v){if(selBone&&bones[selBone]){bones[selBone].len=Math.max(1,v||1);recalcAll();draw();updateBoneProps();}}
+// Slot prop setters
+function setSlotOx(v){if(selSlot&&slots[selSlot]){slots[selSlot].ox=v||0;draw();}}
+function setSlotOy(v){if(selSlot&&slots[selSlot]){slots[selSlot].oy=v||0;draw();}}
+function setSlotOa(v){if(selSlot&&slots[selSlot]){slots[selSlot].oa=v||0;draw();}}
+function setSlotSx(v){if(selSlot&&slots[selSlot]){slots[selSlot].sx=v||1;draw();}}
+function setSlotSy(v){if(selSlot&&slots[selSlot]){slots[selSlot].sy=v||1;draw();}}
+function setSlotAl(v){if(selSlot&&slots[selSlot]){slots[selSlot].alpha=Math.max(0,Math.min(1,v??1));draw();}}
+function centerSlotOnBone(){if(selSlot&&slots[selSlot]){slots[selSlot].ox=0;slots[selSlot].oy=0;slots[selSlot].oa=0;draw();updateSlotProps();}}
+function deleteSelSlot(){if(!selSlot)return;removeSlot(selSlot);selSlot=null;updateUI();}
 
-// Snap image center to bone root (zero offset — the DragonBones default starting point)
-function nudgeSlotToBone(){
-  const d=getSelSlotDisp(); if(!d)return;
-  d.transform.x=0; d.transform.y=0; d.transform.rot=0;
-  updateSlotProps(); renderVp();
-}
-
-function deleteSelSlot(){
-  if(!selSlot)return;
-  if(!confirm('Remove this slot image?'))return;
-  delSlot(selSlot); selSlot=null;
-  updateSlotList(); updateSlotProps(); renderVp();
-}
-
-// Hit test slot images in world space — returns slot id or null
-function slotAt(wx,wy){
-  // Reverse z-order (top-most first)
-  const sorted=[...slotOrder].reverse();
-  for(const sid of sorted){
-    const s=slots[sid]; if(!s||!s.visible)continue;
-    const b=bones[s.boneId]; if(!b)continue;
-    const disps=skin.slotDisplays[sid]||[];
-    const d=disps[s.displayIdx]||disps[0]; if(!d||!d.name)continue;
-    const r=atlas.regions[d.name]; if(!r)continue;
-    const wm=mulM(b.world,localM(d.transform));
-    // Transform world point to image local space
-    const inv=invM(wm);
-    const lp=applyM(inv,wx,wy);
-    if(Math.abs(lp.x)<r.ow/2&&Math.abs(lp.y)<r.oh/2) return sid;
-  }
-  return null;
-}
-
-// ── SLICE MODE ─────────────────────────────────────────────────────
-// Draws a rectangle over the ref sprite, crops that region, and
-// attaches it as a slot to the selected bone — exactly like DragonBones
-// sprite slicing where each body part gets its own display image.
-function toggleSliceMode(){
-  if(!refSprite){alert('Load a reference sprite first (LOAD SPRITE).');return;}
-  sliceMode=!sliceMode;
-  sliceDrag=null;
-  const hud=document.getElementById('slice-hud');
-  const btn=document.getElementById('ref-slice-btn');
-  if(sliceMode){
-    hud.style.display='flex';
-    btn.style.opacity='1';
-    vp.style.cursor='crosshair';
-    if(!selBone&&boneOrder.length) selectBone(boneOrder[0]);
-  } else {
-    hud.style.display='none';
-    btn.style.opacity='0.5';
-    vp.style.cursor='default';
-  }
-  renderVp();
-}
-
-function commitSlice(worldX,worldY,worldW,worldH){
-  if(!selBone){alert('Select a bone first, then slice a region to attach to it.');return;}
-  if(!refSprite){return;}
-  const rs=refSprite;
-  const rad=rs.rot*PI/180;
-  const cosR=Math.cos(-rad), sinR=Math.sin(-rad);
-  const hw=rs.img.width/2, hh=rs.img.height/2;
-
-  // World-space point → ref sprite pixel coords
-  function w2px(wx,wy){
-    const dx=wx-rs.x, dy=wy-rs.y;
-    const lx=(dx*cosR-dy*sinR)/rs.scale;
-    const ly=(dx*sinR+dy*cosR)/rs.scale;
-    return [lx+hw, ly+hh];
-  }
-
-  // Transform all 4 corners to find pixel bounding box
-  const corners=[
-    w2px(worldX,         worldY),
-    w2px(worldX+worldW,  worldY),
-    w2px(worldX+worldW,  worldY+worldH),
-    w2px(worldX,         worldY+worldH)
-  ];
-  const pxs=corners.map(c=>c[0]), pys=corners.map(c=>c[1]);
-  const px0=Math.max(0,Math.floor(Math.min(...pxs)));
-  const py0=Math.max(0,Math.floor(Math.min(...pys)));
-  const px1=Math.min(rs.img.width, Math.ceil(Math.max(...pxs)));
-  const py1=Math.min(rs.img.height,Math.ceil(Math.max(...pys)));
-  const pw=Math.max(1,px1-px0), ph=Math.max(1,py1-py0);
-
-  // Crop the pixel region from the ref sprite
-  const cropC=document.createElement('canvas');
-  cropC.width=pw; cropC.height=ph;
-  cropC.getContext('2d').drawImage(rs.img,px0,py0,pw,ph,0,0,pw,ph);
-  const b64=cropC.toDataURL('image/png');
-
-  const boneName=bones[selBone]?.name||'part';
-  const regionName=boneName+'_'+(slotOrder.filter(id=>slots[id]?.boneId===selBone).length+1);
-
-  const sliceImg=new Image(); sliceImg.src=b64;
-  sliceImg.onload=()=>{
-    // Add to atlas
-    addSingleImageRegion(regionName,sliceImg,b64);
-
-    // Compute bone-local offset so the image center lands at the
-    // world-space center of the slice rect — matching DragonBones pivot behaviour
-    const b=bones[selBone];
-    const worldCx=worldX+worldW/2, worldCy=worldY+worldH/2;
-    const bInv=invM(b.world);
-    const localOff=applyM(bInv,worldCx,worldCy);
-
-    // Slot display: no extra rotation — image follows the bone exactly.
-    // The offset positions the image center relative to the bone's pivot.
-    addSlot(selBone,regionName,regionName,{x:localOff.x,y:localOff.y,rot:0,sx:1,sy:1});
-
-    selSlot=slotOrder[slotOrder.length-1];
-    updateSlotList(); updateSlotProps(); renderVp();
-    switchTab('slots');
-  };
-}
-
-function refreshAll(){
-  rebuildOrder();recalcAll();
-  updateBoneTree();updateSlotList();updateProps();
-  updateTLLabels();renderTL();renderVp();updateFrameDisp();
-}
-
-function selectBone(id){
-  selBone=id;
-  updateBoneTree();updateSlotList();updateProps();updateTLLabels();renderTL();renderVp();
-}
-
-function updateSlotList(){
-  const el=document.getElementById('pane-slots');el.innerHTML='';
-  slotOrder.forEach((id,i)=>{
-    const s=slots[id];if(!s)return;
-    const disps=skin.slotDisplays[id]||[];
-    const imgName=disps[0]?.name||'(no image)';
-    const d=document.createElement('div');
-    d.className='srow'+(id===selSlot?' sel':'');
-    // Z-order arrows
-    d.innerHTML=
-      `<span class="srow-dot" style="background:${bones[s.boneId]?.col||'#888'}"></span>`+
-      `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:9px">${s.name}</span>`+
-      `<span style="color:var(--t0);font-size:8px;font-family:IBM Plex Mono;margin-right:4px">${imgName.slice(0,8)}</span>`+
-      `<button style="background:none;border:none;color:var(--t0);cursor:pointer;font-size:10px;padding:0 2px;" onclick="event.stopPropagation();moveSlotZ('${id}',-1)" title="Move up">↑</button>`+
-      `<button style="background:none;border:none;color:var(--t0);cursor:pointer;font-size:10px;padding:0 2px;" onclick="event.stopPropagation();moveSlotZ('${id}',1)" title="Move down">↓</button>`;
-    d.onclick=()=>{selSlot=id;selectBone(s.boneId);updateSlotProps();switchTab('slots');};
-    el.appendChild(d);
-  });
-}
-
-// Swatches
+// Color swatches
 (()=>{
   const c=document.getElementById('swatches');
-  BONE_COLORS.forEach(col=>{
-    const d=document.createElement('div');
-    d.className='sw';d.style.background=col;
-    d.onclick=()=>{if(selBone&&bones[selBone]){bones[selBone].col=col;renderVp();updateBoneTree();}};
+  COLORS.forEach(col=>{
+    const d=document.createElement('div');d.className='sw';d.style.background=col;
+    d.onclick=()=>{if(selBone&&bones[selBone]){bones[selBone].color=col;draw();updateBoneTree();}};
     c.appendChild(d);
   });
 })();
 
-// ── 13. TOOL ACTIONS ─────────────────────────────────────────────
+// ── TOOLS ────────────────────────────────────────────────────────────
 function setTool(t){
   tool=t;
-  ['sel','add','pan'].forEach(x=>document.getElementById('tb-'+x)?.classList.remove('on'));
-  const m={select:'sel',add:'add',pan:'pan'};
-  document.getElementById('tb-'+m[t])?.classList.add('on');
-  document.getElementById('vpmode').textContent=t.toUpperCase();
+  ['sel','add','pan'].forEach(x=>document.getElementById('tb'+x)?.classList.remove('on'));
+  const m={sel:'tbs',add:'tba',pan:'tbp'};
+  document.getElementById(m[t])?.classList.add('on');
+  document.getElementById('vpm').textContent=t.toUpperCase();
   vp.style.cursor=t==='pan'?'grab':t==='add'?'crosshair':'default';
   if(t!=='add'){addFrom=null;addPrev=null;}
-  renderVp();
+  draw();
 }
-
-function recordKF(){
-  if(!selBone)return;
-  recordKeyframe(curAnim,selBone,curFrame);
-  renderTL();updateTLLabels();
-}
-
+function recordKF(){if(!selBone)return;addKF(curAnim,selBone,curF);drawTL();}
 function setRestPose(){
   if(!selBone)return;
-  const b=bones[selBone];
-  b.rest={...b.local};
+  const b=bones[selBone]; b.restLa=b.la;b.restLx=b.lx;b.restLy=b.ly;
   alert(`Rest pose set for "${b.name}"`);
 }
-
-function deleteSel(){
+function renameBone(){if(!selBone)return;const n=prompt('Name:',bones[selBone].name);if(n){bones[selBone].name=n;refreshAll();}}
+function deleteSelBone(){
   if(!selBone)return;
-  if(!confirm(`Delete "${bones[selBone]?.name}" and all its children?`))return;
-  const id=selBone;selBone=null;delBone(id);refreshAll();
+  if(!confirm('Delete "'+bones[selBone]?.name+'" and all its children?'))return;
+  const id=selBone;selBone=null;selSlot=null;removeBone(id);refreshAll();
 }
-
-function renameBone(){
-  if(!selBone)return;
-  const n=prompt('New name:',bones[selBone].name);
-  if(n){bones[selBone].name=n;refreshAll();}
-}
-
-function toggleBoneVis(id){
-  if(bones[id])bones[id].visible=!bones[id].visible;
-  renderVp();updateBoneTree();
-}
-
-function setPropRot(v){if(selBone&&bones[selBone]){bones[selBone].local.rot=v||0;if(document.getElementById('autokey').checked)recordKeyframe(curAnim,selBone,curFrame);recalcAll();renderVp();renderTL();}}
-function setPropX(v){if(selBone&&bones[selBone]){bones[selBone].local.x=v||0;recalcAll();renderVp();}}
-function setPropY(v){if(selBone&&bones[selBone]){bones[selBone].local.y=v||0;recalcAll();renderVp();}}
-function setPropLen(v){if(selBone&&bones[selBone]){bones[selBone].len=Math.max(1,v||1);recalcAll();renderVp();}}
-
-function setTotalF(n){
-  totalF=Math.max(4,Math.min(960,n||30));
-  Object.values(anims).forEach(a=>a.totalF=totalF);
-  curFrame=Math.min(curFrame,totalF-1);
-  renderTL();updateFrameDisp();
-}
-
+function setTotalF(n){totalF=Math.max(4,Math.min(960,n||30));Object.values(anims).forEach(a=>a.totalF=totalF);curF=Math.min(curF,totalF-1);drawTL();updateFDisp();}
 function switchAnim(name){
-  curAnim=name;
-  const a=anims[name];
-  if(a){totalF=a.totalF;document.getElementById('tf-inp').value=totalF;}
-  else{ensureAnim(name);}
-  seekFrame(0);updateTLLabels();renderTL();
+  curAnim=name;const a=anims[name];
+  if(a){totalF=a.totalF;document.getElementById('leninp').value=totalF;}
+  else ensureAnim(name);
+  seekF(0);drawTLLabels();drawTL();
 }
-
 function newAnim(){
-  const name=prompt('Animation name:','attack');
-  if(!name)return;
+  const name=prompt('Animation name:','attack');if(!name)return;
   ensureAnim(name);
-  const opt=document.createElement('option');
-  opt.value=name;opt.textContent=name;
-  document.getElementById('anim-sel').appendChild(opt);
-  document.getElementById('anim-sel').value=name;
+  const o=document.createElement('option');o.value=name;o.textContent=name;
+  document.getElementById('animsel').appendChild(o);
+  document.getElementById('animsel').value=name;
   switchAnim(name);
 }
-
+function resetPose(){
+  bOrder.forEach(id=>{const b=bones[id];if(!b)return;b.la=b.restLa;b.lx=b.restLx;b.ly=b.restLy;});
+  recalcAll();draw();updateBoneProps();
+}
 function switchTab(t){
-  document.getElementById('tab-bones').classList.toggle('on',t==='bones');
-  document.getElementById('tab-slots').classList.toggle('on',t==='slots');
-  document.getElementById('pane-bones').classList.toggle('on',t==='bones');
-  document.getElementById('pane-slots').classList.toggle('on',t==='slots');
+  document.getElementById('tab-b').classList.toggle('on',t==='b');
+  document.getElementById('tab-s').classList.toggle('on',t==='s');
+  document.getElementById('pane-b').classList.toggle('on',t==='b');
+  document.getElementById('pane-s').classList.toggle('on',t==='s');
 }
 
-function moveSlotZ(id,dir){
-  const i=slotOrder.indexOf(id);
-  const ni=i+dir;
-  if(ni<0||ni>=slotOrder.length)return;
-  [slotOrder[i],slotOrder[ni]]=[slotOrder[ni],slotOrder[i]];
-  // Update z values
-  slotOrder.forEach((sid,idx)=>{if(slots[sid])slots[sid].z=idx;});
-  updateSlotList();renderVp();
+// ── REF SPRITE ───────────────────────────────────────────────────────
+function updateRefHud(){
+  const h=document.getElementById('refhud');
+  if(!ref){h.style.display='none';return;}
+  h.style.display='flex';
+  document.getElementById('refinfo').textContent=
+    `${ref.w}×${ref.h}  rot:${ref.angle.toFixed(0)}°  scale:${ref.scale.toFixed(2)}${ref.locked?'  🔒':''}`;
+  document.getElementById('reflock-btn').textContent=ref.locked?'UNLOCK':'LOCK';
+}
+function refToggleLock(){if(ref){ref.locked=!ref.locked;updateRefHud();draw();}}
+function clearRef(){ref=null;updateRefHud();draw();}
+function refAttach(){
+  if(!ref){return;}
+  if(!selBone){alert('Select a bone first.');return;}
+  const b=bones[selBone];
+  const name='ref_'+b.name;
+  images[name]={canvas:ref.canvas,w:ref.w,h:ref.h};
+  const s=makeSlot(selBone,name,name,0,0,0,1,1,1);
+  addSlot(s); selSlot=s.id;
+  updateUI();
+}
+function clearRefAndModal(){ref=null;}
+
+// Slice mode
+function toggleSlice(){
+  if(!ref){alert('Load a reference sprite first (LOAD SPRITE).');return;}
+  sliceMode=!sliceMode; sliceDrag=null;
+  document.getElementById('slicehud').style.display=sliceMode?'flex':'none';
+  document.getElementById('slicebtn').className=sliceMode?'btn on':'btn y';
+  if(sliceMode){
+    vp.style.cursor='crosshair';
+    if(!selBone&&bOrder.length)selectBone(bOrder[0]);
+  } else {
+    vp.style.cursor='default';
+  }
+  draw();
 }
 
-// ── 14. ATLAS MODAL ─────────────────────────────────────────────
-function openModal(id){document.getElementById(id).classList.add('on');}
-function closeModal(id){document.getElementById(id).classList.remove('on');}
+// World coord → ref sprite pixel coord
+function w2refPx(wx,wy){
+  if(!ref)return[0,0];
+  const r=-ref.angle*D2R;
+  const dx=(wx-ref.x)/ref.scale, dy=(wy-ref.y)/ref.scale;
+  const lx=dx*Math.cos(r)-dy*Math.sin(r);
+  const ly=dx*Math.sin(r)+dy*Math.cos(r);
+  return[lx+ref.w/2, ly+ref.h/2];
+}
 
-document.getElementById('fi-ajson').addEventListener('change',e=>{
-  const f=e.target.files[0];if(!f)return;
-  const r=new FileReader();r.onload=ev=>{
-    if(loadAtlasJSON(ev.target.result)){
-      pendAtlasJson=ev.target.result;
-      document.getElementById('drop-atlas-json').classList.add('ok');
-      document.getElementById('drop-atlas-json-lbl').textContent='✓ '+f.name;
-      const n=Object.keys(atlas.regions).length;
-      document.getElementById('atlas-regions').textContent=n+' regions: '+Object.keys(atlas.regions).slice(0,6).join(', ')+(n>6?'…':'');
+function commitSlice(worldX,worldY,worldW,worldH){
+  if(!selBone){alert('Select a bone first.');return;}
+  if(!ref)return;
+  const b=bones[selBone];
+  // Slice center in world
+  const cx=worldX+worldW/2, cy=worldY+worldH/2;
+  // Bone-local offset: transform world center into bone-local space
+  const ba=-b.wa*D2R;
+  const dx=cx-b.wx, dy=cy-b.wy;
+  const ox=dx*Math.cos(ba)-dy*Math.sin(ba);
+  const oy=dx*Math.sin(ba)+dy*Math.cos(ba);
+  // Pixel corners of slice in ref sprite space
+  const corners=[[worldX,worldY],[worldX+worldW,worldY],[worldX+worldW,worldY+worldH],[worldX,worldY+worldH]].map(([x,y])=>w2refPx(x,y));
+  const pxs=corners.map(c=>c[0]),pys=corners.map(c=>c[1]);
+  const px0=Math.max(0,Math.floor(Math.min(...pxs)));
+  const py0=Math.max(0,Math.floor(Math.min(...pys)));
+  const px1=Math.min(ref.w,Math.ceil(Math.max(...pxs)));
+  const py1=Math.min(ref.h,Math.ceil(Math.max(...pys)));
+  const pw=Math.max(1,px1-px0),ph=Math.max(1,py1-py0);
+  const crop=document.createElement('canvas');
+  crop.width=pw;crop.height=ph;
+  crop.getContext('2d').drawImage(ref.canvas,px0,py0,pw,ph,0,0,pw,ph);
+  const name=b.name+'_'+(sOrder.filter(id=>slots[id]?.boneId===selBone).length+1);
+  images[name]={canvas:crop,w:pw,h:ph};
+  const s=makeSlot(selBone,name,name,ox,oy,0,1,1,1);
+  addSlot(s);selSlot=s.id;
+  updateUI();switchTab('s');
+}
+
+// ── BACKGROUND REMOVAL ───────────────────────────────────────────────
+let bgrSrc=null,bgrBgCol=[0,200,0],bgrPicked=false,bgrDebounce=null,bgrResultCanvas=null;
+
+function sampleBgColor(img){
+  const c=document.createElement('canvas'),sc=Math.min(1,300/Math.max(img.width,img.height));
+  c.width=Math.ceil(img.width*sc);c.height=Math.ceil(img.height*sc);
+  const ctx=c.getContext('2d');ctx.drawImage(img,0,0,c.width,c.height);
+  const W=c.width,H=c.height,hist={};
+  function sample(x,y){
+    const d=ctx.getImageData(x,y,1,1).data;if(d[3]<128)return;
+    const k=`${d[0]>>4},${d[1]>>4},${d[2]>>4}`;
+    if(!hist[k])hist[k]={count:0,r:d[0],g:d[1],b:d[2]};hist[k].count++;
+  }
+  for(let x=0;x<W;x++){sample(x,0);sample(x,H-1);}
+  for(let y=1;y<H-1;y++){sample(0,y);sample(W-1,y);}
+  let best=null,bc=0;
+  Object.values(hist).forEach(v=>{if(v.count>bc){bc=v.count;best=v;}});
+  return best?[best.r,best.g,best.b]:[0,200,0];
+}
+
+// Flood-fill from edges — only removes pixels CONNECTED to border matching bg color
+function floodRemoveBg(srcImg,bgR,bgG,bgB,tol,fth,scalePct,rotDeg){
+  const scale=Math.max(.01,(scalePct||100)/100);
+  const rad=(rotDeg||0)*D2R;
+  const ac=Math.abs(Math.cos(rad)),as=Math.abs(Math.sin(rad));
+  const sw=Math.round(srcImg.width*scale),sh=Math.round(srcImg.height*scale);
+  const W=Math.max(1,Math.round(sw*ac+sh*as)),H=Math.max(1,Math.round(sw*as+sh*ac));
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const ctx=c.getContext('2d');
+  ctx.save();ctx.translate(W/2,H/2);ctx.rotate(rad);
+  ctx.drawImage(srcImg,-sw/2,-sh/2,sw,sh);
+  ctx.restore();
+  if(!document.getElementById('bgon').checked)return c;
+  const id=ctx.getImageData(0,0,W,H),px=id.data;
+  const maxD=Math.sqrt(255*255*0.2126+255*255*0.7152+255*255*0.0722);
+  function dist(i){const dr=px[i]-bgR,dg=px[i+1]-bgG,db=px[i+2]-bgB;return Math.sqrt(dr*dr*0.2126+dg*dg*0.7152+db*db*0.0722)/maxD*255;}
+  const N=W*H,vis=new Uint8Array(N),rem=new Uint8Array(N),stk=new Int32Array(N);let sp=0;
+  function seed(idx){if(!vis[idx]){vis[idx]=1;stk[sp++]=idx;}}
+  for(let x=0;x<W;x++){seed(x);seed((H-1)*W+x);}
+  for(let y=1;y<H-1;y++){seed(y*W);seed(y*W+W-1);}
+  while(sp>0){
+    const idx=stk[--sp];const pi=idx*4;
+    if(px[pi+3]===0){rem[idx]=1;continue;}
+    if(dist(pi)<=tol){
+      px[pi+3]=0;rem[idx]=1;
+      const x=idx%W,y=idx/W|0;
+      if(x>0&&!vis[idx-1]){vis[idx-1]=1;stk[sp++]=idx-1;}
+      if(x<W-1&&!vis[idx+1]){vis[idx+1]=1;stk[sp++]=idx+1;}
+      if(y>0&&!vis[idx-W]){vis[idx-W]=1;stk[sp++]=idx-W;}
+      if(y<H-1&&!vis[idx+W]){vis[idx+W]=1;stk[sp++]=idx+W;}
     }
-  };r.readAsText(f);
-});
+  }
+  if(fth>0){
+    for(let idx=0;idx<N;idx++){
+      if(rem[idx])continue;const pi=idx*4;if(px[pi+3]===0)continue;
+      const d=dist(pi);if(d>tol+fth)continue;
+      const x=idx%W,y=idx/W|0;
+      const touch=(x>0&&rem[idx-1])||(x<W-1&&rem[idx+1])||(y>0&&rem[idx-W])||(y<H-1&&rem[idx+W]);
+      if(!touch)continue;
+      const t=Math.max(0,(d-tol)/fth),sm=t*t*(3-2*t);
+      px[pi+3]=Math.round(px[pi+3]*sm);
+    }
+  }
+  ctx.putImageData(id,0,0);return c;
+}
 
-document.getElementById('fi-aimg').addEventListener('change',e=>{
+function bgrUpdate(){
+  const tol=document.getElementById('bgtol').value;
+  const fth=document.getElementById('bgfth').value;
+  const rot=document.getElementById('bgrot').value;
+  const scl=document.getElementById('bgscl').value;
+  document.getElementById('bgtvl').textContent=tol;
+  document.getElementById('bgfvl').textContent=fth;
+  document.getElementById('bgrvl').textContent=rot;
+  document.getElementById('bgsvl').textContent=scl;
+  if(!bgrSrc)return;
+  document.getElementById('bpvl').style.display='flex';
+  clearTimeout(bgrDebounce);
+  bgrDebounce=setTimeout(()=>{
+    const c=floodRemoveBg(bgrSrc,...bgrBgCol,+tol,+fth,+scl,+rot);
+    document.getElementById('bpvi').src=c.toDataURL('image/png');
+    document.getElementById('bpvl').style.display='none';
+    bgrResultCanvas=c;
+  },150);
+}
+function bgrPick(hex){
+  bgrBgCol=[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];
+  bgrPicked=true;
+  document.getElementById('bgcsw').style.background=hex;
+  document.getElementById('bgbadge').textContent='MANUAL';
+  bgrUpdate();
+}
+function bgrLoadImg(img){
+  bgrSrc=img;
+  if(!bgrPicked){
+    bgrBgCol=sampleBgColor(img);
+    const hex='#'+bgrBgCol.map(v=>v.toString(16).padStart(2,'0')).join('');
+    document.getElementById('bgcsw').style.background=hex;
+    document.getElementById('bgci').value=hex;
+    document.getElementById('bgbadge').textContent='AUTO-DETECT';
+  }
+  document.getElementById('bpv').style.display='block';
+  bgrUpdate();
+}
+function bgrReset(){
+  bgrSrc=null;bgrResultCanvas=null;bgrPicked=false;
+  document.getElementById('fd-img').classList.remove('ok');
+  document.getElementById('fd-img-lbl').textContent='🖼 Drop or click — PNG / JPG / WebP';
+  document.getElementById('bpv').style.display='none';
+}
+
+document.getElementById('fi-img').addEventListener('change',e=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();r.onload=ev=>{
-    pendAtlasImgB64=ev.target.result;
     const img=new Image();img.src=ev.target.result;
     img.onload=()=>{
-      pendAtlasImg=img;
-      document.getElementById('drop-atlas-img').classList.add('ok');
-      document.getElementById('drop-atlas-img-lbl').textContent='✓ '+f.name+' ('+img.width+'×'+img.height+')';
+      document.getElementById('fd-img').classList.add('ok');
+      document.getElementById('fd-img-lbl').textContent='✓ '+f.name+' ('+img.width+'×'+img.height+')';
+      bgrLoadImg(img);
     };
   };r.readAsDataURL(f);
 });
 
-function confirmAtlas(){
-  if(!pendAtlasImg){alert('Please load an atlas image.');return;}
-  atlas.img=pendAtlasImg;atlas.imgB64=pendAtlasImgB64;
-  atlas.w=pendAtlasImg.width;atlas.h=pendAtlasImg.height;
-  if(pendAtlasJson)loadAtlasJSON(pendAtlasJson);
-  pendAtlasJson=null;pendAtlasImg=null;pendAtlasImgB64=null;
-  closeModal('modal-atlas');renderVp();
+function doLoadAsRef(){
+  if(!bgrResultCanvas){alert('Load an image first.');return;}
+  ref={canvas:bgrResultCanvas,w:bgrResultCanvas.width,h:bgrResultCanvas.height,
+    x:0,y:0,angle:+document.getElementById('bgrot').value,scale:1,opacity:.7,locked:false};
+  bgrReset();closeModal('mod-load');updateRefHud();draw();
+}
+function doAttachToBone(){
+  if(!selBone){alert('Select a bone first.');return;}
+  if(!bgrResultCanvas){alert('Load an image first.');return;}
+  const b=bones[selBone];
+  const name='img_'+b.name+'_'+Date.now().toString(36).slice(-4);
+  images[name]={canvas:bgrResultCanvas,w:bgrResultCanvas.width,h:bgrResultCanvas.height};
+  const s=makeSlot(selBone,name,name,0,0,0,1,1,1);
+  addSlot(s);selSlot=s.id;
+  bgrReset();closeModal('mod-load');updateUI();
 }
 
-// ── 15. ATTACH IMAGE MODAL ───────────────────────────────────────
-function openAttachModal(){
-  // List atlas regions (if any)
-  const el=document.getElementById('atlas-region-list');el.innerHTML='';
-  if(Object.keys(atlas.regions).length){
-    const hdr=document.createElement('div');
-    hdr.style.cssText='font-size:8px;letter-spacing:1px;color:var(--t0);text-transform:uppercase;padding:4px 0 6px';
-    hdr.textContent='Atlas regions:';el.appendChild(hdr);
-    Object.keys(atlas.regions).forEach(name=>{
-      const d=document.createElement('div');
-      d.style.cssText='padding:3px 6px;cursor:pointer;font-size:10px;color:var(--t1);border-radius:3px;margin:2px 0;';
-      d.textContent=name;
-      d.onmouseenter=()=>d.style.background='var(--p2)';
-      d.onmouseleave=()=>d.style.background='';
-      d.onclick=()=>{pendRegionName=name;
-        el.querySelectorAll('div').forEach(x=>x.style.color='var(--t1)');
-        d.style.color='var(--sel)';};
-      el.appendChild(d);
-    });
-  }
-  openModal('modal-attach');
-}
-
-// ── BACKGROUND REMOVAL ENGINE (flood-fill from edges) ──────────────
-let bgrSrcImg = null, bgrSrcName = '', bgrBgColor = [0,200,0], bgrUserPicked = false;
-let bgrDebounce = null, bgrProcessedCanvas = null;
-
-function sampleDominantBgColor(img) {
-  const c = document.createElement('canvas');
-  const MAX = 300;
-  const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-  c.width = Math.max(1, Math.ceil(img.width * scale));
-  c.height = Math.max(1, Math.ceil(img.height * scale));
-  const ctx = c.getContext('2d');
-  ctx.drawImage(img, 0, 0, c.width, c.height);
-  const W = c.width, H = c.height;
-  const id = ctx.getImageData(0, 0, W, H), px = id.data;
-  const hist = {};
-  function addPx(x, y) {
-    const i = (y * W + x) * 4;
-    if (px[i+3] < 128) return;
-    const key = `${px[i]>>4},${px[i+1]>>4},${px[i+2]>>4}`;
-    if (!hist[key]) hist[key] = {count:0, r:px[i], g:px[i+1], b:px[i+2]};
-    hist[key].count++;
-  }
-  for (let x = 0; x < W; x++) { addPx(x, 0); addPx(x, H-1); }
-  for (let y = 1; y < H-1; y++) { addPx(0, y); addPx(W-1, y); }
-  let best = null, bestC = 0;
-  Object.values(hist).forEach(v => { if (v.count > bestC) { bestC = v.count; best = v; } });
-  return best ? [best.r, best.g, best.b] : [0, 200, 0];
-}
-
-function hexToRgb(hex) {
-  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
-}
-function rgbToHex(r, g, b) {
-  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
-}
-
-/* Flood-fill background removal.
-   Only erases pixels that are CONNECTED to the image border and match the bg color.
-   This prevents character colors that happen to match the bg from being erased. */
-function floodFillRemoveBg(srcImg, bgR, bgG, bgB, tolerance, feather, scalePct, rotDeg) {
-  // Step 1: draw with rotation + scale
-  const scale = Math.max(0.01, (scalePct || 100) / 100);
-  const rad = (rotDeg || 0) * PI / 180;
-  const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
-  const srcW = Math.round(srcImg.width * scale), srcH = Math.round(srcImg.height * scale);
-  const W = Math.max(1, Math.round(srcW * cos + srcH * sin));
-  const H = Math.max(1, Math.round(srcW * sin + srcH * cos));
-
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
-  ctx.save();
-  ctx.translate(W / 2, H / 2);
-  ctx.rotate(rad);
-  ctx.drawImage(srcImg, -srcW / 2, -srcH / 2, srcW, srcH);
-  ctx.restore();
-
-  if (!document.getElementById('bgr-on').checked) return c;
-
-  // Step 2: flood-fill from all border pixels
-  const id = ctx.getImageData(0, 0, W, H);
-  const px = id.data;
-  const maxD = Math.sqrt(255*255*0.2126 + 255*255*0.7152 + 255*255*0.0722);
-
-  function colorDist(i) {
-    const dr = px[i]-bgR, dg = px[i+1]-bgG, db = px[i+2]-bgB;
-    return Math.sqrt(dr*dr*0.2126 + dg*dg*0.7152 + db*db*0.0722) / maxD * 255;
-  }
-
-  const N = W * H;
-  const visited = new Uint8Array(N);
-  const removed = new Uint8Array(N);
-  // Use a flat stack (pairs of x,y packed as x+y*W doesn't need encoding; use linear index)
-  const stack = new Int32Array(N);
-  let sp = 0;
-
-  function seedBorder() {
-    for (let x = 0; x < W; x++) { const i0=x, i1=(H-1)*W+x; if(!visited[i0]){visited[i0]=1;stack[sp++]=i0;} if(!visited[i1]){visited[i1]=1;stack[sp++]=i1;} }
-    for (let y = 1; y < H-1; y++) { const i0=y*W, i1=y*W+W-1; if(!visited[i0]){visited[i0]=1;stack[sp++]=i0;} if(!visited[i1]){visited[i1]=1;stack[sp++]=i1;} }
-  }
-  seedBorder();
-
-  while (sp > 0) {
-    const idx = stack[--sp];
-    const pi = idx * 4;
-    if (px[pi+3] === 0) { removed[idx]=1; continue; } // already transparent
-    if (colorDist(pi) <= tolerance) {
-      px[pi+3] = 0; removed[idx] = 1;
-      const x = idx % W, y = (idx / W) | 0;
-      if (x > 0   && !visited[idx-1]) { visited[idx-1]=1; stack[sp++]=idx-1; }
-      if (x < W-1 && !visited[idx+1]) { visited[idx+1]=1; stack[sp++]=idx+1; }
-      if (y > 0   && !visited[idx-W]) { visited[idx-W]=1; stack[sp++]=idx-W; }
-      if (y < H-1 && !visited[idx+W]) { visited[idx+W]=1; stack[sp++]=idx+W; }
-    }
-  }
-
-  // Step 3: feather — pixels adjacent to removed pixels get softened based on color proximity
-  if (feather > 0) {
-    for (let idx = 0; idx < N; idx++) {
-      if (removed[idx]) continue;
-      const pi = idx * 4;
-      if (px[pi+3] === 0) continue;
-      const d = colorDist(pi);
-      // Only feather pixels that are close to the bg color AND touch a removed pixel
-      if (d > tolerance + feather) continue;
-      const x = idx % W, y = (idx / W) | 0;
-      const touchesRemoved =
-        (x > 0   && removed[idx-1]) || (x < W-1 && removed[idx+1]) ||
-        (y > 0   && removed[idx-W]) || (y < H-1 && removed[idx+W]);
-      if (!touchesRemoved) continue;
-      const t = Math.max(0, (d - tolerance) / feather);
-      const smooth = t * t * (3 - 2 * t); // smoothstep
-      px[pi+3] = Math.round(px[pi+3] * smooth);
-    }
-  }
-
-  ctx.putImageData(id, 0, 0);
-  return c;
-}
-
-function bgrUpdate() {
-  const tol = document.getElementById('bgr-tol').value;
-  const fth = document.getElementById('bgr-fth').value;
-  const rot = document.getElementById('bgr-rot').value;
-  const scl = document.getElementById('bgr-scale').value;
-  document.getElementById('bgr-tol-val').textContent = tol;
-  document.getElementById('bgr-fth-val').textContent = fth;
-  document.getElementById('bgr-rot-val').textContent = rot;
-  document.getElementById('bgr-scale-val').textContent = scl;
-  if (!bgrSrcImg) return;
-  document.getElementById('bgr-loading').style.display = 'flex';
-  clearTimeout(bgrDebounce);
-  bgrDebounce = setTimeout(() => {
-    const [r, g, b] = bgrBgColor;
-    const c = floodFillRemoveBg(bgrSrcImg, r, g, b, +tol, +fth, +scl, +rot);
-    document.getElementById('bgr-preview').src = c.toDataURL('image/png');
-    document.getElementById('bgr-loading').style.display = 'none';
-    bgrProcessedCanvas = c;
-  }, 150);
-}
-
-function bgrColorPick(hex) {
-  bgrBgColor = hexToRgb(hex);
-  bgrUserPicked = true;
-  document.getElementById('bgr-color-swatch').style.background = hex;
-  document.getElementById('bgr-auto-badge').textContent = 'MANUAL';
-  bgrUpdate();
-}
-
-function bgrReset() {
-  bgrSrcImg = null; bgrSrcName = ''; bgrProcessedCanvas = null; bgrUserPicked = false;
-  pendSingleImg = null; pendSingleImgB64 = null; pendRegionName = null;
-  document.getElementById('drop-single-img').classList.remove('ok');
-  document.getElementById('drop-single-img-lbl').textContent = '🖼 Drop or click to load image (PNG / JPG / WebP)';
-  document.getElementById('bgr-preview-wrap').style.display = 'none';
-  document.getElementById('bgr-rot').value = 0;
-  document.getElementById('bgr-rot-val').textContent = '0';
-}
-
-function bgrLoadImage(img, name) {
-  bgrSrcImg = img; bgrSrcName = name;
-  if (!bgrUserPicked) {
-    bgrBgColor = sampleDominantBgColor(img);
-    const hex = rgbToHex(...bgrBgColor);
-    document.getElementById('bgr-color-swatch').style.background = hex;
-    document.getElementById('bgr-color-input').value = hex;
-    document.getElementById('bgr-auto-badge').textContent = 'AUTO-DETECT';
-  }
-  document.getElementById('bgr-preview-wrap').style.display = 'block';
-  bgrUpdate();
-}
-
-// ── REFERENCE SPRITE LAYER ──────────────────────────────────────────
-// A floating image in the viewport you can position/rotate and rig over.
-let refSprite = null; // {img, x, y, rot, scale, opacity, locked}
-let refSelHandle = null; // 'move' | 'rotate' | null
-let refLastW = null; // last world position during drag
-
-function refHudUpdate() {
-  const hud = document.getElementById('ref-hud');
-  if (!refSprite) { hud.style.display = 'none'; return; }
-  hud.style.display = 'flex';
-  document.getElementById('ref-hud-info').textContent =
-    `${refSprite.img.width}×${refSprite.img.height}  rot:${refSprite.rot.toFixed(0)}°  scale:${refSprite.scale.toFixed(2)}${refSprite.locked?' 🔒':''}`;
-  document.getElementById('ref-lock-btn').textContent = refSprite.locked ? 'UNLOCK' : 'LOCK';
-}
-
-function refToggleLock() {
-  if (!refSprite) return;
-  refSprite.locked = !refSprite.locked;
-  refHudUpdate(); renderVp();
-}
-
-function refClear() {
-  refSprite = null; refHudUpdate(); renderVp();
-}
-
-function refAttachToSel() {
-  if (!refSprite || !selBone) { alert('Select a bone first.'); return; }
-  const b = bones[selBone];
-  const regionName = 'ref_' + (bgrSrcName || 'sprite');
-  const c = document.createElement('canvas');
-  c.width = refSprite.img.width; c.height = refSprite.img.height;
-  c.getContext('2d').drawImage(refSprite.img, 0, 0);
-  const b64 = c.toDataURL('image/png');
-  const finalImg = new Image(); finalImg.src = b64;
-  finalImg.onload = () => {
-    addSingleImageRegion(regionName, finalImg, b64);
-    const counterRot = document.getElementById('bgr-upright')?.checked ? -mAngle(b.world) : 0;
-    addSlot(selBone, b.name + '_slot', regionName, {x:0, y:0, rot: counterRot + refSprite.rot, sx: refSprite.scale, sy: refSprite.scale});
-    refClear();
-    updateSlotList(); renderVp();
-  };
-}
-
-function loadAsReference() {
-  if (!bgrProcessedCanvas) { alert('Load an image first.'); return; }
-  const b64 = bgrProcessedCanvas.toDataURL('image/png');
-  const img = new Image(); img.src = b64;
-  img.onload = () => {
-    refSprite = {
-      img, x: 0, y: 0,
-      rot: +(document.getElementById('bgr-rot')?.value || 0),
-      scale: 1, opacity: 0.7, locked: false
-    };
-    bgrReset(); closeModal('modal-attach');
-    refHudUpdate(); renderVp();
-  };
-}
-
-function hitTestRefSprite(wx, wy) {
-  if (!refSprite) return null;
-  const rs = refSprite;
-  const rad = rs.rot * PI / 180;
-  const cos = Math.cos(-rad), sin = Math.sin(-rad);
-  const dx = wx - rs.x, dy = wy - rs.y;
-  const lx = dx * cos - dy * sin, ly = dx * sin + dy * cos;
-  const hw = rs.img.width * rs.scale / 2, hh = rs.img.height * rs.scale / 2;
-  // Check rotation handle (above top-center)
-  const rHx = 0, rHy = -hh - 20 / zoom;
-  const dlx = lx - rHx, dly = ly - rHy;
-  if (Math.hypot(dlx, dly) < 10 / zoom) return 'rotate';
-  // Check body
-  if (Math.abs(lx) < hw && Math.abs(ly) < hh) return 'move';
-  return null;
-}
-
-function openSpriteModal() {
-  // Open attach modal in reference mode (no bone required)
-  const el = document.getElementById('atlas-region-list'); el.innerHTML = '';
-  bgrUserPicked = false;
-  openModal('modal-attach');
-}
-
-document.getElementById('fi-simg').addEventListener('change', e => {
-  const f = e.target.files[0]; if (!f) return;
-  const r = new FileReader(); r.onload = ev => {
-    const img = new Image(); img.src = ev.target.result;
-    img.onload = () => {
-      pendRegionName = f.name.replace(/\.(png|jpg|webp|gif|jpeg)$/i, '');
-      pendSingleImgB64 = ev.target.result;
-      document.getElementById('drop-single-img').classList.add('ok');
-      document.getElementById('drop-single-img-lbl').textContent = `✓ ${f.name} (${img.width}×${img.height})`;
-      bgrLoadImage(img, pendRegionName);
-    };
-  }; r.readAsDataURL(f);
-});
-
-function confirmAttach() {
-  if (!selBone) { alert('Select a bone first, then click ATTACH TO BONE.'); return; }
-  let regionName = pendRegionName;
-  if (!regionName && !bgrProcessedCanvas) { alert('Load an image first.'); return; }
-
-  const useCanvas = bgrProcessedCanvas || (() => {
-    const c = document.createElement('canvas');
-    c.width = bgrSrcImg?.width || 1; c.height = bgrSrcImg?.height || 1;
-    if (bgrSrcImg) c.getContext('2d').drawImage(bgrSrcImg, 0, 0);
-    return c;
-  })();
-
-  const finalB64 = useCanvas.toDataURL('image/png');
-  const finalImg = new Image(); finalImg.src = finalB64;
-  finalImg.onload = () => {
-    if (!atlas.regions[regionName]) addSingleImageRegion(regionName, finalImg, finalB64);
-    const b = bones[selBone];
-    // Counter-rotate so image lands world-upright (cancels bone's world angle)
-    const counterRot = document.getElementById('bgr-upright').checked ? -mAngle(b.world) : 0;
-    addSlot(selBone, b.name + '_slot', regionName, {x: 0, y: 0, rot: counterRot, sx: 1, sy: 1});
-    bgrReset();
-    closeModal('modal-attach');
-    updateSlotList(); renderVp();
-  };
-}
-
-// Drag-and-drop onto viewport
-const vpwrap=document.getElementById('vpwrap');
-const dz=document.getElementById('dropzone');
-vpwrap.addEventListener('dragover',e=>{e.preventDefault();dz.style.display='flex';});
-vpwrap.addEventListener('dragleave',()=>{dz.style.display='none';});
-vpwrap.addEventListener('drop',e=>{
-  e.preventDefault();dz.style.display='none';
-  const files=[...e.dataTransfer.files];
-  const json=files.find(f=>f.name.endsWith('.json'));
-  const imgFile=files.find(f=>f.type.startsWith('image/'));
-  if(imgFile){
+// Drag-drop onto viewport
+document.getElementById('vpw').addEventListener('dragover',e=>{e.preventDefault();document.getElementById('dz').style.display='flex';});
+document.getElementById('vpw').addEventListener('dragleave',()=>{document.getElementById('dz').style.display='none';});
+document.getElementById('vpw').addEventListener('drop',e=>{
+  e.preventDefault();document.getElementById('dz').style.display='none';
+  const f=[...e.dataTransfer.files].find(f=>f.type.startsWith('image/'));
+  if(f){
     const r=new FileReader();r.onload=ev=>{
       const img=new Image();img.src=ev.target.result;
-      img.onload=()=>{
-        if(!selBone&&boneOrder.length)selectBone(boneOrder[0]);
-        pendRegionName=imgFile.name.replace(/\.(png|jpg|webp|gif|jpeg)$/i,'');
-        pendSingleImgB64=ev.target.result;
-        document.getElementById('drop-single-img').classList.add('ok');
-        document.getElementById('drop-single-img-lbl').textContent=`✓ ${imgFile.name} (${img.width}×${img.height})`;
-        bgrUserPicked=false;
-        // Open attach modal with bg removal
-        openAttachModal();
-        bgrLoadImage(img,pendRegionName);
-      };
-    };r.readAsDataURL(imgFile);
-  }
-  if(json){
-    const r=new FileReader();r.onload=ev=>{
-      pendAtlasJson=ev.target.result;loadAtlasJSON(ev.target.result);
-      document.getElementById('atlas-regions').textContent=Object.keys(atlas.regions).length+' regions loaded';
-    };r.readAsText(json);
+      img.onload=()=>{bgrLoadImg(img);document.getElementById('fd-img').classList.add('ok');document.getElementById('fd-img-lbl').textContent='✓ '+f.name;openModal('mod-load');};
+    };r.readAsDataURL(f);
   }
 });
 
-// ── 16. KEYBOARD ─────────────────────────────────────────────────
+// Modals
+function openModal(id){document.getElementById(id).classList.add('on');}
+function closeModal(id){document.getElementById(id).classList.remove('on');}
+
+// ── DRAGONBONES 5.5 EXPORT ───────────────────────────────────────────
+function exportAll(){
+  const fps=parseInt(document.getElementById('fpsinp').value)||24;
+  // 1. Pack all images into a texture atlas
+  const imgNames=Object.keys(images);
+  if(!imgNames.length){alert('No images attached. Export ske.json only.');}
+  // Simple row-pack
+  const pad=2;
+  let atlasW=1,atlasH=0;
+  const regions={};
+  imgNames.forEach(name=>{
+    const img=images[name];
+    atlasW=Math.max(atlasW,img.w+pad*2);
+    regions[name]={x:pad,y:atlasH+pad,w:img.w,h:img.h};
+    atlasH+=img.h+pad*2;
+  });
+  atlasW=Math.pow(2,Math.ceil(Math.log2(atlasW+1)));
+  atlasH=Math.pow(2,Math.ceil(Math.log2(atlasH+1)));
+  const ac=document.createElement('canvas');ac.width=atlasW;ac.height=atlasH;
+  const actx=ac.getContext('2d');
+  imgNames.forEach(name=>{const r=regions[name];const img=images[name];actx.drawImage(img.canvas,r.x,r.y);});
+  // tex.json
+  const texJ={name:'export_tex',imagePath:'export_tex.png',width:atlasW,height:atlasH,
+    SubTexture:imgNames.map(n=>{const r=regions[n];return{name:n,x:r.x,y:r.y,width:r.w,height:r.h,frameX:0,frameY:0,frameWidth:r.w,frameHeight:r.h};})};
+  // ske.json
+  let mnX=Infinity,mnY=Infinity,mxX=-Infinity,mxY=-Infinity;
+  bOrder.forEach(id=>{const b=bones[id];mnX=Math.min(mnX,b.wx,b.tipX);mxX=Math.max(mxX,b.wx,b.tipX);mnY=Math.min(mnY,b.wy,b.tipY);mxY=Math.max(mxY,b.wy,b.tipY);});
+  if(!bOrder.length){mnX=mnY=-100;mxX=mxY=100;}
+  const pad2=20;
+  const aabb={x:mnX-pad2,y:mnY-pad2,width:mxX-mnX+pad2*2,height:mxY-mnY+pad2*2};
+  const dbBones=bOrder.map(id=>{
+    const b=bones[id];const r={name:b.name,length:b.len};
+    if(b.parentId&&bones[b.parentId])r.parent=bones[b.parentId].name;
+    const tr={};
+    if(Math.abs(b.restLx)>.001)tr.x=+b.restLx.toFixed(4);
+    if(Math.abs(b.restLy)>.001)tr.y=+b.restLy.toFixed(4);
+    if(Math.abs(b.restLa)>.001){tr.skX=+b.restLa.toFixed(4);tr.skY=+b.restLa.toFixed(4);}
+    if(Object.keys(tr).length)r.transform=tr;
+    return r;
+  });
+  const dbSlots=sOrder.map((id,i)=>{const s=slots[id];return{name:s.name,parent:bones[s.boneId]?.name||'root',z:i};});
+  const dbSkin=[{name:'default',slot:sOrder.map(id=>{
+    const s=slots[id];const tr={};
+    if(Math.abs(s.ox)>.001)tr.x=+s.ox.toFixed(4);
+    if(Math.abs(s.oy)>.001)tr.y=+s.oy.toFixed(4);
+    if(Math.abs(s.oa)>.001){tr.skX=+s.oa.toFixed(4);tr.skY=+s.oa.toFixed(4);}
+    if(Math.abs(s.sx-1)>.001)tr.scX=+s.sx.toFixed(4);
+    if(Math.abs(s.sy-1)>.001)tr.scY=+s.sy.toFixed(4);
+    return{name:s.name,display:[{name:s.imgName,...(Object.keys(tr).length?{transform:tr}:{})}]};
+  })}];
+  const dbAnims=Object.values(anims).map(anim=>{
+    const da={name:anim.name,duration:anim.totalF,playTimes:0,bone:[]};
+    bOrder.forEach(id=>{
+      const b=bones[id],t=anim.tracks[id];if(!t)return;
+      const dbt={name:b.name};
+      if(t.rKFs?.length){
+        const kfs=[...t.rKFs].sort((a,b)=>a.f-b.f);
+        const rfs=[];
+        for(let i=0;i<kfs.length;i++){
+          const nf=i<kfs.length-1?kfs[i+1].f:anim.totalF;
+          rfs.push({duration:nf-kfs[i].f,tweenEasing:0,rotate:+(kfs[i].a-b.restLa).toFixed(4)});
+        }
+        rfs.push({duration:0});dbt.rotateFrame=rfs;
+      }
+      if(t.tKFs?.length&&!b.parentId){
+        const kfs=[...t.tKFs].sort((a,b)=>a.f-b.f);
+        const tfs=[];
+        for(let i=0;i<kfs.length;i++){
+          const nf=i<kfs.length-1?kfs[i+1].f:anim.totalF;
+          tfs.push({duration:nf-kfs[i].f,tweenEasing:0,x:+(kfs[i].x-b.restLx).toFixed(4),y:+(kfs[i].y-b.restLy).toFixed(4)});
+        }
+        tfs.push({duration:0});dbt.translateFrame=tfs;
+      }
+      if(dbt.rotateFrame||dbt.translateFrame)da.bone.push(dbt);
+    });
+    return da;
+  });
+  const skeJ={frameRate:fps,name:'export',version:'5.5',compatibleVersion:'5.5',
+    armature:[{type:'Armature',frameRate:fps,name:'Armature',aabb,
+      bone:dbBones,slot:dbSlots,skin:dbSkin,animation:dbAnims,
+      defaultActions:[{gotoAndPlay:Object.keys(anims)[0]||'idle'}]}]};
+  function dl(fn,data){const a=document.createElement('a');a.href=data;a.download=fn;a.click();}
+  dl('export_ske.json','data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(skeJ,null,2)));
+  if(imgNames.length){
+    setTimeout(()=>dl('export_tex.json','data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(texJ,null,2))),300);
+    setTimeout(()=>dl('export_tex.png',ac.toDataURL('image/png')),600);
+  }
+}
+
+// ── KEYBOARD ─────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
   const k=e.key.toLowerCase();
-  if(k==='s')setTool('select');
+  if(k==='s')setTool('sel');
   if(k==='a'){e.preventDefault();setTool('add');}
   if(k===' '){e.preventDefault();setTool('pan');}
   if(k==='k'){e.preventDefault();recordKF();}
-  if(k==='x'&&refSprite){e.preventDefault();toggleSliceMode();}
-  if(k==='escape'&&sliceMode){sliceMode=false;sliceDrag=null;document.getElementById('slice-hud').style.display='none';vp.style.cursor='default';renderVp();}
+  if(k==='x'&&ref){e.preventDefault();toggleSlice();}
+  if(k==='escape'&&sliceMode){sliceMode=false;sliceDrag=null;document.getElementById('slicehud').style.display='none';document.getElementById('slicebtn').className='btn y';vp.style.cursor='default';draw();}
   if(k==='f'){
-    if(boneOrder.length){
-      let mnX=Infinity,mxX=-Infinity,mnY=Infinity,mxY=-Infinity;
-      boneOrder.forEach(id=>{const b=bones[id];if(!b)return;
-        mnX=Math.min(mnX,b.world.tx,b.tipX);mxX=Math.max(mxX,b.world.tx,b.tipX);
-        mnY=Math.min(mnY,b.world.ty,b.tipY);mxY=Math.max(mxY,b.world.ty,b.tipY);
-      });
-      const bw=mxX-mnX||100, bh=mxY-mnY||100;
-      const vw=vp.clientWidth||800, vh=vp.clientHeight||600;
-      zoom=Math.min(vw/bw,vh/bh)*0.7;
-      panX=-(mnX+bw/2)*zoom; panY=-(mnY+bh/2)*zoom;
-      renderVp();
-    }
+    // Fit bones in view
+    if(!bOrder.length)return;
+    let mnX=Infinity,mnY=Infinity,mxX=-Infinity,mxY=-Infinity;
+    bOrder.forEach(id=>{const b=bones[id];if(!b)return;mnX=Math.min(mnX,b.wx,b.tipX);mxX=Math.max(mxX,b.wx,b.tipX);mnY=Math.min(mnY,b.wy,b.tipY);mxY=Math.max(mxY,b.wy,b.tipY);});
+    const bw=Math.max(1,mxX-mnX),bh=Math.max(1,mxY-mnY);
+    const vw=vp.clientWidth||800,vh=vp.clientHeight||500;
+    zoom=Math.min(vw/bw,vh/bh)*.7;
+    panX=-(mnX+bw/2)*zoom;panY=-(mnY+bh/2)*zoom;
+    draw();
   }
-  if(k==='delete'||k==='backspace'){
+  if((k==='delete'||k==='backspace')&&!e.target.value){
     if(selSlot){deleteSelSlot();return;}
-    if(selBone&&confirm(`Delete "${bones[selBone]?.name}"?`)){
-      const id=selBone;selBone=null;delBone(id);refreshAll();
-    }
+    if(selBone&&confirm('Delete "'+bones[selBone]?.name+'"?')){const id=selBone;selBone=null;selSlot=null;removeBone(id);refreshAll();}
   }
   if(k==='arrowup'&&selBone&&bones[selBone]){
-    bones[selBone].local.rot-=2;
-    if(document.getElementById('autokey').checked)recordKeyframe(curAnim,selBone,curFrame);
-    recalcAll();renderVp();updateProps();renderTL();
+    bones[selBone].la-=2;if(document.getElementById('autokey').checked)addKF(curAnim,selBone,curF);
+    recalcAll();draw();updateBoneProps();drawTL();
   }
   if(k==='arrowdown'&&selBone&&bones[selBone]){
-    bones[selBone].local.rot+=2;
-    if(document.getElementById('autokey').checked)recordKeyframe(curAnim,selBone,curFrame);
-    recalcAll();renderVp();updateProps();renderTL();
+    bones[selBone].la+=2;if(document.getElementById('autokey').checked)addKF(curAnim,selBone,curF);
+    recalcAll();draw();updateBoneProps();drawTL();
   }
   if(k==='arrowleft')stepF(-1);
   if(k==='arrowright')stepF(1);
 });
 
-// ── 17. HUMANOID PRESET ──────────────────────────────────────────
+// ── HUMANOID PRESET ──────────────────────────────────────────────────
 function loadHumanoid(){
-  bones={};boneOrder=[];slots={};slotOrder=[];slotUid=0;
-  skin={name:'default',slotDisplays:{}};anims={};
-  selBone=null;selSlot=null;curFrame=0;totalF=30;
+  bones={};bOrder=[];slots={};sOrder=[];images={};anims={};slotUid=0;uid=0;
+  selBone=null;selSlot=null;ref=null;sliceMode=false;sliceDrag=null;
   pauseAnim();
+  document.getElementById('slicehud').style.display='none';
+  updateRefHud();
 
-  // Helper: add bone and immediately recalc so we can compute world transforms
-  // for subsequent bones that reference parent tips
-  function B(id,name,pid,lx,ly,lr,len,col){
-    const b=makeBone(id,name,pid,lx,ly,lr,len,col);addBone(b);recalcAll();
+  function B(id,name,pid,lx,ly,la,len,col){
+    const b=makeBone(id,name,pid,lx,ly,la,len,col);addBone(b);recalcAll();
   }
-
-  // Root
-  B('root','root',null,0,30,-90,8,'#666666');
-  // Pelvis (slightly below root tip = up direction, so positive Y in parent's local space = down)
-  B('pelvis','pelvis','root',0,8,90,32,'#e8904a');
-  // Spine chain (children of root, upward)
-  B('sp1','spine1','root',0,0,0,55,'#4a80e8');
-  B('sp2','spine2','sp1',55,0,0,45,'#4a80e8');
-  B('neck','neck','sp2',45,0,0,18,'#60a0f8');
-  B('head','head','neck',18,0,0,42,'#60a0f8');
-
-  // Left leg (child of pelvis, pointing down from pelvis tip)
-  B('lt','l.thigh','pelvis',32,-14,90,54,'#40c070');
-  B('ls','l.shin','lt',54,0,6,48,'#40c070');
-  B('lf','l.foot','ls',48,0,-76,26,'#40c070');
-
+  // Root sits at hips, points up (angle -90)
+  B('root','root',null,0,50,-90,8,'#555566');
+  // Hips extend down from root
+  B('hip','hips','root',0,0,90,28,'#d07030');
+  // Spine goes up
+  B('sp1','spine1','root',0,0,0,55,'#4878e0');
+  B('sp2','spine2','sp1',55,0,0,40,'#4878e0');
+  B('nk','neck','sp2',40,0,0,18,'#60a0f8');
+  B('hd','head','nk',18,0,0,44,'#60a0f8');
+  // Left leg (from hip tip, pointing down)
+  B('lt','l.thigh','hip',28,-12,90,54,'#30b060');
+  B('ls','l.shin','lt',54,0,8,48,'#30b060');
+  B('lf','l.foot','ls',48,0,-78,26,'#30b060');
   // Right leg
-  B('rt','r.thigh','pelvis',32,14,90,54,'#c05040');
-  B('rs','r.shin','rt',54,0,-6,48,'#c05040');
-  B('rf','r.foot','rs',48,0,-76,26,'#c05040');
-
-  // Left arm (shoulder sprouts from sp2 bone at ~1/3 along it)
-  B('lsh','l.shoulder','sp2',20,-15,-120,14,'#c09040');
-  B('lu','l.upper','lsh',14,0,-10,42,'#c09040');
-  B('ll','l.lower','lu',42,0,14,34,'#c09040');
-  B('lh','l.hand','ll',34,0,8,18,'#c09040');
-
+  B('rt','r.thigh','hip',28,12,90,54,'#c04840');
+  B('rs','r.shin','rt',54,0,-8,48,'#c04840');
+  B('rf','r.foot','rs',48,0,-78,26,'#c04840');
+  // Left arm (from sp2, going left-down)
+  B('lsh','l.shoulder','sp2',14,-12,-120,13,'#c09030');
+  B('lu','l.upper','lsh',13,0,-15,44,'#c09030');
+  B('ll','l.lower','lu',44,0,18,36,'#c09030');
+  B('lh','l.hand','ll',36,0,6,18,'#c09030');
   // Right arm
-  B('rsh','r.shoulder','sp2',20,15,120,14,'#9040c0');
-  B('ru','r.upper','rsh',14,0,10,42,'#9040c0');
-  B('rl','r.lower','ru',42,0,-14,34,'#9040c0');
-  B('rh','r.hand','rl',34,0,-8,18,'#9040c0');
+  B('rsh','r.shoulder','sp2',14,12,120,13,'#9030c0');
+  B('ru','r.upper','rsh',13,0,15,44,'#9030c0');
+  B('rl','r.lower','ru',44,0,-18,36,'#9030c0');
+  B('rh','r.hand','rl',36,0,-6,18,'#9030c0');
 
-  // IDLE ANIMATION (30 frames)
-  totalF=30;
-  document.getElementById('tf-inp').value=30;
-  document.getElementById('fps-inp').value=24;
-
-  const KF=(an,id,f,rot,tx,ty)=>{
-    ensureAnim(an);anims[an].totalF=totalF;
-    if(!anims[an].boneTracks[id])anims[an].boneTracks[id]={rKFs:[],tKFs:[]};
-    const t=anims[an].boneTracks[id];
-    t.rKFs.push({f,rot});
-    if(tx!==undefined)t.tKFs.push({f,x:tx,y:ty});
-  };
-
-  // Root bob
-  KF('idle','root',0,-90,0,30);KF('idle','root',15,-90,0,28);KF('idle','root',30,-90,0,30);
-  // Spine sway
-  KF('idle','sp1',0,0);KF('idle','sp1',15,-2);KF('idle','sp1',30,0);
-  KF('idle','sp2',0,0);KF('idle','sp2',15,-1.5);KF('idle','sp2',30,0);
-  // Head tilt
-  KF('idle','head',0,0);KF('idle','head',15,3);KF('idle','head',30,0);
-  // Arm sway
-  KF('idle','lu',0,-10);KF('idle','lu',15,-7);KF('idle','lu',30,-10);
-  KF('idle','ru',0,10);KF('idle','ru',15,7);KF('idle','ru',30,10);
-
-  // WALK ANIMATION (32 frames)
+  totalF=30; document.getElementById('leninp').value=30;
+  document.getElementById('fpsinp').value=24;
+  // Idle anim
+  ensureAnim('idle');anims['idle'].totalF=30;
+  function KF(id,f,a,lx,ly){
+    if(!anims['idle'].tracks[id])anims['idle'].tracks[id]={rKFs:[],tKFs:[]};
+    anims['idle'].tracks[id].rKFs.push({f,a});
+    if(lx!==undefined)anims['idle'].tracks[id].tKFs.push({f,x:lx,y:ly});
+  }
+  KF('root',0,-90,0,50);KF('root',15,-90,0,48);KF('root',30,-90,0,50);
+  KF('sp1',0,0);KF('sp1',15,-1.5);KF('sp1',30,0);
+  KF('hd',0,-4);KF('hd',15,4);KF('hd',30,-4);
+  KF('lu',0,-15);KF('lu',15,-12);KF('lu',30,-15);
+  KF('ru',0,15);KF('ru',15,12);KF('ru',30,15);
+  // Walk anim
   ensureAnim('walk');anims['walk'].totalF=32;
-  const WF=(id,f,rot)=>KF('walk',id,f,rot);
+  function WF(id,f,a){if(!anims['walk'].tracks[id])anims['walk'].tracks[id]={rKFs:[],tKFs:[]};anims['walk'].tracks[id].rKFs.push({f,a});}
+  WF('root',0,-90);WF('root',8,-88);WF('root',16,-90);WF('root',24,-88);
+  WF('lt',0,65);WF('lt',8,88);WF('lt',16,115);WF('lt',24,90);WF('lt',32,65);
+  WF('ls',0,8);WF('ls',8,32);WF('ls',16,54);WF('ls',24,16);WF('ls',32,8);
+  WF('lf',0,-72);WF('lf',8,-90);WF('lf',16,-98);WF('lf',24,-78);
+  WF('rt',0,115);WF('rt',8,90);WF('rt',16,65);WF('rt',24,88);WF('rt',32,115);
+  WF('rs',0,54);WF('rs',8,16);WF('rs',16,8);WF('rs',24,32);WF('rs',32,54);
+  WF('rf',0,-98);WF('rf',8,-78);WF('rf',16,-72);WF('rf',24,-90);
+  WF('lu',0,-55);WF('lu',8,-28);WF('lu',16,-5);WF('lu',24,-30);WF('lu',32,-55);
+  WF('ru',0,-5);WF('ru',8,-30);WF('ru',16,-55);WF('ru',24,-28);WF('ru',32,-5);
+  WF('sp1',0,4);WF('sp1',8,0);WF('sp1',16,-4);WF('sp1',24,0);WF('sp1',32,4);
 
-  // Root bounce
-  KF('walk','root',0,-90,0,30);KF('walk','root',8,-90,0,26);KF('walk','root',16,-90,0,30);KF('walk','root',24,-90,0,26);
-  // Left leg forward
-  WF('lt',0,70);WF('lt',8,88);WF('lt',16,110);WF('lt',24,90);WF('lt',32,70);
-  WF('ls',0,6);WF('ls',8,30);WF('ls',16,52);WF('ls',24,14);WF('ls',32,6);
-  WF('lf',0,-70);WF('lf',8,-88);WF('lf',16,-96);WF('lf',24,-76);
-  // Right leg (opposite)
-  WF('rt',0,110);WF('rt',8,90);WF('rt',16,70);WF('rt',24,88);WF('rt',32,110);
-  WF('rs',0,52);WF('rs',8,14);WF('rs',16,6);WF('rs',24,30);WF('rs',32,52);
-  WF('rf',0,-96);WF('rf',8,-76);WF('rf',16,-70);WF('rf',24,-88);
-  // Arms (contralateral)
-  WF('lu',0,-60);WF('lu',8,-30);WF('lu',16,-5);WF('lu',24,-32);WF('lu',32,-60);
-  WF('ru',0,-5);WF('ru',8,-32);WF('ru',16,-60);WF('ru',24,-30);WF('ru',32,-5);
-  // Elbow bend
-  WF('ll',0,18);WF('ll',16,10);
-  WF('rl',0,-10);WF('rl',16,-18);
-  // Spine counter-rotation
-  WF('sp1',0,3);WF('sp1',8,0);WF('sp1',16,-3);WF('sp1',24,0);WF('sp1',32,3);
-  WF('sp2',0,2);WF('sp2',16,-2);
-
-  // Add anim to selector
-  const sel=document.getElementById('anim-sel');
-  sel.innerHTML='';
+  const sel=document.getElementById('animsel');sel.innerHTML='';
   ['idle','walk'].forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
   curAnim='idle';sel.value='idle';
-
-  zoom=1.0;panX=0;panY=0;
-  applyAnimToFrame('idle',0);recalcAll();refreshAll();
+  panX=0;panY=0;zoom=1;
+  applyAnim('idle',0);recalcAll();refreshAll();updateFDisp();
 }
 
-// ── 18. RESIZE HANDLER ───────────────────────────────────────────
-window.addEventListener('resize',()=>{resizeVp();renderVp();renderTL();});
-
-// ── 19. INIT ─────────────────────────────────────────────────────
-ensureAnim('idle');
-setTool('select');
-loadHumanoid();
+// ── INIT ─────────────────────────────────────────────────────────────
+window.addEventListener('resize',()=>{draw();drawTL();});
+ensureAnim('idle');setTool('sel');loadHumanoid();
 </script>
 </body>
 </html>
