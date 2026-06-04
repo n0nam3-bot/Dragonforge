@@ -2280,6 +2280,510 @@ function init(){
   },1000);
 }
 init();
+
+
+// ══════════════════════════════════════════════════════════════
+//  MESH DEFORMATION + SKINNING SYSTEM
+//  Adds per-vertex bone weighting so a single sprite image
+//  can be deformed by the skeleton (like DragonBones Pro)
+// ══════════════════════════════════════════════════════════════
+
+// ── Mesh Data ────────────────────────────────────────────────
+// Stored on disp.mesh when disp.type === 'mesh'
+// vertices:    [{x,y}]  vertex positions in DISPLAY LOCAL space
+// uvs:         [{u,v}]  UV coords 0-1
+// triangles:   [i,j,k...] flat triangle index list
+// boneWeights: per vertex → [{boneId, weight, lx, ly}]
+//              lx,ly = vertex position in that bone's LOCAL space at bind time
+
+function ptSegDist(px, py, ax, ay, bx, by) {
+  const dx = bx-ax, dy = by-ay, len2 = dx*dx+dy*dy;
+  if(len2 < 1e-6) return Math.sqrt((px-ax)**2+(py-ay)**2);
+  const t = Math.max(0, Math.min(1, ((px-ax)*dx+(py-ay)*dy)/len2));
+  return Math.sqrt((px-(ax+t*dx))**2+(py-(ay+t*dy))**2);
+}
+
+// ── Create grid mesh over a Display ──────────────────────────
+function createMeshOnDisplay(disp, cols, rows) {
+  if(!disp._img) { toast('Assign an image first', 'err'); return; }
+  cols = Math.max(1, cols||4); rows = Math.max(1, rows||6);
+  const w = disp.width, h = disp.height;
+  const px = disp.pivotX * w, py = disp.pivotY * h;
+  const verts = [], uvs = [], tris = [], bw = [];
+  for(let r = 0; r <= rows; r++) {
+    for(let c = 0; c <= cols; c++) {
+      const u = c/cols, v = r/rows;
+      verts.push({x: u*w - px, y: v*h - py});
+      uvs.push({u, v});
+      bw.push([]);  // empty weights initially
+    }
+  }
+  for(let r = 0; r < rows; r++) {
+    for(let c = 0; c < cols; c++) {
+      const i0 = r*(cols+1)+c, i1 = i0+1, i2 = i0+(cols+1), i3 = i2+1;
+      tris.push(i0, i1, i2,  i1, i3, i2);
+    }
+  }
+  disp.type = 'mesh';
+  disp.mesh = {vertices: verts, uvs, triangles: tris, boneWeights: bw, cols, rows};
+  toast(`Mesh created: ${(cols+1)*(rows+1)} verts, ${cols*rows*2} tris`,'ok');
+  saveHist(); updateProps(); render();
+}
+
+// Remove mesh from display (back to plain image)
+function removeMeshFromDisplay(disp) {
+  disp.type = 'image';
+  disp.mesh = null;
+  saveHist(); updateProps(); render();
+  toast('Mesh removed');
+}
+
+// ── Auto-bind weights (proximity-based LBS) ──────────────────
+function autoBindWeights(disp, slot) {
+  if(!disp.mesh) { toast('Create mesh first','err'); return; }
+  const arm = S.arm;
+  const bones = arm.bones.filter(b => b.visible && b.length > 0);
+  if(!bones.length) { toast('Add bones first','err'); return; }
+  // Get display world matrix at BIND TIME (current rest pose)
+  const bone = arm.bone(slot.boneId);
+  if(!bone) { toast('Slot has no bone assigned','err'); return; }
+  const bwm = arm.worldMat(bone.id);
+  const dm  = M2.fromBone(disp.x, disp.y, disp.rotation, disp.scaleX, disp.scaleY);
+  const displayWorldMat = bwm.mul(dm);
+
+  disp.mesh.boneWeights = disp.mesh.vertices.map(v => {
+    // Vertex in world space
+    const wp = displayWorldMat.pt(v.x, v.y);
+    // Distance from vertex to each bone's line segment
+    const influences = bones.map(b => {
+      const bm = arm.worldMat(b.id);
+      const tip = bm.pt(b.length, 0);
+      const dist = ptSegDist(wp.x, wp.y, bm.e, bm.f, tip.x, tip.y);
+      return {boneId: b.id, dist: Math.max(1, dist)};
+    });
+    // Inverse-distance-squared weighting, top 4 bones
+    const sorted = influences.sort((a,b) => a.dist - b.dist).slice(0, 4);
+    const invSq = sorted.map(i => 1 / (i.dist * i.dist));
+    const total = invSq.reduce((s,v) => s+v, 0);
+    return sorted.map((inf, i) => {
+      const w = invSq[i] / total;
+      // Store vertex in this bone's LOCAL space (for LBS at runtime)
+      const boneMat = arm.worldMat(inf.boneId);
+      const local = boneMat.invert().pt(wp.x, wp.y);
+      return {boneId: inf.boneId, weight: w, lx: local.x, ly: local.y};
+    });
+  });
+  saveHist(); updateProps(); render();
+  toast('Weights bound to '+bones.length+' bones','ok');
+}
+
+// ── Deform mesh vertices using LBS ───────────────────────────
+function deformMeshVertices(disp, slot, arm, anim, frame, sc, ox, oy) {
+  const mesh = disp.mesh;
+  const bone = arm.bone(slot.boneId);
+  // Fallback: display world matrix (no deformation)
+  const bwm = arm.worldMat(bone ? bone.id : arm.bones[0]?.id || '', anim, frame);
+  const dm  = M2.fromBone(disp.x, disp.y, disp.rotation, disp.scaleX, disp.scaleY);
+  const displayWorldMat = bwm.mul(dm);
+
+  return mesh.vertices.map((v, vi) => {
+    const bws = mesh.boneWeights[vi];
+    if(!bws || !bws.length) {
+      // No weights: rigidly follow the display's bone
+      const wp = displayWorldMat.pt(v.x, v.y);
+      return {x: wp.x * sc + ox, y: wp.y * sc + oy};
+    }
+    // LBS: sum(weight_i * bone_world_i * vertex_in_bone_local_i)
+    let wx = 0, wy = 0;
+    for(const {boneId, weight, lx, ly} of bws) {
+      const bm = arm.worldMat(boneId, anim, frame);
+      const p = bm.pt(lx, ly);
+      wx += p.x * weight;
+      wy += p.y * weight;
+    }
+    return {x: wx * sc + ox, y: wy * sc + oy};
+  });
+}
+
+// ── Textured triangle (canvas 2D affine) ─────────────────────
+function drawTexturedTri(ctx, img, x0,y0,x1,y1,x2,y2, u0,v0,u1,v1,u2,v2) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2);
+  ctx.closePath(); ctx.clip();
+  const det = (u1-u0)*(v2-v0) - (u2-u0)*(v1-v0);
+  if(Math.abs(det) < 0.001) { ctx.restore(); return; }
+  const a=((x1-x0)*(v2-v0)-(x2-x0)*(v1-v0))/det;
+  const b=((x2-x0)*(u1-u0)-(x1-x0)*(u2-u0))/det;
+  const c=x0-a*u0-b*v0;
+  const d=((y1-y0)*(v2-v0)-(y2-y0)*(v1-v0))/det;
+  const e=((y2-y0)*(u1-u0)-(y1-y0)*(u2-u0))/det;
+  const f=y0-d*u0-e*v0;
+  ctx.transform(a,d,b,e,c,f);
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+}
+
+// ── Draw a mesh display ───────────────────────────────────────
+function drawMeshDisplay(ctx, disp, slot, arm, anim, frame, sc, ox, oy) {
+  const mesh = disp.mesh;
+  if(!mesh || !disp._img) return;
+  const alpha = slot.color.a / 255;
+  const deformed = deformMeshVertices(disp, slot, arm, anim, frame, sc, ox, oy);
+  const tris = mesh.triangles;
+  const uvs  = mesh.uvs;
+  const iw = disp._img.naturalWidth, ih = disp._img.naturalHeight;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  for(let i = 0; i < tris.length-2; i += 3) {
+    const i0=tris[i],i1=tris[i+1],i2=tris[i+2];
+    const p0=deformed[i0],p1=deformed[i1],p2=deformed[i2];
+    const uv0=uvs[i0],uv1=uvs[i1],uv2=uvs[i2];
+    drawTexturedTri(ctx, disp._img,
+      p0.x,p0.y, p1.x,p1.y, p2.x,p2.y,
+      uv0.u*iw,uv0.v*ih, uv1.u*iw,uv1.v*ih, uv2.u*iw,uv2.v*ih
+    );
+  }
+  ctx.restore();
+  // Draw mesh wireframe overlay in edit/select mode
+  if(S.tool === 'mesh' && S.meshEdit.activeSlot === slot.id) {
+    drawMeshWireframe(ctx, disp, deformed, sc, ox, oy);
+  }
+}
+
+// ── Draw mesh wireframe and vertex handles ────────────────────
+function drawMeshWireframe(ctx, disp, deformed, sc, ox, oy) {
+  const mesh = disp.mesh;
+  const tris = mesh.triangles;
+  ctx.save();
+  // Wireframe edges
+  ctx.strokeStyle = 'rgba(100,220,255,.5)';
+  ctx.lineWidth = 1;
+  const drawn = new Set();
+  for(let i = 0; i < tris.length-2; i += 3) {
+    [[tris[i],tris[i+1]],[tris[i+1],tris[i+2]],[tris[i+2],tris[i]]].forEach(([a,b]) => {
+      const key = Math.min(a,b)+'-'+Math.max(a,b);
+      if(drawn.has(key)) return; drawn.add(key);
+      const pa = deformed[a], pb = deformed[b];
+      ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
+    });
+  }
+  // Vertex handles
+  const selVert = S.meshEdit.selectedVert;
+  const paintBone = S.meshEdit.paintBoneId;
+  deformed.forEach((p, vi) => {
+    const isSel = selVert === vi;
+    const bws = mesh.boneWeights[vi] || [];
+    // Color by dominant bone weight if paint mode
+    let fillColor = isSel ? '#fff' : 'rgba(100,220,255,.9)';
+    if(paintBone && bws.length) {
+      const inf = bws.find(w => w.boneId === paintBone);
+      const w = inf ? inf.weight : 0;
+      const r = Math.round(255*w), g = Math.round(80*(1-w)), b2 = Math.round(200*(1-w));
+      fillColor = `rgb(${r},${g},${b2})`;
+    }
+    const r = (isSel ? 6 : 4) * (IS_TOUCH ? 1.5 : 1);
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    ctx.fillStyle = fillColor; ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+  });
+  ctx.restore();
+}
+
+// ── Mesh edit state ───────────────────────────────────────────
+S.meshEdit = {
+  activeSlot: null,   // slot id currently being mesh-edited
+  selectedVert: null, // vertex index
+  paintBoneId: null,  // bone id for weight painting
+  paintWeight: 1.0,
+  dragVert: false,
+  dragStartX: 0, dragStartY: 0,
+  origVert: null,
+};
+
+function enterMeshEdit(slotId) {
+  S.meshEdit.activeSlot = slotId;
+  S.meshEdit.selectedVert = null;
+  setTool('mesh');
+  toast('Mesh Edit mode. Click vertices to select. Right-click a bone name to paint weights.','ok');
+  render();
+}
+function exitMeshEdit() {
+  S.meshEdit.activeSlot = null;
+  S.meshEdit.selectedVert = null;
+  S.meshEdit.paintBoneId = null;
+  setTool(TOOL.SEL);
+  render();
+}
+
+// ── Patch render() to handle mesh type displays ───────────────
+const _origRender_meshPatch = render;
+render = function() {
+  // Run the original render (handles bones, non-mesh sprites, grid, etc.)
+  // But we need to intercept BEFORE the original draws sprites.
+  // Strategy: call original, then re-draw mesh displays on top.
+  // Actually we re-implement the sprite loop to handle both types.
+  _origRender_meshPatch();
+  // The original render already draws 'image' type displays correctly.
+  // Now draw 'mesh' type displays (they were skipped by the original
+  // because _img check passes but the setTransform path was for 'image').
+  // We need to REPLACE the original sprite rendering for mesh type.
+  // Do a second pass here ONLY for mesh slots:
+  const c = ctx, sc = S.vp.scale, ox = S.vp.x, oy = S.vp.y;
+  const arm = S.arm;
+  const ac = animCtx();
+  const anim = ac ? ac.anim : null;
+  const frame = ac ? ac.frame : 0;
+  if(S.ui.sprites) {
+    const sorted = [...arm.slots].sort((a,b) => a.z - b.z);
+    for(const slot of sorted) {
+      if(!slot.visible) continue;
+      const bone = arm.bone(slot.boneId); if(!bone || !bone.visible) continue;
+      let dispIdx = slot.displayIndex;
+      if(ac && anim && anim.st[slot.id]) {
+        const d = anim.st[slot.id].evalDisplay(frame);
+        if(d !== null) dispIdx = d;
+      }
+      const dsps = arm.skin.displays(slot.id);
+      const disp = dsps[dispIdx];
+      if(!disp || !disp._img || disp.type !== 'mesh') continue;
+      drawMeshDisplay(c, disp, slot, arm, anim, frame, sc, ox, oy);
+    }
+  }
+};
+
+// ── Patch canvas pointer handling for mesh edit mode ─────────
+const _origPointerDown_mesh = onPointerDown;
+onPointerDown = function(cx, cy, btn, mods) {
+  if(S.tool !== 'mesh' || !S.meshEdit.activeSlot) {
+    _origPointerDown_mesh(cx, cy, btn, mods);
+    return;
+  }
+  const slot = S.arm.slot(S.meshEdit.activeSlot);
+  if(!slot) return;
+  const dsps = S.arm.skin.displays(slot.id);
+  const disp = dsps[slot.displayIndex];
+  if(!disp || !disp.mesh) return;
+  const ac = animCtx();
+  const deformed = deformMeshVertices(disp, slot, S.arm, ac?.anim, ac?.frame||0, S.vp.scale, S.vp.x, S.vp.y);
+  const hitR = IS_TOUCH ? 20 : 10;
+  // Find nearest vertex
+  let nearest = -1, nearestDist = Infinity;
+  deformed.forEach((p, vi) => {
+    const d = Math.sqrt((cx-p.x)**2+(cy-p.y)**2);
+    if(d < hitR && d < nearestDist) { nearest = vi; nearestDist = d; }
+  });
+  if(nearest >= 0) {
+    S.meshEdit.selectedVert = nearest;
+    if(btn === 0) {
+      // If paint mode: adjust weight for this vertex
+      if(S.meshEdit.paintBoneId) {
+        paintWeight(disp, nearest, S.meshEdit.paintBoneId, S.meshEdit.paintWeight);
+        saveHist(); updateProps(); render();
+      } else {
+        // Start vertex drag
+        const vx = disp.mesh.vertices[nearest];
+        S.meshEdit.dragVert = true;
+        S.meshEdit.dragStartX = cx; S.meshEdit.dragStartY = cy;
+        S.meshEdit.origVert = {x: vx.x, y: vx.y};
+      }
+    }
+  } else {
+    S.meshEdit.selectedVert = null;
+  }
+  updateProps(); render();
+};
+
+const _origPointerMove_mesh = onPointerMove;
+onPointerMove = function(cx, cy, buttons) {
+  if(S.tool !== 'mesh' || !S.meshEdit.activeSlot || !S.meshEdit.dragVert) {
+    _origPointerMove_mesh(cx, cy, buttons);
+    return;
+  }
+  if(!buttons) { S.meshEdit.dragVert = false; return; }
+  const slot = S.arm.slot(S.meshEdit.activeSlot);
+  if(!slot) return;
+  const dsps = S.arm.skin.displays(slot.id);
+  const disp = dsps[slot.displayIndex];
+  if(!disp || !disp.mesh) return;
+  const vi = S.meshEdit.selectedVert;
+  if(vi === null) return;
+  const dx = (cx - S.meshEdit.dragStartX) / S.vp.scale;
+  const dy = (cy - S.meshEdit.dragStartY) / S.vp.scale;
+  disp.mesh.vertices[vi].x = S.meshEdit.origVert.x + dx;
+  disp.mesh.vertices[vi].y = S.meshEdit.origVert.y + dy;
+  render();
+};
+
+const _origPointerUp_mesh = onPointerUp;
+onPointerUp = function(cx, cy, btn) {
+  if(S.meshEdit.dragVert) { S.meshEdit.dragVert = false; saveHist(); return; }
+  if(S.tool !== 'mesh') { _origPointerUp_mesh(cx, cy, btn); }
+};
+
+// ── Paint weight for a vertex ─────────────────────────────────
+function paintWeight(disp, vertIdx, boneId, weight) {
+  const bws = disp.mesh.boneWeights[vertIdx];
+  const existing = bws.find(w => w.boneId === boneId);
+  const bone = S.arm.bone(boneId);
+  if(!bone) return;
+  // Get vertex world position
+  const slot = S.arm.slots.find(s => S.arm.skin.displays(s.id).includes(disp));
+  if(!slot) return;
+  const bm = S.arm.worldMat(bone.id);
+  const dispBone = S.arm.bone(slot.boneId);
+  const dbm = S.arm.worldMat(dispBone?.id || bone.id);
+  const dm = M2.fromBone(disp.x, disp.y, disp.rotation, disp.scaleX, disp.scaleY);
+  const dispWorldMat = dbm.mul(dm);
+  const vw = dispWorldMat.pt(disp.mesh.vertices[vertIdx].x, disp.mesh.vertices[vertIdx].y);
+  const local = bm.invert().pt(vw.x, vw.y);
+  if(existing) {
+    existing.weight = weight;
+    existing.lx = local.x; existing.ly = local.y;
+  } else {
+    bws.push({boneId, weight, lx: local.x, ly: local.y});
+  }
+  // Renormalize weights
+  const total = bws.reduce((s, w) => s + w.weight, 0);
+  if(total > 0) bws.forEach(w => w.weight /= total);
+}
+
+// ── Patch updateProps to add Mesh section ─────────────────────
+const _origUpdateProps_mesh = updateProps;
+updateProps = function() {
+  _origUpdateProps_mesh();
+  // If a slot is selected and has a mesh-capable display, add mesh section
+  if(!S.selSlot) return;
+  const slot = S.arm.slot(S.selSlot);
+  if(!slot) return;
+  const dsps = S.arm.skin.displays(slot.id);
+  const disp = dsps[slot.displayIndex];
+  if(!disp || !disp._img) return;
+  const cont = document.getElementById('props-content');
+  const body = mkSec(cont, '🕸 Mesh Deformation');
+  if(disp.type !== 'mesh') {
+    // Not yet a mesh
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:11px;color:var(--txt2);margin-bottom:8px;line-height:1.6';
+    info.textContent = 'Convert this image to a mesh so bones can deform individual parts of the sprite.';
+    body.appendChild(info);
+    // Grid size controls
+    const gr = document.createElement('div');gr.className='pr';
+    gr.innerHTML='<span class="plabel">Grid</span>';
+    const gc=document.createElement('div');gc.className='p2col';gc.style.flex='1';
+    const ci=document.createElement('input');ci.type='number';ci.className='pinput';ci.value='4';ci.min='1';ci.max='20';ci.placeholder='Cols';
+    const ri=document.createElement('input');ri.type='number';ri.className='pinput';ri.value='6';ri.min='1';ri.max='30';ri.placeholder='Rows';
+    gc.appendChild(ci);gc.appendChild(ri);gr.appendChild(gc);body.appendChild(gr);
+    body.appendChild(mkBtn('Create Mesh ('+disp.width+'×'+disp.height+'px)', 'prim full', () => {
+      createMeshOnDisplay(disp, +ci.value, +ri.value);
+    }));
+  } else {
+    // Has mesh
+    const mesh = disp.mesh;
+    const info = document.createElement('div');
+    info.style.cssText='font-size:10px;color:var(--txt2);margin-bottom:6px;font-family:monospace';
+    info.textContent = `${mesh.vertices.length} verts · ${mesh.triangles.length/3|0} tris · ${mesh.cols}×${mesh.rows} grid`;
+    body.appendChild(info);
+    body.appendChild(mkBtn('Auto-Bind Weights to Bones', 'prim full', () => autoBindWeights(disp, slot)));
+    const editBtn = mkBtn(S.meshEdit.activeSlot===slot.id ? '✕ Exit Mesh Edit' : '✎ Edit Mesh / Paint Weights', 'full', () => {
+      if(S.meshEdit.activeSlot === slot.id) exitMeshEdit();
+      else enterMeshEdit(slot.id);
+    });
+    body.appendChild(editBtn);
+    if(S.meshEdit.activeSlot === slot.id) {
+      // Weight paint controls
+      const wpDiv = document.createElement('div');
+      wpDiv.style.cssText='margin-top:8px;padding:6px;background:var(--bg3);border-radius:4px;border:1px solid var(--br)';
+      wpDiv.innerHTML='<div style="font-size:10px;color:var(--acc);font-weight:600;margin-bottom:6px">WEIGHT PAINT MODE</div>';
+      // Bone selector
+      const bsel = document.createElement('select');bsel.className='psel';bsel.style.width='100%';
+      bsel.innerHTML='<option value="">-- Select bone to paint --</option>';
+      S.arm.bones.forEach(b => {
+        const o=document.createElement('option');o.value=b.id;o.textContent=b.name;
+        if(b.id===S.meshEdit.paintBoneId)o.selected=true;bsel.appendChild(o);
+      });
+      bsel.addEventListener('change',()=>{S.meshEdit.paintBoneId=bsel.value||null;render()});
+      wpDiv.appendChild(bsel);
+      // Weight value
+      const wr=document.createElement('div');wr.className='pr';wr.style.marginTop='5px';
+      wr.innerHTML='<span class="plabel">Weight</span>';
+      const wi=document.createElement('input');wi.type='range';wi.min='0';wi.max='1';wi.step='0.05';
+      wi.value=S.meshEdit.paintWeight;wi.style.flex='1';
+      const wlabel=document.createElement('span');wlabel.style.cssText='font-size:11px;color:var(--txt);min-width:28px;text-align:right;font-family:monospace';
+      wlabel.textContent=S.meshEdit.paintWeight.toFixed(2);
+      wi.addEventListener('input',()=>{S.meshEdit.paintWeight=+wi.value;wlabel.textContent=(+wi.value).toFixed(2)});
+      wr.appendChild(wi);wr.appendChild(wlabel);wpDiv.appendChild(wr);
+      // Selected vertex info
+      if(S.meshEdit.selectedVert !== null) {
+        const vi=S.meshEdit.selectedVert;
+        const bws=mesh.boneWeights[vi]||[];
+        const vinfo=document.createElement('div');vinfo.style.cssText='font-size:10px;color:var(--txt2);margin-top:6px';
+        vinfo.innerHTML='<b style="color:var(--txt)">Vertex '+vi+' influences:</b><br>'+
+          (bws.length ? bws.map(w=>{const b=S.arm.bone(w.boneId);return `${b?b.name:'?'}: ${(w.weight*100).toFixed(1)}%`}).join('<br>') : '(none — will follow bone)');
+        wpDiv.appendChild(vinfo);
+        // Paint button
+        if(S.meshEdit.paintBoneId){
+          const pb=mkBtn(`Paint ${S.meshEdit.paintWeight.toFixed(2)} → vert ${vi}`,'prim full',()=>{
+            paintWeight(disp,vi,S.meshEdit.paintBoneId,S.meshEdit.paintWeight);
+            saveHist();updateProps();render();
+          });pb.style.marginTop='5px';wpDiv.appendChild(pb);
+        }
+      } else {
+        const hint=document.createElement('div');hint.style.cssText='font-size:10px;color:var(--txt3);margin-top:6px';
+        hint.textContent='Click a vertex in the viewport to select it, then paint a weight.';
+        wpDiv.appendChild(hint);
+      }
+      body.appendChild(wpDiv);
+    }
+    // Rebuild grid
+    const gr2=document.createElement('div');gr2.className='pr';gr2.style.marginTop='6px';
+    gr2.innerHTML='<span class="plabel">Rebuild</span>';
+    const gc2=document.createElement('div');gc2.className='p2col';gc2.style.flex='1';
+    const ci2=document.createElement('input');ci2.type='number';ci2.className='pinput';ci2.value=mesh.cols;ci2.min='1';ci2.max='20';
+    const ri2=document.createElement('input');ri2.type='number';ri2.className='pinput';ri2.value=mesh.rows;ri2.min='1';ri2.max='30';
+    gc2.appendChild(ci2);gc2.appendChild(ri2);gr2.appendChild(gc2);body.appendChild(gr2);
+    body.appendChild(mkBtn('Rebuild Mesh Grid', 'full', () => createMeshOnDisplay(disp, +ci2.value, +ri2.value)));
+    body.appendChild(mkBtn('Remove Mesh (back to image)', 'danger full', () => removeMeshFromDisplay(disp)));
+  }
+};
+
+// ── Add mesh tool to toolbar ──────────────────────────────────
+(function(){
+  // Add mesh tool button to toolbar
+  const tbg = document.querySelector('#toolbar .tbg');
+  if(tbg) {
+    const b = document.createElement('button');
+    b.className = 'tbtn'; b.dataset.tool = 'mesh';
+    b.title = 'Mesh Edit (M)'; b.textContent = '🕸';
+    b.addEventListener('click', () => {
+      if(S.meshEdit.activeSlot) setTool('mesh');
+      else { toast('Select a slot with a mesh first', 'err'); }
+    });
+    // Insert after IK button
+    const ikBtn = document.querySelector('.tbtn[data-tool="ik"]');
+    if(ikBtn) ikBtn.parentNode.insertBefore(b, ikBtn.nextSibling);
+    else tbg.appendChild(b);
+  }
+  // Add M key shortcut
+  const _origKey = document.onkeydown;
+  document.addEventListener('keydown', e => {
+    if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+    if((e.ctrlKey||e.metaKey)) return;
+    if(e.key.toLowerCase()==='m') {
+      if(S.meshEdit.activeSlot) setTool('mesh');
+      else toast('Select a slot with a mesh first','err');
+    }
+  });
+})();
+
+// ── Info about mesh in About dialog ──────────────────────────
+// Patch showAbout to include mesh info
+const _origShowAbout = showAbout;
+showAbout = function() { _origShowAbout(); };
+
+console.log('[DragonBones] Mesh deformation system loaded.');
+
+
 </script>
 </body>
 </html>
