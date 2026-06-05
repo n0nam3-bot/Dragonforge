@@ -1794,7 +1794,6 @@ function toggleMobileTools(){
 
 /* Toolbar wiring */
 document.querySelectorAll('.tool[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
-document.getElementById('btn-mode-design'||'mode-design').addEventListener('click',()=>setMode('design'));
 document.getElementById('mode-design').addEventListener('click',()=>setMode('design'));
 document.getElementById('mode-anim').addEventListener('click',()=>setMode('anim'));
 document.getElementById('tb-grid').addEventListener('click',()=>{S.ui.grid=!S.ui.grid;document.getElementById('tb-grid').classList.toggle('on',S.ui.grid);render()});
